@@ -60,6 +60,7 @@ export default async function AccesosPage() {
             <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800">
               <tr>
                 <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Correo</th>
+                <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Operativo</th>
                 <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Permisos</th>
                 <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Contraseña</th>
                 <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Activo</th>
@@ -72,6 +73,9 @@ export default async function AccesosPage() {
                 return (
                   <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
                     <td className="whitespace-nowrap px-4 py-3 text-slate-700 dark:text-slate-300">{row.email}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-slate-700 dark:text-slate-300">
+                      {row.operativo_asociado || "—"}
+                    </td>
                     <td className="px-4 py-3">
                       <PermisosRow
                         initial={{
@@ -96,7 +100,7 @@ export default async function AccesosPage() {
 
               {rows.length === 0 && !error && (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400 dark:text-slate-500">
                     No hay accesos todavía.
                   </td>
                 </tr>

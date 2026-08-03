@@ -115,6 +115,7 @@ function OperativoField({
 }) {
   const [selected, setSelected] = useState<string[]>(defaultValues);
   const isEmpty = selected.length === 0;
+  const detailsRef = useRef<HTMLDetailsElement>(null);
 
   function toggle(option: string) {
     setSelected((prev) =>
@@ -130,7 +131,16 @@ function OperativoField({
       >
         {label}
       </label>
-      <details className="relative">
+      <details
+        ref={detailsRef}
+        className="relative"
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            detailsRef.current?.removeAttribute("open");
+          }
+        }}
+      >
         <summary
           className={`flex w-full cursor-pointer list-none items-center justify-between rounded-md border bg-white px-2.5 py-1.5 text-[10px] focus:outline-none dark:bg-slate-800 ${
             isEmpty

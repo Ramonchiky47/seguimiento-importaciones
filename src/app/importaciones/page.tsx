@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/login/actions";
-import { deleteImportacion, actualizarImportacion, updateImportacionOperativo } from "./actions";
+import { deleteImportacion, actualizarImportacion } from "./actions";
 import { RowActions } from "@/components/RowActions";
 import { UpdateCell } from "@/components/UpdateCell";
 import { ClickableRow } from "@/components/ClickableRow";
 import { EstatusDropdown } from "@/components/EstatusDropdown";
-import { OperativoCell } from "@/components/OperativoCell";
 import { getMyPermissions } from "@/lib/permissions";
 import type { Importacion } from "@/types/importacion";
 import { FIELD_LABELS, LIST_COLUMNS } from "@/types/importacion";
@@ -67,13 +66,6 @@ export default async function ImportacionesPage({
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
-  const { data: operativosData } = await supabase
-    .from("catalogo_operativos")
-    .select("nombre_operativo")
-    .eq("activo", true)
-    .order("nombre_operativo");
-  const operativoOptions = (operativosData ?? []).map((o) => o.nombre_operativo as string);
-
   const sortHref = (field: string) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
@@ -110,6 +102,12 @@ export default async function ImportacionesPage({
             Seguimiento de Importaciones
           </h1>
           <div className="flex items-center gap-4">
+            <Link
+              href="/dashboard"
+              className="text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
+            >
+              Dashboard
+            </Link>
             {(myPermissions.es_admin || myPermissions.puede_operativos) && (
               <Link
                 href="/catalogos"
@@ -224,26 +222,16 @@ export default async function ImportacionesPage({
                     className={ESTATUS_ROW_CLASS[row.estatus] ?? ""}
                   >
                     <UpdateCell id={row.id} onUpdate={actualizarImportacion} stickyBg={rowBg} />
-                    {LIST_COLUMNS.map((field) =>
-                      field === "operativo" ? (
-                        <OperativoCell
-                          key={field}
-                          id={row.id}
-                          initialValue={row.operativo}
-                          options={operativoOptions}
-                          onSave={updateImportacionOperativo}
-                        />
-                      ) : (
-                        <td
-                          key={field}
-                          className={`whitespace-nowrap px-3 py-1.5 text-slate-700 dark:text-slate-300 ${
-                            field === "booking" ? `sticky left-8 z-10 ${rowBg}` : ""
-                          }`}
-                        >
-                          {values[field] ?? "—"}
-                        </td>
-                      ),
-                    )}
+                    {LIST_COLUMNS.map((field) => (
+                      <td
+                        key={field}
+                        className={`whitespace-nowrap px-3 py-1.5 text-slate-700 dark:text-slate-300 ${
+                          field === "booking" ? `sticky left-8 z-10 ${rowBg}` : ""
+                        }`}
+                      >
+                        {values[field] ?? "—"}
+                      </td>
+                    ))}
                     <RowActions
                       id={row.id}
                       onDelete={deleteImportacion}

@@ -21,4 +21,5 @@ export type AppUser = {
   puede_borrar?: boolean;
   puede_operativos?: boolean;
   es_master?: boolean;
+  operativo_asociado?: string | null;
 };

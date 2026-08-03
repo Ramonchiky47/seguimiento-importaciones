@@ -210,7 +210,7 @@ export const FIELD_LABELS: Record<string, string> = {
   hbl: "HBL",
   telex_hbl: "Telex HBL",
   contenedor: "Contenedor",
-  cantidad_contenedores_tipo: "Cantidad de contenedores por tipo",
+  cantidad_contenedores_tipo: "Cant contenedores por tipo / CBM",
   shipper: "Shipper (Proveedor en Origen)",
   direccion_recoleccion: "Dirección Recolección",
   asegurado_por: "Asegurado por",
@@ -218,8 +218,9 @@ export const FIELD_LABELS: Record<string, string> = {
   confirmacion_48_horas: "Confirmación ATD",
   eta_ata: "ETA / ATA",
   notificacion_arribo_7_dias: "Notificación de arribo (7 días antes de la ETA)",
-  validacion_48_horas_antes_eta: "Validación 48 horas antes de la ETA",
-  revalidacion_48_horas_antes_eta: "Revalidación 48 horas antes de ETA",
+  validacion_48_horas_antes_eta:
+    "Validación 48 hr antes de la ETA / Fecha que aplican inst. con consolidadora",
+  revalidacion_48_horas_antes_eta: "Revalidación 48 hr antes de ETA / Fecha de desconsolidación",
   recepcion_eir: "Recepción EIR",
   fecha_solicita_corte_naviera: "Fecha en que se solicita corte a naviera",
   fecha_recibimos_corte_demoras_naviera:

@@ -147,20 +147,6 @@ export async function deleteIncidencia(importacionId: number, incidenciaId: numb
   revalidatePath(`/importaciones/${importacionId}`);
 }
 
-export async function updateImportacionOperativo(id: number, operativos: string[]) {
-  const supabase = await createClient();
-  const value = operativos.length > 0 ? operativos.join(", ") : null;
-
-  const { error } = await supabase
-    .from("seguimiento_importaciones")
-    .update({ operativo: value })
-    .eq("id", id);
-
-  if (error) throw new Error(error.message);
-
-  revalidatePath("/importaciones");
-}
-
 export async function deleteImportacion(id: number) {
   const myPermissions = await getMyPermissions();
   if (!myPermissions.puede_borrar) throw new Error("No tienes permiso para borrar.");
