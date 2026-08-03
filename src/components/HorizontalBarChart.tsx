@@ -1,17 +1,31 @@
+import Link from "next/link";
+
 export function HorizontalBarChart({
   title,
   data,
+  href,
 }: {
   title: string;
   data: { label: string; value: number }[];
+  href?: string;
 }) {
   const max = Math.max(1, ...data.map((d) => d.value));
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-        {title}
-      </h3>
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          {title}
+        </h3>
+        {href && (
+          <Link
+            href={href}
+            className="text-[10px] font-medium text-slate-500 hover:text-slate-800 hover:underline dark:text-slate-400 dark:hover:text-slate-100"
+          >
+            Ver detalle →
+          </Link>
+        )}
+      </div>
       {data.length === 0 ? (
         <p className="text-xs text-slate-400 dark:text-slate-500">Sin datos.</p>
       ) : (

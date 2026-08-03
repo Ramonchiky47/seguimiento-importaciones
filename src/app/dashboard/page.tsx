@@ -4,6 +4,7 @@ import { logout } from "@/app/login/actions";
 import { StatTile } from "@/components/StatTile";
 import { HorizontalBarChart } from "@/components/HorizontalBarChart";
 import { MonthlyBarChart } from "@/components/MonthlyBarChart";
+import { MonthFilter } from "@/components/MonthFilter";
 
 export const dynamic = "force-dynamic";
 
@@ -43,16 +44,29 @@ function monthlyGroups(rows: Row[]) {
     .slice(-12);
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mes?: string }>;
+}) {
+  const { mes } = await searchParams;
   const supabase = await createClient();
 
   const { data } = await supabase
     .from("seguimiento_importaciones")
     .select("naviera, agente, pod, pol, oficina, fecha, estatus");
-  const rows = (data ?? []) as Row[];
+  const allRows = (data ?? []) as Row[];
 
-  const totalCount = rows.length;
-  const countByEstatus = rows.reduce(
+  const availableMonths = Array.from(
+    new Set(allRows.map((r) => r.fecha?.slice(0, 7)).filter((m): m is string => Boolean(m))),
+  ).sort((a, b) => b.localeCompare(a));
+
+  // The month filter applies only to the "embarques por X" breakdown charts —
+  // the monthly trend chart and KPI tiles always reflect the full dataset.
+  const filteredRows = mes ? allRows.filter((r) => r.fecha?.startsWith(mes)) : allRows;
+
+  const totalCount = allRows.length;
+  const countByEstatus = allRows.reduce(
     (acc, r) => {
       if (r.estatus === "Vigente" || r.estatus === "Finalizado" || r.estatus === "Cancelado") {
         acc[r.estatus]++;
@@ -62,12 +76,14 @@ export default async function DashboardPage() {
     { Vigente: 0, Finalizado: 0, Cancelado: 0 },
   );
 
-  const byMonth = monthlyGroups(rows);
-  const byNaviera = topGroups(rows, "naviera", 8);
-  const byAgente = topGroups(rows, "agente", 8);
-  const byPod = topGroups(rows, "pod", 8);
-  const byPol = topGroups(rows, "pol", 8);
-  const byPlaza = topGroups(rows, "oficina", 8);
+  const byMonth = monthlyGroups(allRows);
+  const byNaviera = topGroups(filteredRows, "naviera", 8);
+  const byAgente = topGroups(filteredRows, "agente", 8);
+  const byPod = topGroups(filteredRows, "pod", 8);
+  const byPol = topGroups(filteredRows, "pol", 8);
+  const byPlaza = topGroups(filteredRows, "oficina", 8);
+
+  const detailHref = (dim: string) => `/dashboard/detalle/${dim}${mes ? `?mes=${mes}` : ""}`;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -103,12 +119,24 @@ export default async function DashboardPage() {
 
         <MonthlyBarChart title="Embarques por mes" data={byMonth} />
 
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            El filtro de mes solo afecta las gráficas de embarques de abajo — no afecta la gráfica
+            anual de arriba.
+          </p>
+          <MonthFilter months={availableMonths} />
+        </div>
+
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <HorizontalBarChart title="Embarques por naviera" data={byNaviera} />
-          <HorizontalBarChart title="Embarques por agente en el extranjero" data={byAgente} />
-          <HorizontalBarChart title="Embarques por POD" data={byPod} />
-          <HorizontalBarChart title="Embarques por POL" data={byPol} />
-          <HorizontalBarChart title="Embarques por plaza" data={byPlaza} />
+          <HorizontalBarChart title="Embarques por naviera" data={byNaviera} href={detailHref("naviera")} />
+          <HorizontalBarChart
+            title="Embarques por agente en el extranjero"
+            data={byAgente}
+            href={detailHref("agente")}
+          />
+          <HorizontalBarChart title="Embarques por POD" data={byPod} href={detailHref("pod")} />
+          <HorizontalBarChart title="Embarques por POL" data={byPol} href={detailHref("pol")} />
+          <HorizontalBarChart title="Embarques por plaza" data={byPlaza} href={detailHref("plaza")} />
         </div>
       </main>
     </div>
