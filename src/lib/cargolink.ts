@@ -97,7 +97,76 @@ export async function buscarBookingCargolink(
   return Array.isArray(valores) && valores.length > 0 ? (valores[0] as CargolinkBooking) : null;
 }
 
-function normalizeFecha(value: unknown): string | null {
+const TIPOS_SEGUIMIENTO = new Set(["FCLI", "LCLI"]);
+// Tope de seguridad: al ritmo de 50 registros por página, esto cubriría más
+// de 100,000 registros. Si algún día se alcanza, es señal de un bug (p. ej.
+// una página que nunca regresa vacía) y no de un año con tantos bookings.
+const MAX_PAGINAS = 2000;
+
+export type ReferenciaCargolink = { noBooking: string; booking: CargolinkBooking };
+
+// El "Concentrado" de Cargolink pagina con el parámetro de URL "limit", pero
+// pese al nombre NO es un offset de filas (probado empíricamente): es un
+// número de página de 50 registros, es decir la fila real es
+// pagina * 50. Pasar un offset de filas ahí (como hace, incorrectamente,
+// ~/Agentes/cargolink_service.py) satura "pagina" y la mayoría de las
+// llamadas caen fuera de rango, regresando vacío en silencio.
+async function consultarConcentradoPagina(
+  token: string,
+  cookie: string,
+  pagina: number,
+  filtros: Record<string, string>,
+): Promise<{ valores: CargolinkBooking[]; total: number | string }> {
+  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${token}&cat=api&fn=consultaBooking&tabla=&limit=${pagina}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: JSON.stringify({ tipo_fecha: "", pagadoBooking: "", ...filtros }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Cargolink respondió con error ${res.status} al consultar el concentrado.`);
+  }
+
+  return res.json();
+}
+
+// Recorre el Concentrado de Cargolink filtrando por fecha de creación dentro
+// del rango dado (fechaDesde/fechaHasta en formato YYYY-MM-DD), y regresa
+// solo los bookings cuyo tipo (últimos 4 caracteres del no_booking) es FCLI
+// o LCLI — los únicos tipos que sigue este sistema.
+export async function listarReferenciasCargolinkPorRango(
+  fechaDesde: string,
+  fechaHasta: string,
+): Promise<ReferenciaCargolink[]> {
+  const { token, cookie } = await loginCargolink();
+  const filtros = {
+    tipo_fecha: "booking.fecha_creacion",
+    fechai: fechaDesde,
+    fechaf: fechaHasta,
+  };
+
+  const encontrados: ReferenciaCargolink[] = [];
+
+  for (let pagina = 0; pagina < MAX_PAGINAS; pagina++) {
+    const respuesta = await consultarConcentradoPagina(token, cookie, pagina, filtros);
+    const valores = respuesta.valores ?? [];
+    if (valores.length === 0) break;
+
+    for (const b of valores) {
+      const noBooking = b.no_booking?.trim();
+      if (!noBooking || noBooking.length < 4) continue;
+      const tipo = noBooking.slice(-4).toUpperCase();
+      if (TIPOS_SEGUIMIENTO.has(tipo)) {
+        encontrados.push({ noBooking, booking: b });
+      }
+    }
+  }
+
+  return encontrados;
+}
+
+export function normalizeFecha(value: unknown): string | null {
   if (typeof value !== "string") return null;
   if (!value || value === "0000-00-00") return null;
   return value.slice(0, 10);

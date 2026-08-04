@@ -1,19 +1,29 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/login/actions";
-import { deleteImportacion, actualizarImportacion } from "./actions";
+import {
+  deleteImportacion,
+  actualizarImportacion,
+  previsualizarSincronizacion,
+  confirmarSincronizacion,
+  obtenerUltimaSincronizacion,
+} from "./actions";
 import { RowActions } from "@/components/RowActions";
 import { UpdateCell } from "@/components/UpdateCell";
 import { ClickableRow } from "@/components/ClickableRow";
 import { EstatusDropdown } from "@/components/EstatusDropdown";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { SincronizarButton } from "@/components/SincronizarButton";
 import { getMyPermissions } from "@/lib/permissions";
 import type { Importacion } from "@/types/importacion";
 import { FIELD_LABELS, LIST_COLUMNS } from "@/types/importacion";
 
 export const dynamic = "force-dynamic";
 
-const SORTABLE_FIELDS = new Set<string>(LIST_COLUMNS);
+// "created_at" no es una columna visible en la tabla, pero se permite como
+// orden para poder mostrar primero lo recién agregado por "Actualizar
+// referencias" (ver SincronizarButton).
+const SORTABLE_FIELDS = new Set<string>([...LIST_COLUMNS, "created_at"]);
 const PAGE_SIZE = 100;
 
 const ESTATUS_ROW_CLASS: Record<string, string> = {
@@ -79,12 +89,33 @@ export default async function ImportacionesPage({
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
-  const { data: polPodData } = await supabase.from("seguimiento_importaciones").select("pol, pod");
+  const ultimaSincronizacionRaw = await obtenerUltimaSincronizacion();
+  const ultimaSincronizacion = ultimaSincronizacionRaw
+    ? new Intl.DateTimeFormat("es-MX", {
+        timeZone: "America/Mexico_City",
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(new Date(ultimaSincronizacionRaw))
+    : null;
+
+  // Paginado porque la API recorta a 1000 filas por default y la tabla ya
+  // pasó de eso — sin esto, POL/POD de filas más allá de la 1000 no
+  // aparecían como opción de filtro.
+  const polPodData: { pol: string | null; pod: string | null }[] = [];
+  for (let desde = 0; ; desde += 500) {
+    const { data } = await supabase
+      .from("seguimiento_importaciones")
+      .select("pol, pod")
+      .range(desde, desde + 499);
+    const pagina = data ?? [];
+    polPodData.push(...pagina);
+    if (pagina.length < 500) break;
+  }
   const availablePol = Array.from(
-    new Set((polPodData ?? []).map((r) => r.pol?.trim()).filter((v): v is string => Boolean(v))),
+    new Set(polPodData.map((r) => r.pol?.trim()).filter((v): v is string => Boolean(v))),
   ).sort();
   const availablePod = Array.from(
-    new Set((polPodData ?? []).map((r) => r.pod?.trim()).filter((v): v is string => Boolean(v))),
+    new Set(polPodData.map((r) => r.pod?.trim()).filter((v): v is string => Boolean(v))),
   ).sort();
 
   const sortHref = (field: string) => {
@@ -181,6 +212,10 @@ export default async function ImportacionesPage({
           </div>
 
           <div className="flex items-center gap-2">
+            <SincronizarButton
+              onPrevisualizar={previsualizarSincronizacion}
+              onConfirmar={confirmarSincronizacion}
+            />
             {myPermissions.puede_exportar && (
               <a
                 href={exportHref}
@@ -204,6 +239,14 @@ export default async function ImportacionesPage({
           </p>
         )}
 
+        <p className="mb-1 text-[10px] text-slate-500 dark:text-slate-400">
+          Última actualización de referencias:{" "}
+          {ultimaSincronizacion ? (
+            <span className="font-medium text-slate-700 dark:text-slate-300">{ultimaSincronizacion}</span>
+          ) : (
+            "nunca se ha corrido"
+          )}
+        </p>
         <p className="mb-2 text-[10px] text-slate-400 dark:text-slate-500">
           El resto de la información (Vendedor, Incidencias) se ve al abrir el detalle de la fila.
         </p>
