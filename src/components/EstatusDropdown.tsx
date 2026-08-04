@@ -51,7 +51,7 @@ export function EstatusDropdown({ current }: { current: string[] }) {
         Estatus: {summary}
         <span className="text-[10px]">▾</span>
       </summary>
-      <div className="absolute left-0 z-20 mt-1 w-44 rounded-md border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+      <div className="absolute left-0 z-40 mt-1 w-44 rounded-md border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
         <label className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50 dark:hover:bg-slate-800">
           <input
             type="checkbox"

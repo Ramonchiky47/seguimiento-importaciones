@@ -27,6 +27,8 @@ export async function GET(request: NextRequest) {
   const estatusRaw = searchParams.getAll("estatus");
   const estatusFilter = estatusRaw.length > 0 ? estatusRaw : ["Vigente"];
   const isTodosEstatus = estatusFilter.includes("Todos");
+  const polFilter = searchParams.getAll("pol");
+  const podFilter = searchParams.getAll("pod");
 
   const supabase = await createClient();
 
@@ -46,6 +48,14 @@ export async function GET(request: NextRequest) {
 
   if (!isTodosEstatus) {
     query = query.in("estatus", estatusFilter);
+  }
+
+  if (polFilter.length > 0) {
+    query = query.in("pol", polFilter);
+  }
+
+  if (podFilter.length > 0) {
+    query = query.in("pod", podFilter);
   }
 
   const { data, error } = await query;

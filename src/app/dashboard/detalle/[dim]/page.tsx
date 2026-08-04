@@ -30,10 +30,12 @@ export default async function DashboardDetallePage({
   searchParams,
 }: {
   params: Promise<{ dim: string }>;
-  searchParams: Promise<{ mes?: string }>;
+  searchParams: Promise<{ mes?: string; pol?: string | string[]; pod?: string | string[] }>;
 }) {
   const { dim } = await params;
-  const { mes } = await searchParams;
+  const { mes, pol, pod } = await searchParams;
+  const polRaw = pol ? (Array.isArray(pol) ? pol : [pol]) : [];
+  const podRaw = pod ? (Array.isArray(pod) ? pod : [pod]) : [];
   const config = DIM_CONFIG[dim];
   if (!config) notFound();
 
@@ -44,6 +46,8 @@ export default async function DashboardDetallePage({
   let rows = (data ?? []) as Row[];
 
   if (mes) rows = rows.filter((r) => r.fecha?.startsWith(mes));
+  if (polRaw.length > 0) rows = rows.filter((r) => polRaw.includes(r.pol?.trim() ?? ""));
+  if (podRaw.length > 0) rows = rows.filter((r) => podRaw.includes(r.pod?.trim() ?? ""));
 
   const serviceTypes = Array.from(
     new Set(rows.map((r) => r.type?.trim().toUpperCase() || "SIN SERVICIO")),
@@ -66,7 +70,18 @@ export default async function DashboardDetallePage({
     })
     .sort((a, b) => b.total - a.total);
 
-  const backHref = `/dashboard${mes ? `?mes=${mes}` : ""}`;
+  const backParams = new URLSearchParams();
+  if (mes) backParams.set("mes", mes);
+  for (const v of polRaw) backParams.append("pol", v);
+  for (const v of podRaw) backParams.append("pod", v);
+  const backQuery = backParams.toString();
+  const backHref = `/dashboard${backQuery ? `?${backQuery}` : ""}`;
+
+  const activeFilters = [
+    mes ? formatMonthLabel(mes) : null,
+    polRaw.length > 0 ? `POL: ${polRaw.join(", ")}` : null,
+    podRaw.length > 0 ? `POD: ${podRaw.join(", ")}` : null,
+  ].filter(Boolean);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -82,7 +97,8 @@ export default async function DashboardDetallePage({
             Detalle: Embarques por {config.title}
           </h1>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {mes ? formatMonthLabel(mes) : "Todos los meses"} · Ordenado de mayor a menor
+            {activeFilters.length > 0 ? activeFilters.join(" · ") : "Todos los meses"} · Ordenado de
+            mayor a menor
           </p>
         </div>
       </header>
@@ -134,7 +150,7 @@ export default async function DashboardDetallePage({
                     colSpan={2 + serviceTypes.length}
                     className="px-4 py-8 text-center text-slate-400 dark:text-slate-500"
                   >
-                    No hay datos para este mes.
+                    No hay datos para estos filtros.
                   </td>
                 </tr>
               )}

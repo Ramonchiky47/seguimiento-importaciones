@@ -6,6 +6,7 @@ import { RowActions } from "@/components/RowActions";
 import { UpdateCell } from "@/components/UpdateCell";
 import { ClickableRow } from "@/components/ClickableRow";
 import { EstatusDropdown } from "@/components/EstatusDropdown";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { getMyPermissions } from "@/lib/permissions";
 import type { Importacion } from "@/types/importacion";
 import { FIELD_LABELS, LIST_COLUMNS } from "@/types/importacion";
@@ -28,10 +29,12 @@ export default async function ImportacionesPage({
     sort?: string;
     dir?: string;
     estatus?: string | string[];
+    pol?: string | string[];
+    pod?: string | string[];
     page?: string;
   }>;
 }) {
-  const { q, sort, dir, estatus, page } = await searchParams;
+  const { q, sort, dir, estatus, pol, pod, page } = await searchParams;
   const myPermissions = await getMyPermissions();
   const supabase = await createClient();
 
@@ -40,6 +43,8 @@ export default async function ImportacionesPage({
 
   const estatusRaw = estatus ? (Array.isArray(estatus) ? estatus : [estatus]) : ["Vigente"];
   const isTodosEstatus = estatusRaw.includes("Todos");
+  const polRaw = pol ? (Array.isArray(pol) ? pol : [pol]) : [];
+  const podRaw = pod ? (Array.isArray(pod) ? pod : [pod]) : [];
 
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
@@ -61,10 +66,26 @@ export default async function ImportacionesPage({
     query = query.in("estatus", estatusRaw);
   }
 
+  if (polRaw.length > 0) {
+    query = query.in("pol", polRaw);
+  }
+
+  if (podRaw.length > 0) {
+    query = query.in("pod", podRaw);
+  }
+
   const { data, error, count } = await query;
   const rows = (data ?? []) as Importacion[];
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  const { data: polPodData } = await supabase.from("seguimiento_importaciones").select("pol, pod");
+  const availablePol = Array.from(
+    new Set((polPodData ?? []).map((r) => r.pol?.trim()).filter((v): v is string => Boolean(v))),
+  ).sort();
+  const availablePod = Array.from(
+    new Set((polPodData ?? []).map((r) => r.pod?.trim()).filter((v): v is string => Boolean(v))),
+  ).sort();
 
   const sortHref = (field: string) => {
     const params = new URLSearchParams();
@@ -72,6 +93,8 @@ export default async function ImportacionesPage({
     params.set("sort", field);
     params.set("dir", sort === field && sortAscending ? "desc" : "asc");
     for (const s of estatusRaw) params.append("estatus", s);
+    for (const v of polRaw) params.append("pol", v);
+    for (const v of podRaw) params.append("pod", v);
     return `?${params.toString()}`;
   };
 
@@ -81,6 +104,8 @@ export default async function ImportacionesPage({
     if (sort) params.set("sort", sort);
     if (dir) params.set("dir", dir);
     for (const s of estatusRaw) params.append("estatus", s);
+    for (const v of polRaw) params.append("pol", v);
+    for (const v of podRaw) params.append("pod", v);
     params.set("page", String(p));
     return `?${params.toString()}`;
   };
@@ -90,6 +115,8 @@ export default async function ImportacionesPage({
   if (sort) exportParams.set("sort", sort);
   if (dir) exportParams.set("dir", dir);
   for (const s of estatusRaw) exportParams.append("estatus", s);
+  for (const v of polRaw) exportParams.append("pol", v);
+  for (const v of podRaw) exportParams.append("pod", v);
   const exportHref = `/importaciones/export${
     exportParams.toString() ? `?${exportParams.toString()}` : ""
   }`;
@@ -149,6 +176,8 @@ export default async function ImportacionesPage({
               </button>
             </form>
             <EstatusDropdown current={estatusRaw} />
+            <MultiSelectFilter paramName="pol" label="POL" options={availablePol} current={polRaw} />
+            <MultiSelectFilter paramName="pod" label="POD" options={availablePod} current={podRaw} />
           </div>
 
           <div className="flex items-center gap-2">

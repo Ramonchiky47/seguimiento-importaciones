@@ -5,6 +5,7 @@ import { StatTile } from "@/components/StatTile";
 import { HorizontalBarChart } from "@/components/HorizontalBarChart";
 import { MonthlyBarChart } from "@/components/MonthlyBarChart";
 import { MonthFilter } from "@/components/MonthFilter";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,23 @@ type Row = {
   oficina: string | null;
   fecha: string | null;
   estatus: string;
+  type: string | null;
+  contenedor: string | null;
+  cantidad_contenedores_tipo: string | null;
 };
+
+// Matches strings like "6 contenedores (Tipo 40 HC,40 OT)" produced by
+// buildCantidadContenedoresTipo() in lib/cargolink.ts. When a booking lists
+// several types for one total count, the type string is kept combined
+// (e.g. "40 HC, 40 OT") instead of guessing a split per type.
+function parseContenedoresTipo(text: string | null): { count: number; type: string } | null {
+  if (!text) return null;
+  const match = text.match(/^(\d+)\s+contenedor(?:es)?\s*\(Tipo\s+(.+)\)\s*$/i);
+  if (!match) return null;
+  const count = Number(match[1]);
+  if (!Number.isFinite(count) || count <= 0) return null;
+  return { count, type: match[2].trim().replace(/,/g, ", ") };
+}
 
 function topGroups(rows: Row[], field: keyof Row, limit: number) {
   const counts = new Map<string, number>();
@@ -47,23 +64,38 @@ function monthlyGroups(rows: Row[]) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string }>;
+  searchParams: Promise<{ mes?: string; pol?: string | string[]; pod?: string | string[] }>;
 }) {
-  const { mes } = await searchParams;
+  const { mes, pol, pod } = await searchParams;
+  const polRaw = pol ? (Array.isArray(pol) ? pol : [pol]) : [];
+  const podRaw = pod ? (Array.isArray(pod) ? pod : [pod]) : [];
   const supabase = await createClient();
 
   const { data } = await supabase
     .from("seguimiento_importaciones")
-    .select("naviera, agente, pod, pol, oficina, fecha, estatus");
+    .select(
+      "naviera, agente, pod, pol, oficina, fecha, estatus, type, contenedor, cantidad_contenedores_tipo",
+    );
   const allRows = (data ?? []) as Row[];
 
   const availableMonths = Array.from(
     new Set(allRows.map((r) => r.fecha?.slice(0, 7)).filter((m): m is string => Boolean(m))),
   ).sort((a, b) => b.localeCompare(a));
+  const availablePol = Array.from(
+    new Set(allRows.map((r) => r.pol?.trim()).filter((v): v is string => Boolean(v))),
+  ).sort();
+  const availablePod = Array.from(
+    new Set(allRows.map((r) => r.pod?.trim()).filter((v): v is string => Boolean(v))),
+  ).sort();
 
-  // The month filter applies only to the "embarques por X" breakdown charts —
-  // the monthly trend chart and KPI tiles always reflect the full dataset.
-  const filteredRows = mes ? allRows.filter((r) => r.fecha?.startsWith(mes)) : allRows;
+  // The month/POL/POD filters apply only to the "embarques por X" breakdown
+  // charts — the monthly trend chart and KPI tiles always reflect the full dataset.
+  const filteredRows = allRows.filter((r) => {
+    if (mes && !r.fecha?.startsWith(mes)) return false;
+    if (polRaw.length > 0 && !polRaw.includes(r.pol?.trim() ?? "")) return false;
+    if (podRaw.length > 0 && !podRaw.includes(r.pod?.trim() ?? "")) return false;
+    return true;
+  });
 
   const totalCount = allRows.length;
   const countByEstatus = allRows.reduce(
@@ -83,7 +115,39 @@ export default async function DashboardPage({
   const byPol = topGroups(filteredRows, "pol", 8);
   const byPlaza = topGroups(filteredRows, "oficina", 8);
 
-  const detailHref = (dim: string) => `/dashboard/detalle/${dim}${mes ? `?mes=${mes}` : ""}`;
+  // Solo bookings FCLI: contenedores por tipo (suma) y detección de
+  // registros sin contenedor registrado. Respeta los mismos filtros de
+  // mes/POL/POD que las gráficas de "embarques por X" de arriba.
+  const fclRows = filteredRows.filter((r) => r.type?.trim().toUpperCase() === "FCLI");
+  const containerTypeCounts = new Map<string, number>();
+  for (const r of fclRows) {
+    const parsed = parseContenedoresTipo(r.cantidad_contenedores_tipo);
+    if (!parsed) continue;
+    containerTypeCounts.set(parsed.type, (containerTypeCounts.get(parsed.type) ?? 0) + parsed.count);
+  }
+  const byContainerType = Array.from(containerTypeCounts.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+  const totalContenedoresFcl = byContainerType.reduce((sum, d) => sum + d.value, 0);
+  const fclSinContenedor = fclRows.filter((r) => !r.contenedor?.trim());
+
+  const detailHref = (dim: string) => {
+    const params = new URLSearchParams();
+    if (mes) params.set("mes", mes);
+    for (const v of polRaw) params.append("pol", v);
+    for (const v of podRaw) params.append("pod", v);
+    const query = params.toString();
+    return `/dashboard/detalle/${dim}${query ? `?${query}` : ""}`;
+  };
+
+  const sinContenedorHref = (() => {
+    const params = new URLSearchParams();
+    if (mes) params.set("mes", mes);
+    for (const v of polRaw) params.append("pol", v);
+    for (const v of podRaw) params.append("pod", v);
+    const query = params.toString();
+    return `/dashboard/sin-contenedor${query ? `?${query}` : ""}`;
+  })();
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -119,12 +183,16 @@ export default async function DashboardPage({
 
         <MonthlyBarChart title="Embarques por mes" data={byMonth} />
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            El filtro de mes solo afecta las gráficas de embarques de abajo — no afecta la gráfica
+            Estos filtros solo afectan las gráficas de embarques de abajo — no afectan la gráfica
             anual de arriba.
           </p>
-          <MonthFilter months={availableMonths} />
+          <div className="flex flex-wrap items-center gap-2">
+            <MonthFilter months={availableMonths} />
+            <MultiSelectFilter paramName="pol" label="POL" options={availablePol} current={polRaw} />
+            <MultiSelectFilter paramName="pod" label="POD" options={availablePod} current={podRaw} />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -137,6 +205,76 @@ export default async function DashboardPage({
           <HorizontalBarChart title="Embarques por POD" data={byPod} href={detailHref("pod")} />
           <HorizontalBarChart title="Embarques por POL" data={byPol} href={detailHref("pol")} />
           <HorizontalBarChart title="Embarques por plaza" data={byPlaza} href={detailHref("plaza")} />
+        </div>
+
+        <div>
+          <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
+            Contenedores (solo bookings FCLI)
+          </h2>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Cantidad de contenedores por tipo
+                </h3>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                  Total: {totalContenedoresFcl}
+                </span>
+              </div>
+              {byContainerType.length === 0 ? (
+                <p className="text-xs text-slate-400 dark:text-slate-500">Sin datos.</p>
+              ) : (
+                <div className="space-y-2">
+                  {byContainerType.map((d) => (
+                    <div key={d.label} className="flex items-center gap-2 rounded px-1 py-0.5">
+                      <span
+                        className="w-32 shrink-0 truncate text-xs text-slate-600 dark:text-slate-300"
+                        title={d.label}
+                      >
+                        {d.label}
+                      </span>
+                      <div className="h-4 flex-1 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
+                        <div
+                          className="h-4 rounded bg-[#2a78d6] dark:bg-[#3987e5]"
+                          style={{
+                            width: `${Math.max(4, (d.value / Math.max(1, byContainerType[0].value)) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="w-8 shrink-0 text-right text-xs tabular-nums text-slate-700 dark:text-slate-200">
+                        {d.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="mt-3 text-[10px] text-slate-400 dark:text-slate-500">
+                Cuando un booking registra varios tipos para un mismo total (ej. &quot;Tipo 40
+                HC,40 OT&quot;), se muestra como una combinación aparte porque no es posible saber
+                cuántos de cada tipo corresponden.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Bookings FCLI sin contenedor registrado
+              </h3>
+              <p className="text-3xl font-semibold tabular-nums text-slate-900 dark:text-slate-50">
+                {fclSinContenedor.length}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                de {fclRows.length} bookings FCLI en total
+              </p>
+              {fclSinContenedor.length > 0 && (
+                <Link
+                  href={sinContenedorHref}
+                  className="mt-4 inline-block text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Ver registros sin contenedor para corregirlos →
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
       </main>
     </div>
