@@ -102,6 +102,30 @@ export async function actualizarImportacion(id: number) {
 
   const payload = mapCargolinkBookingToImportacion(cargolinkBooking, row.booking);
 
+  // El "ejecutivo" de Cargolink se guarda en nuestro campo "operativo". Si
+  // todavía no existe en el catálogo de Operativos, se da de alta aquí mismo
+  // (sin usuario asignado) para que no se pierda y quede disponible en el
+  // catálogo para asignarle acceso después. La comparación normaliza
+  // espacios (además de mayúsculas/minúsculas) porque un simple ILIKE no
+  // detecta catálogo ya cargado con espacios dobles como "Vanessa  Cano" —
+  // eso generaba entradas duplicadas.
+  if (payload.operativo) {
+    const normalizar = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+    const ejecutivoNormalizado = normalizar(payload.operativo);
+    const { data: operativos } = await supabase
+      .from("catalogo_operativos")
+      .select("nombre_operativo");
+    const yaExiste = (operativos ?? []).some(
+      (o) => o.nombre_operativo && normalizar(o.nombre_operativo) === ejecutivoNormalizado,
+    );
+
+    if (!yaExiste) {
+      await supabase
+        .from("catalogo_operativos")
+        .insert({ nombre_operativo: payload.operativo, activo: true, user_id: null });
+    }
+  }
+
   let oficina: string | null = null;
   if (payload.vendedor) {
     const { data: vendedorRow } = await supabase

@@ -4,6 +4,7 @@ export type CargolinkBooking = Record<string, unknown> & {
   no_booking?: string;
   fecha_creacion?: string;
   nameVend?: string;
+  nameEjec?: string;
   nameCust?: string;
   nombreNaviera?: string;
   sitioOrigen?: string;
@@ -228,6 +229,7 @@ export function mapCargolinkBookingToImportacion(booking: CargolinkBooking, noBo
     fecha: normalizeFecha(booking.fecha_creacion),
     type,
     vendedor,
+    operativo: booking.nameEjec?.trim().replace(/\s+/g, " ") || null,
     client: booking.nameCust?.trim() || null,
     agente,
     naviera: isLCLI ? null : booking.nombreNaviera?.trim() || null,
