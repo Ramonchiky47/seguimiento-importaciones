@@ -14,6 +14,7 @@ import { ClickableRow } from "@/components/ClickableRow";
 import { EstatusDropdown } from "@/components/EstatusDropdown";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { SincronizarButton } from "@/components/SincronizarButton";
+import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { getMyPermissions } from "@/lib/permissions";
 import type { Importacion } from "@/types/importacion";
 import { FIELD_LABELS, LIST_COLUMNS } from "@/types/importacion";
@@ -154,6 +155,7 @@ export default async function ImportacionesPage({
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <RealtimeRefresher table="seguimiento_importaciones" />
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
@@ -286,12 +288,16 @@ export default async function ImportacionesPage({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {rows.map((row) => {
                 const values = row as unknown as Record<string, string | number | null>;
-                const rowBg = ESTATUS_ROW_CLASS[row.estatus] || "bg-white dark:bg-slate-900";
+                const sinOperativo = !row.operativo?.trim();
+                const rowClass =
+                  ESTATUS_ROW_CLASS[row.estatus] ??
+                  (sinOperativo ? "bg-yellow-200 dark:bg-yellow-900" : "");
+                const rowBg = rowClass || "bg-white dark:bg-slate-900";
                 return (
                   <ClickableRow
                     key={row.id}
                     href={`/importaciones/${row.id}`}
-                    className={ESTATUS_ROW_CLASS[row.estatus] ?? ""}
+                    className={rowClass}
                   >
                     <UpdateCell id={row.id} onUpdate={actualizarImportacion} stickyBg={rowBg} />
                     {LIST_COLUMNS.map((field) => (
