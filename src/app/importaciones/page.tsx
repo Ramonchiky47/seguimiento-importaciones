@@ -48,7 +48,7 @@ export default async function ImportacionesPage({
   const myPermissions = await getMyPermissions();
   const supabase = await createClient();
 
-  const sortField = sort && SORTABLE_FIELDS.has(sort) ? sort : "fecha";
+  const sortField = sort && SORTABLE_FIELDS.has(sort) ? sort : "booking";
   const sortAscending = dir === "asc";
 
   const estatusRaw = estatus ? (Array.isArray(estatus) ? estatus : [estatus]) : ["Vigente"];

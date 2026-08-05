@@ -219,6 +219,7 @@ export function ImportacionForm({
       }
       const anchor = (e.target as HTMLElement).closest("a");
       if (!anchor || (anchor.target && anchor.target !== "_self")) return;
+      if (anchor.dataset.discardChanges === "true") return;
 
       e.preventDefault();
       e.stopPropagation();
@@ -436,6 +437,11 @@ export function ImportacionForm({
       <div className="flex justify-end gap-3 border-t border-slate-200 pt-3 dark:border-slate-800">
         <a
           href="/importaciones"
+          data-discard-changes="true"
+          onClick={() => {
+            dirtyRef.current = false;
+            setDirty(false);
+          }}
           className="rounded-md border border-slate-300 px-3 py-1.5 text-[10px] font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
         >
           Cancelar
