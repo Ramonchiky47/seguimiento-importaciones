@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
   const estatusRaw = searchParams.getAll("estatus");
   const estatusFilter = estatusRaw.length > 0 ? estatusRaw : ["Vigente"];
   const isTodosEstatus = estatusFilter.includes("Todos");
+  const isNingunoEstatus = estatusFilter.includes("Ninguno");
   const polFilter = searchParams.getAll("pol");
   const podFilter = searchParams.getAll("pod");
 
@@ -46,7 +47,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!isTodosEstatus) {
+  if (isNingunoEstatus) {
+    query = query.eq("id", -1);
+  } else if (!isTodosEstatus) {
     query = query.in("estatus", estatusFilter);
   }
 

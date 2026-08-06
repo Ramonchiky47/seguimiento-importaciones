@@ -5,14 +5,15 @@ import { formatMonthLabel } from "@/lib/dateLabels";
 
 export const dynamic = "force-dynamic";
 
-type FieldName = "naviera" | "agente" | "pod" | "pol" | "oficina";
+type FieldName = "naviera" | "agente" | "pod" | "pol" | "oficina" | "operativo";
 
-const DIM_CONFIG: Record<string, { field: FieldName; title: string }> = {
+const DIM_CONFIG: Record<string, { field: FieldName; title: string; multiValue?: boolean }> = {
   naviera: { field: "naviera", title: "Naviera" },
   agente: { field: "agente", title: "Agente en el extranjero" },
   pod: { field: "pod", title: "POD" },
   pol: { field: "pol", title: "POL" },
   plaza: { field: "oficina", title: "Plaza" },
+  operativo: { field: "operativo", title: "Operativo", multiValue: true },
 };
 
 type Row = {
@@ -21,8 +22,10 @@ type Row = {
   pod: string | null;
   pol: string | null;
   oficina: string | null;
+  operativo: string | null;
   type: string | null;
   fecha: string | null;
+  estatus: string;
 };
 
 export default async function DashboardDetallePage({
@@ -30,10 +33,15 @@ export default async function DashboardDetallePage({
   searchParams,
 }: {
   params: Promise<{ dim: string }>;
-  searchParams: Promise<{ mes?: string; pol?: string | string[]; pod?: string | string[] }>;
+  searchParams: Promise<{
+    mes?: string;
+    pol?: string | string[];
+    pod?: string | string[];
+    estatus?: string;
+  }>;
 }) {
   const { dim } = await params;
-  const { mes, pol, pod } = await searchParams;
+  const { mes, pol, pod, estatus } = await searchParams;
   const polRaw = pol ? (Array.isArray(pol) ? pol : [pol]) : [];
   const podRaw = pod ? (Array.isArray(pod) ? pod : [pod]) : [];
   const config = DIM_CONFIG[dim];
@@ -42,25 +50,35 @@ export default async function DashboardDetallePage({
   const supabase = await createClient();
   const { data } = await supabase
     .from("seguimiento_importaciones")
-    .select("naviera, agente, pod, pol, oficina, type, fecha");
+    .select("naviera, agente, pod, pol, oficina, operativo, type, fecha, estatus");
   let rows = (data ?? []) as Row[];
 
   if (mes) rows = rows.filter((r) => r.fecha?.startsWith(mes));
   if (polRaw.length > 0) rows = rows.filter((r) => polRaw.includes(r.pol?.trim() ?? ""));
   if (podRaw.length > 0) rows = rows.filter((r) => podRaw.includes(r.pod?.trim() ?? ""));
+  if (estatus) rows = rows.filter((r) => r.estatus === estatus);
 
   const serviceTypes = Array.from(
     new Set(rows.map((r) => r.type?.trim().toUpperCase() || "SIN SERVICIO")),
   ).sort();
 
+  // Cuando el campo puede traer varios valores en una sola fila (ej.
+  // "Adriana del Rosario Avila, EMMANUEL PULIDO" en operativo), se cuenta el
+  // booking una vez por cada valor listado, igual que hace la restricción de
+  // visibilidad por operativo (que también trata el campo como una lista).
   const groups = new Map<string, Map<string, number>>();
   for (const r of rows) {
-    const key = r[config.field]?.trim();
-    if (!key) continue;
+    const raw = r[config.field]?.trim();
+    if (!raw) continue;
+    const keys = config.multiValue
+      ? raw.split(",").map((k) => k.trim()).filter(Boolean)
+      : [raw];
     const service = r.type?.trim().toUpperCase() || "SIN SERVICIO";
-    if (!groups.has(key)) groups.set(key, new Map());
-    const byService = groups.get(key)!;
-    byService.set(service, (byService.get(service) ?? 0) + 1);
+    for (const key of keys) {
+      if (!groups.has(key)) groups.set(key, new Map());
+      const byService = groups.get(key)!;
+      byService.set(service, (byService.get(service) ?? 0) + 1);
+    }
   }
 
   const table = Array.from(groups.entries())
@@ -78,10 +96,22 @@ export default async function DashboardDetallePage({
   const backHref = `/dashboard${backQuery ? `?${backQuery}` : ""}`;
 
   const activeFilters = [
+    estatus ? `Estatus: ${estatus}` : null,
     mes ? formatMonthLabel(mes) : null,
     polRaw.length > 0 ? `POL: ${polRaw.join(", ")}` : null,
     podRaw.length > 0 ? `POD: ${podRaw.join(", ")}` : null,
   ].filter(Boolean);
+
+  const rowHref = (label: string) => {
+    if (!config.multiValue) return null;
+    const params = new URLSearchParams();
+    if (estatus) params.set("estatus", estatus);
+    if (mes) params.set("mes", mes);
+    for (const v of polRaw) params.append("pol", v);
+    for (const v of podRaw) params.append("pod", v);
+    const query = params.toString();
+    return `/dashboard/detalle/${dim}/${encodeURIComponent(label)}${query ? `?${query}` : ""}`;
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -125,24 +155,38 @@ export default async function DashboardDetallePage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {table.map((row) => (
-                <tr key={row.label} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                  <td className="whitespace-nowrap px-4 py-2 text-slate-700 dark:text-slate-300">
-                    {row.label}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-2 text-right font-medium tabular-nums text-slate-900 dark:text-slate-50">
-                    {row.total}
-                  </td>
-                  {serviceTypes.map((service) => (
-                    <td
-                      key={service}
-                      className="whitespace-nowrap px-4 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300"
-                    >
-                      {row.byService.get(service) ?? 0}
+              {table.map((row) => {
+                const href = rowHref(row.label);
+                const cells = (
+                  <>
+                    <td className="whitespace-nowrap px-4 py-2 text-slate-700 dark:text-slate-300">
+                      {href ? (
+                        <Link href={href} className="text-blue-600 hover:underline dark:text-blue-400">
+                          {row.label}
+                        </Link>
+                      ) : (
+                        row.label
+                      )}
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    <td className="whitespace-nowrap px-4 py-2 text-right font-medium tabular-nums text-slate-900 dark:text-slate-50">
+                      {row.total}
+                    </td>
+                    {serviceTypes.map((service) => (
+                      <td
+                        key={service}
+                        className="whitespace-nowrap px-4 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300"
+                      >
+                        {row.byService.get(service) ?? 0}
+                      </td>
+                    ))}
+                  </>
+                );
+                return (
+                  <tr key={row.label} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                    {cells}
+                  </tr>
+                );
+              })}
 
               {table.length === 0 && (
                 <tr>

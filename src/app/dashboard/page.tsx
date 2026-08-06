@@ -15,6 +15,7 @@ type Row = {
   pod: string | null;
   pol: string | null;
   oficina: string | null;
+  operativo: string | null;
   fecha: string | null;
   estatus: string;
   type: string | null;
@@ -74,7 +75,7 @@ export default async function DashboardPage({
   const { data } = await supabase
     .from("seguimiento_importaciones")
     .select(
-      "naviera, agente, pod, pol, oficina, fecha, estatus, type, contenedor, cantidad_contenedores_tipo",
+      "naviera, agente, pod, pol, oficina, operativo, fecha, estatus, type, contenedor, cantidad_contenedores_tipo",
     );
   const allRows = (data ?? []) as Row[];
 
@@ -130,6 +131,37 @@ export default async function DashboardPage({
     .sort((a, b) => b.value - a.value);
   const totalContenedoresFcl = byContainerType.reduce((sum, d) => sum + d.value, 0);
   const fclSinContenedor = fclRows.filter((r) => !r.contenedor?.trim());
+
+  // Operaciones vigentes por operativo, con desglose FCLI/LCLI. El campo
+  // operativo puede traer varios nombres separados por coma en una misma
+  // fila (ej. "Adriana del Rosario Avila, EMMANUEL PULIDO"), así que el
+  // booking se cuenta una vez por cada nombre listado.
+  const vigenteRows = filteredRows.filter((r) => r.estatus === "Vigente");
+  const operativoStats = new Map<string, { total: number; fcli: number; lcli: number }>();
+  for (const r of vigenteRows) {
+    const raw = r.operativo?.trim();
+    if (!raw) continue;
+    const type = r.type?.trim().toUpperCase();
+    for (const name of raw.split(",").map((n) => n.trim()).filter(Boolean)) {
+      if (!operativoStats.has(name)) operativoStats.set(name, { total: 0, fcli: 0, lcli: 0 });
+      const stat = operativoStats.get(name)!;
+      stat.total++;
+      if (type === "FCLI") stat.fcli++;
+      else if (type === "LCLI") stat.lcli++;
+    }
+  }
+  const operativoTable = Array.from(operativoStats.entries())
+    .map(([label, stat]) => ({ label, ...stat }))
+    .sort((a, b) => b.total - a.total);
+
+  const operativoBookingsHref = (label: string) => {
+    const params = new URLSearchParams();
+    params.set("estatus", "Vigente");
+    if (mes) params.set("mes", mes);
+    for (const v of polRaw) params.append("pol", v);
+    for (const v of podRaw) params.append("pod", v);
+    return `/dashboard/detalle/operativo/${encodeURIComponent(label)}?${params.toString()}`;
+  };
 
   const detailHref = (dim: string) => {
     const params = new URLSearchParams();
@@ -275,6 +307,66 @@ export default async function DashboardPage({
               )}
             </div>
           </div>
+        </div>
+
+        <div>
+          <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
+            Operaciones vigentes por operativo
+          </h2>
+          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+            <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+              <thead className="bg-slate-50 dark:bg-slate-800">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">
+                    Operativo
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">
+                    Total
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">
+                    FCLI
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">
+                    LCLI
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {operativoTable.map((row) => (
+                  <tr key={row.label} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                    <td className="whitespace-nowrap px-4 py-2">
+                      <Link
+                        href={operativoBookingsHref(row.label)}
+                        className="text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        {row.label}
+                      </Link>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2 text-right font-medium tabular-nums text-slate-900 dark:text-slate-50">
+                      {row.total}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                      {row.fcli}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                      {row.lcli}
+                    </td>
+                  </tr>
+                ))}
+
+                {operativoTable.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-8 text-center text-slate-400 dark:text-slate-500">
+                      No hay operaciones vigentes para estos filtros.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+            Haz clic en un operativo para ver sus bookings y clientes.
+          </p>
         </div>
       </main>
     </div>

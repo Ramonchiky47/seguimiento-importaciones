@@ -54,6 +54,7 @@ export default async function ImportacionesPage({
 
   const estatusRaw = estatus ? (Array.isArray(estatus) ? estatus : [estatus]) : ["Vigente"];
   const isTodosEstatus = estatusRaw.includes("Todos");
+  const isNingunoEstatus = estatusRaw.includes("Ninguno");
   const polRaw = pol ? (Array.isArray(pol) ? pol : [pol]) : [];
   const podRaw = pod ? (Array.isArray(pod) ? pod : [pod]) : [];
 
@@ -73,7 +74,12 @@ export default async function ImportacionesPage({
     );
   }
 
-  if (!isTodosEstatus) {
+  if (isNingunoEstatus) {
+    // Selección explícita de "ningún estatus" — se fuerza una condición
+    // imposible en vez de .in("estatus", []) porque un IN vacío no siempre
+    // se traduce de forma confiable a "cero filas" en PostgREST.
+    query = query.eq("id", -1);
+  } else if (!isTodosEstatus) {
     query = query.in("estatus", estatusRaw);
   }
 
