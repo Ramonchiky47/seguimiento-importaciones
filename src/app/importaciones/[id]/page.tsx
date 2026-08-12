@@ -45,6 +45,16 @@ export default async function EditarImportacionPage({
     operativoOptions.push(row.operativo);
   }
 
+  const { data: terminalesData } = await supabase
+    .from("catalogo_terminales_portuarias")
+    .select("nombre")
+    .order("nombre");
+
+  const terminalPortuariaOptions = (terminalesData ?? []).map((t) => t.nombre as string);
+  if (row.terminal_portuaria && !terminalPortuariaOptions.includes(row.terminal_portuaria)) {
+    terminalPortuariaOptions.push(row.terminal_portuaria);
+  }
+
   const { data: incidenciasData } = await supabase
     .from("incidencias_importacion")
     .select("*")
@@ -88,6 +98,7 @@ export default async function EditarImportacionPage({
             action={boundUpdate}
             initialValue={row}
             operativoOptions={operativoOptions}
+            terminalPortuariaOptions={terminalPortuariaOptions}
           />
         </div>
 

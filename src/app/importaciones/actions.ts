@@ -5,12 +5,92 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DATE_FIELDS, TEXT_FIELDS } from "@/types/importacion";
 import {
-  buscarBookingCargolink,
+  buscarBookingConSesion,
   listarReferenciasCargolinkPorRango,
+  loginCargolink,
   mapCargolinkBookingToImportacion,
   normalizeFecha,
+  type CargolinkSession,
 } from "@/lib/cargolink";
 import { getMyPermissions } from "@/lib/permissions";
+
+function normalizarNombre(s: string): string {
+  return s.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+// El "ejecutivo" de Cargolink se guarda en nuestro campo "operativo". Si
+// todavía no existe en el catálogo de Operativos, se da de alta aquí mismo
+// (sin usuario asignado) para que no se pierda y quede disponible en el
+// catálogo para asignarle acceso después. La comparación normaliza espacios
+// (además de mayúsculas/minúsculas) porque un simple ILIKE no detecta
+// catálogo ya cargado con espacios dobles como "Vanessa  Cano" — eso
+// generaba entradas duplicadas. operativosConocidos se recibe y se muta para
+// poder reusarlo en un loop sin volver a consultar el catálogo en cada vuelta.
+async function asegurarOperativoEnCatalogo(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  operativo: string,
+  operativosConocidos: Set<string>,
+) {
+  const clave = normalizarNombre(operativo);
+  if (operativosConocidos.has(clave)) return;
+
+  const { error } = await supabase
+    .from("catalogo_operativos")
+    .insert({ nombre_operativo: operativo, activo: true, user_id: null });
+  if (!error) operativosConocidos.add(clave);
+}
+
+// Trae y actualiza los ~20 campos completos de un booking desde Cargolink
+// (usado tanto por el botón "Actualizar" de una fila como por la
+// sincronización masiva, que ahora enriquece cada registro insertado en vez
+// de dejarlo con el set reducido de campos).
+async function enriquecerImportacionDesdeCargolink(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  session: CargolinkSession,
+  id: number,
+  noBooking: string,
+  operativosConocidos: Set<string>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const cargolinkBooking = await buscarBookingConSesion(session, noBooking);
+  if (!cargolinkBooking) {
+    return { ok: false, error: `No se encontró el booking ${noBooking} en Cargolink.` };
+  }
+
+  const payload = mapCargolinkBookingToImportacion(cargolinkBooking, noBooking);
+
+  if (payload.operativo) {
+    await asegurarOperativoEnCatalogo(supabase, payload.operativo, operativosConocidos);
+  }
+
+  let oficina: string | null = null;
+  if (payload.vendedor) {
+    const { data: vendedorRow } = await supabase
+      .from("catalogo_vendedores")
+      .select("plaza")
+      .ilike("vendedor", payload.vendedor)
+      .maybeSingle();
+    oficina = (vendedorRow?.plaza as string | undefined) ?? null;
+  }
+
+  const { error: updateError } = await supabase
+    .from("seguimiento_importaciones")
+    .update({ ...payload, oficina })
+    .eq("id", id);
+
+  if (updateError) return { ok: false, error: updateError.message };
+  return { ok: true };
+}
+
+async function cargarOperativosConocidos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<Set<string>> {
+  const { data } = await supabase.from("catalogo_operativos").select("nombre_operativo");
+  return new Set(
+    (data ?? [])
+      .map((o) => (o.nombre_operativo ? normalizarNombre(o.nombre_operativo) : null))
+      .filter((n): n is string => Boolean(n)),
+  );
+}
 
 function friendlyDbError(error: { code?: string; message: string }): string {
   if (error.code === "23505" && error.message.includes("booking")) {
@@ -95,63 +175,26 @@ export async function actualizarImportacion(id: number) {
   if (!row) throw new Error("Registro no encontrado.");
   if (!row.booking) throw new Error("Este registro no tiene número de booking capturado.");
 
-  const cargolinkBooking = await buscarBookingCargolink(row.booking);
-  if (!cargolinkBooking) {
-    throw new Error(`No se encontró el booking ${row.booking} en Cargolink.`);
-  }
-
-  const payload = mapCargolinkBookingToImportacion(cargolinkBooking, row.booking);
-
-  // El "ejecutivo" de Cargolink se guarda en nuestro campo "operativo". Si
-  // todavía no existe en el catálogo de Operativos, se da de alta aquí mismo
-  // (sin usuario asignado) para que no se pierda y quede disponible en el
-  // catálogo para asignarle acceso después. La comparación normaliza
-  // espacios (además de mayúsculas/minúsculas) porque un simple ILIKE no
-  // detecta catálogo ya cargado con espacios dobles como "Vanessa  Cano" —
-  // eso generaba entradas duplicadas.
-  if (payload.operativo) {
-    const normalizar = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
-    const ejecutivoNormalizado = normalizar(payload.operativo);
-    const { data: operativos } = await supabase
-      .from("catalogo_operativos")
-      .select("nombre_operativo");
-    const yaExiste = (operativos ?? []).some(
-      (o) => o.nombre_operativo && normalizar(o.nombre_operativo) === ejecutivoNormalizado,
-    );
-
-    if (!yaExiste) {
-      await supabase
-        .from("catalogo_operativos")
-        .insert({ nombre_operativo: payload.operativo, activo: true, user_id: null });
-    }
-  }
-
-  let oficina: string | null = null;
-  if (payload.vendedor) {
-    const { data: vendedorRow } = await supabase
-      .from("catalogo_vendedores")
-      .select("plaza")
-      .ilike("vendedor", payload.vendedor)
-      .maybeSingle();
-    oficina = (vendedorRow?.plaza as string | undefined) ?? null;
-  }
-
-  const { error: updateError } = await supabase
-    .from("seguimiento_importaciones")
-    .update({ ...payload, oficina })
-    .eq("id", id);
-
-  if (updateError) throw new Error(updateError.message);
+  const session = await loginCargolink();
+  const operativosConocidos = await cargarOperativosConocidos(supabase);
+  const resultado = await enriquecerImportacionDesdeCargolink(
+    supabase,
+    session,
+    row.id,
+    row.booking,
+    operativosConocidos,
+  );
+  if (!resultado.ok) throw new Error(resultado.error);
 
   revalidatePath("/importaciones");
   revalidatePath(`/importaciones/${id}`);
 }
 
-// Solo el mínimo para poder ubicar y filtrar la fila en el listado — el
-// resto de los campos (naviera, POL/POD, MBL, fechas de tránsito, etc.) se
-// llenan después con el botón "Actualizar" de cada fila, uno a la vez. Traer
-// y guardar los ~20 campos completos para cientos de referencias de golpe es
-// lo que hacía lento el botón de sincronizar.
+// Set mínimo para la previsualización (rápida de mostrar en la tabla del
+// modal) — una vez que el usuario confirma, confirmarSincronizacion() trae
+// el resto de los ~20 campos por cada registro insertado (ver
+// enriquecerImportacionDesdeCargolink), así no hay que dar clic en
+// "Actualizar" fila por fila después de sincronizar.
 export type FilaSincronizacion = {
   booking: string;
   fecha: string | null;
@@ -170,6 +213,7 @@ export type ResultadoSincronizacion = {
   totalRevisados: number;
   nuevos: number;
   insertados: number;
+  enriquecidos: number;
   errores: string[];
 };
 
@@ -274,15 +318,18 @@ export async function previsualizarSincronizacion(): Promise<PrevisualizacionSin
 
 // Paso 2: inserta las filas que el usuario confirmó en la ventana de
 // previsualización (se reciben ya armadas, no se vuelve a consultar
-// Cargolink) y deja registro en sincronizacion_cargolink para poder mostrar
-// la hora de la última actualización arriba del listado.
+// Cargolink para insertarlas), y luego enriquece cada registro insertado con
+// los ~20 campos completos (mismo mecanismo que el botón "Actualizar" de una
+// fila), reutilizando una sola sesión de Cargolink para todo el lote en vez
+// de loguearse por cada booking. Deja registro en sincronizacion_cargolink
+// para poder mostrar la hora de la última actualización arriba del listado.
 export async function confirmarSincronizacion(
   filas: FilaSincronizacion[],
   totalRevisados: number,
 ): Promise<ResultadoSincronizacion> {
   const supabase = await createClient();
   const errores: string[] = [];
-  let insertados = 0;
+  const insertadosConId: { id: number; booking: string }[] = [];
 
   for (let i = 0; i < filas.length; i += LOTE_SINCRONIZACION) {
     const lote = filas.slice(i, i + LOTE_SINCRONIZACION);
@@ -292,22 +339,50 @@ export async function confirmarSincronizacion(
     const { data, error } = await supabase
       .from("seguimiento_importaciones")
       .upsert(lote, { onConflict: "booking", ignoreDuplicates: true })
-      .select("booking");
+      .select("id, booking");
 
     if (error) {
       errores.push(`Lote ${Math.floor(i / LOTE_SINCRONIZACION) + 1}: ${friendlyDbError(error)}`);
     } else {
-      insertados += data?.length ?? 0;
+      for (const r of data ?? []) insertadosConId.push(r);
     }
   }
 
-  await supabase
-    .from("sincronizacion_cargolink")
-    .insert({ revisados: totalRevisados, nuevos: filas.length, insertados });
+  let enriquecidos = 0;
+  if (insertadosConId.length > 0) {
+    const session = await loginCargolink();
+    const operativosConocidos = await cargarOperativosConocidos(supabase);
+    for (const { id, booking } of insertadosConId) {
+      const resultado = await enriquecerImportacionDesdeCargolink(
+        supabase,
+        session,
+        id,
+        booking,
+        operativosConocidos,
+      );
+      if (resultado.ok) {
+        enriquecidos++;
+      } else {
+        errores.push(`${booking}: ${resultado.error}`);
+      }
+    }
+  }
+
+  await supabase.from("sincronizacion_cargolink").insert({
+    revisados: totalRevisados,
+    nuevos: filas.length,
+    insertados: insertadosConId.length,
+  });
 
   revalidatePath("/importaciones");
 
-  return { totalRevisados, nuevos: filas.length, insertados, errores };
+  return {
+    totalRevisados,
+    nuevos: filas.length,
+    insertados: insertadosConId.length,
+    enriquecidos,
+    errores,
+  };
 }
 
 // Hora de la última corrida (exitosa o no) de "Actualizar referencias",

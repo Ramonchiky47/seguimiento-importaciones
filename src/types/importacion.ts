@@ -9,6 +9,7 @@ export type Importacion = {
   client: string | null;
   agente: string | null;
   naviera: string | null;
+  terminal_portuaria: string | null;
   pol: string | null;
   pod: string | null;
   mbl: string | null;
@@ -69,6 +70,7 @@ export const TEXT_FIELDS = [
   "client",
   "agente",
   "naviera",
+  "terminal_portuaria",
   "pol",
   "pod",
   "mbl",
@@ -90,6 +92,7 @@ export const FIELD_SECTIONS: { title: string; fields: readonly string[] }[] = [
   {
     title: "Documentos y puertos",
     fields: [
+      "terminal_portuaria",
       "pol",
       "pod",
       "mbl",
@@ -137,6 +140,7 @@ export const LIST_COLUMNS = [
   "client",
   "agente",
   "naviera",
+  "terminal_portuaria",
   "pol",
   "pod",
   "mbl",
@@ -203,6 +207,7 @@ export const FIELD_LABELS: Record<string, string> = {
   client: "Cliente",
   agente: "Agente",
   naviera: "Naviera",
+  terminal_portuaria: "Terminal Portuaria",
   pol: "POL",
   pod: "POD",
   mbl: "MBL",

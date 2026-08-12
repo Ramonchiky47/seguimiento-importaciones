@@ -43,7 +43,9 @@ function mergeCookies(res: Response, existing: string): string {
     .join("; ");
 }
 
-async function loginCargolink(): Promise<{ token: string; cookie: string }> {
+export type CargolinkSession = { token: string; cookie: string };
+
+export async function loginCargolink(): Promise<CargolinkSession> {
   const usuario = process.env.CARGOLINK_USER;
   const password = process.env.CARGOLINK_PASSWORD;
   if (!usuario || !password) {
@@ -77,15 +79,16 @@ async function loginCargolink(): Promise<{ token: string; cookie: string }> {
   return { token: match[1], cookie };
 }
 
-export async function buscarBookingCargolink(
+// Variante que reutiliza una sesión ya iniciada (login+token), para no tener
+// que loguearse de nuevo en cada booking cuando se consultan varios seguidos.
+export async function buscarBookingConSesion(
+  session: CargolinkSession,
   noBooking: string,
 ): Promise<CargolinkBooking | null> {
-  const { token, cookie } = await loginCargolink();
-
-  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${token}&cat=api&fn=consultaBooking&tabla=&limit=0`;
+  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api&fn=consultaBooking&tabla=&limit=0`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Cookie: cookie },
+    headers: { "Content-Type": "application/json", Cookie: session.cookie },
     body: JSON.stringify({ tipo_fecha: "", pagadoBooking: "", no_booking: noBooking }),
   });
 
@@ -96,6 +99,13 @@ export async function buscarBookingCargolink(
   const data = await res.json();
   const valores = data?.valores;
   return Array.isArray(valores) && valores.length > 0 ? (valores[0] as CargolinkBooking) : null;
+}
+
+export async function buscarBookingCargolink(
+  noBooking: string,
+): Promise<CargolinkBooking | null> {
+  const session = await loginCargolink();
+  return buscarBookingConSesion(session, noBooking);
 }
 
 const TIPOS_SEGUIMIENTO = new Set(["FCLI", "LCLI"]);

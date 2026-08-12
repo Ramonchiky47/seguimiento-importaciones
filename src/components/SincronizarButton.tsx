@@ -41,6 +41,7 @@ export function SincronizarButton({
         const partes = [
           `Revisados en Cargolink (jul 2026 a la fecha): ${r.totalRevisados}`,
           `Agregadas: ${r.insertados}`,
+          `Completadas con todos sus datos: ${r.enriquecidos}`,
         ];
         if (r.errores.length > 0) {
           partes.push(`\nCon error (${r.errores.length}):\n${r.errores.join("\n")}`);
@@ -138,7 +139,9 @@ export function SincronizarButton({
                   onClick={handleConfirmar}
                   className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300"
                 >
-                  {confirmando ? "Agregando…" : `Confirmar y agregar ${preview.filas.length}`}
+                  {confirmando
+                    ? "Agregando y completando datos…"
+                    : `Confirmar y agregar ${preview.filas.length}`}
                 </button>
               )}
             </div>

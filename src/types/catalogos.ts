@@ -11,6 +11,12 @@ export type CatalogoOperativo = {
   user_id: string | null;
 };
 
+export type CatalogoTerminalPortuaria = {
+  id: number;
+  codigo: string;
+  nombre: string;
+};
+
 export type AppUser = {
   id: string;
   email: string;

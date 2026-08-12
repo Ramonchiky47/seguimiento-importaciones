@@ -185,10 +185,12 @@ export function ImportacionForm({
   action,
   initialValue,
   operativoOptions = [],
+  terminalPortuariaOptions = [],
 }: {
   action: (formData: FormData) => Promise<void>;
   initialValue?: Importacion;
   operativoOptions?: string[];
+  terminalPortuariaOptions?: string[];
 }) {
   const [pending, setPending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -319,6 +321,12 @@ export function ImportacionForm({
           Documentos y puertos
         </h2>
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+          <SelectField
+            name="terminal_portuaria"
+            label={FIELD_LABELS.terminal_portuaria}
+            options={terminalPortuariaOptions}
+            defaultValue={initialValue?.terminal_portuaria}
+          />
           <Field name="pol" label={FIELD_LABELS.pol} defaultValue={initialValue?.pol} />
           <Field name="pod" label={FIELD_LABELS.pod} defaultValue={initialValue?.pod} />
           <Field name="mbl" label={FIELD_LABELS.mbl} defaultValue={initialValue?.mbl} />

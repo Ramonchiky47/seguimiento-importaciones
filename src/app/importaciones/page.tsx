@@ -20,6 +20,10 @@ import type { Importacion } from "@/types/importacion";
 import { FIELD_LABELS, LIST_COLUMNS } from "@/types/importacion";
 
 export const dynamic = "force-dynamic";
+// "Actualizar referencias" ahora enriquece cada registro insertado
+// consultando Cargolink uno por uno (ver confirmarSincronizacion), lo que
+// puede tardar bastante más que el resto de las acciones de esta página.
+export const maxDuration = 300;
 
 // "created_at" no es una columna visible en la tabla, pero se permite como
 // orden para poder mostrar primero lo recién agregado por "Actualizar
