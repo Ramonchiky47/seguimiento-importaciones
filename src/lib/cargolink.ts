@@ -254,10 +254,8 @@ export function mapCargolinkBookingToImportacion(booking: CargolinkBooking, noBo
     confirmacion_48_horas: subtractDays(normalizeFecha(booking.fecha_atd), 2),
     eta_ata: etaAta,
     notificacion_arribo_7_dias: subtractDays(etaAta, 7),
-    dias_demoras:
-      booking.dias_demora !== undefined && booking.dias_demora !== null
-        ? Number(booking.dias_demora)
-        : null,
+    // dias_demoras ya no viene de Cargolink: ahora es un cálculo local
+    // (fecha actual - último día libre de demoras), ver calcularDiasDemoras.
     seguro: booking.seguro !== undefined ? booking.seguro?.trim().toUpperCase() === "SI" : null,
   };
 }

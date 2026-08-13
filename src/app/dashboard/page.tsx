@@ -10,6 +10,7 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 export const dynamic = "force-dynamic";
 
 type Row = {
+  booking: string | null;
   naviera: string | null;
   agente: string | null;
   pod: string | null;
@@ -23,17 +24,134 @@ type Row = {
   cantidad_contenedores_tipo: string | null;
 };
 
-// Matches strings like "6 contenedores (Tipo 40 HC,40 OT)" produced by
-// buildCantidadContenedoresTipo() in lib/cargolink.ts. When a booking lists
-// several types for one total count, the type string is kept combined
-// (e.g. "40 HC, 40 OT") instead of guessing a split per type.
-function parseContenedoresTipo(text: string | null): { count: number; type: string } | null {
-  if (!text) return null;
+// Bookings donde el total de contenedores no coincide con la cantidad de
+// tipos listados por Cargolink (ver parseContenedoresTipo) — el desglose
+// real se verificó a mano en Cargolink (pantalla "Detalles de Carga FCL",
+// columna Tipo de Contenedor por cada número de contenedor) porque esa
+// info no viene en el campo de texto que sí tenemos. Ir agregando aquí
+// conforme se vayan verificando más bookings ambiguos.
+const DESGLOSE_MANUAL_CONTENEDORES: Record<string, { type: string; count: number }[]> = {
+  "2604-1827-FCLI": [
+    { type: "40 HC", count: 10 },
+    { type: "20", count: 1 },
+  ],
+  "2601-0133-FCLI": [
+    { type: "40 HC", count: 8 },
+    { type: "40 OT", count: 2 },
+  ],
+  "2601-0289-FCLI": [
+    { type: "20", count: 1 },
+    { type: "40 HC", count: 4 },
+  ],
+  "2601-0303-FCLI": [
+    { type: "40", count: 3 },
+    { type: "40 OT", count: 1 },
+  ],
+  "2601-0345-FCLI": [
+    { type: "40 HC", count: 7 },
+    { type: "40 FR", count: 5 },
+  ],
+  "2601-0542-FCLI": [
+    { type: "20", count: 1 },
+    { type: "40 HC", count: 2 },
+  ],
+  "2601-0545-FCLI": [
+    { type: "20", count: 1 },
+    { type: "40 HC", count: 7 },
+  ],
+  "2601-0549-FCLI": [
+    { type: "20", count: 1 },
+    { type: "40 HC", count: 7 },
+  ],
+  "2602-0818-FCLI": [
+    { type: "20", count: 1 },
+    { type: "40 HC", count: 2 },
+  ],
+  "2602-0859-FCLI": [
+    { type: "20", count: 2 },
+    { type: "40 HC", count: 8 },
+  ],
+  "2602-0993-FCLI": [
+    { type: "20", count: 1 },
+    { type: "40 HC", count: 4 },
+  ],
+  "2602-1017-FCLI": [
+    { type: "20", count: 1 },
+    { type: "40 HC", count: 4 },
+  ],
+  "2603-1509-FCLI": [
+    { type: "40 HC", count: 5 },
+    { type: "40 OT", count: 1 },
+  ],
+  "2603-1577-FCLI": [
+    { type: "20", count: 1 },
+    { type: "40 HC", count: 2 },
+  ],
+  "2604-1708-FCLI": [
+    { type: "20", count: 1 },
+    { type: "40 HC", count: 2 },
+  ],
+  "2604-1825-FCLI": [
+    { type: "20", count: 1 },
+    { type: "40 HC", count: 11 },
+  ],
+  "2604-2135-FCLI": [
+    { type: "40 HC", count: 3 },
+    { type: "20 FR", count: 1 },
+  ],
+  "2606-2983-FCLI": [
+    { type: "40 HC", count: 4 },
+    { type: "20 OT", count: 1 },
+  ],
+  "2606-2990-FCLI": [
+    { type: "40 HC", count: 6 },
+    { type: "40 FR", count: 3 },
+  ],
+  "2606-3137-FCLI": [
+    { type: "40 HC", count: 3 },
+    { type: "40 FR", count: 3 },
+  ],
+  "2607-3515-FCLI": [
+    { type: "40 HC", count: 4 },
+    { type: "40 OT", count: 2 },
+  ],
+  "2608-3813-FCLI": [
+    { type: "40 FR", count: 3 },
+    { type: "40 HC", count: 3 },
+  ],
+};
+
+// Parses strings like "6 contenedores (Tipo 40 HC,40 OT)" produced by
+// buildCantidadContenedoresTipo() in lib/cargolink.ts. Cargolink's "Tipo"
+// list is the set of distinct types present, not one entry per contenedor —
+// so when el total coincide exactamente con la cantidad de tipos listados,
+// la única distribución posible es uno de cada tipo (ej. "2 contenedores
+// (Tipo 20,40 HC)" = 1 de tipo 20 + 1 de tipo 40 HC), y así se reparte. Si
+// el total es mayor a los tipos listados (ej. "6 contenedores (Tipo 40
+// HC,40 OT)"), no hay forma de saber cuántos son de cada uno a menos que
+// esté en DESGLOSE_MANUAL_CONTENEDORES — si no, se deja como una
+// combinación aparte en vez de inventar un reparto.
+function parseContenedoresTipo(
+  booking: string | null,
+  text: string | null,
+): { type: string; count: number }[] {
+  if (booking && DESGLOSE_MANUAL_CONTENEDORES[booking]) {
+    return DESGLOSE_MANUAL_CONTENEDORES[booking];
+  }
+  if (!text) return [];
   const match = text.match(/^(\d+)\s+contenedor(?:es)?\s*\(Tipo\s+(.+)\)\s*$/i);
-  if (!match) return null;
+  if (!match) return [];
   const count = Number(match[1]);
-  if (!Number.isFinite(count) || count <= 0) return null;
-  return { count, type: match[2].trim().replace(/,/g, ", ") };
+  if (!Number.isFinite(count) || count <= 0) return [];
+  const tipos = match[2]
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (tipos.length === 0) return [];
+  if (count === tipos.length) {
+    return tipos.map((type) => ({ type, count: 1 }));
+  }
+  return [{ type: tipos.join(", "), count }];
 }
 
 function topGroups(rows: Row[], field: keyof Row, limit: number) {
@@ -72,12 +190,28 @@ export default async function DashboardPage({
   const podRaw = pod ? (Array.isArray(pod) ? pod : [pod]) : [];
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from("seguimiento_importaciones")
-    .select(
-      "naviera, agente, pod, pol, oficina, operativo, fecha, estatus, type, contenedor, cantidad_contenedores_tipo",
-    );
-  const allRows = (data ?? []) as Row[];
+  // PostgREST recorta cada select a un máximo de filas por default (1000),
+  // aunque no se pida un .limit() explícito — con la tabla ya por encima de
+  // eso, un select simple se quedaba corto y todos los totales del Dashboard
+  // (embarques, contenedores, etc.) salían truncados sin avisar. Se pagina
+  // igual que fetchTodosLosBookings() en importaciones/actions.ts.
+  const allRows: Row[] = [];
+  {
+    const TAM_PAGINA = 500;
+    let desde = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("seguimiento_importaciones")
+        .select(
+          "booking, naviera, agente, pod, pol, oficina, operativo, fecha, estatus, type, contenedor, cantidad_contenedores_tipo",
+        )
+        .range(desde, desde + TAM_PAGINA - 1);
+      const pagina = (data ?? []) as Row[];
+      allRows.push(...pagina);
+      if (pagina.length < TAM_PAGINA) break;
+      desde += TAM_PAGINA;
+    }
+  }
 
   const availableMonths = Array.from(
     new Set(allRows.map((r) => r.fecha?.slice(0, 7)).filter((m): m is string => Boolean(m))),
@@ -122,9 +256,9 @@ export default async function DashboardPage({
   const fclRows = filteredRows.filter((r) => r.type?.trim().toUpperCase() === "FCLI");
   const containerTypeCounts = new Map<string, number>();
   for (const r of fclRows) {
-    const parsed = parseContenedoresTipo(r.cantidad_contenedores_tipo);
-    if (!parsed) continue;
-    containerTypeCounts.set(parsed.type, (containerTypeCounts.get(parsed.type) ?? 0) + parsed.count);
+    for (const { type, count } of parseContenedoresTipo(r.booking, r.cantidad_contenedores_tipo)) {
+      containerTypeCounts.set(type, (containerTypeCounts.get(type) ?? 0) + count);
+    }
   }
   const byContainerType = Array.from(containerTypeCounts.entries())
     .map(([label, value]) => ({ label, value }))
@@ -281,9 +415,10 @@ export default async function DashboardPage({
                 </div>
               )}
               <p className="mt-3 text-[10px] text-slate-400 dark:text-slate-500">
-                Cuando un booking registra varios tipos para un mismo total (ej. &quot;Tipo 40
-                HC,40 OT&quot;), se muestra como una combinación aparte porque no es posible saber
-                cuántos de cada tipo corresponden.
+                Si un booking tiene, por ejemplo, 2 contenedores de 2 tipos distintos, se cuenta 1
+                de cada tipo. Solo cuando el total no alcanza para repartir uno por tipo (ej.
+                &quot;6 contenedores (Tipo 40 HC,40 OT)&quot;) se deja como combinación aparte,
+                porque no es posible saber cuántos son de cada tipo.
               </p>
             </div>
 
@@ -305,6 +440,22 @@ export default async function DashboardPage({
                   Ver registros sin contenedor para corregirlos →
                 </Link>
               )}
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Seguimiento ETA — FCLI vigentes
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Notificación de arribo, validación y revalidación 48 hr pendientes o sin datos
+                registrados
+              </p>
+              <Link
+                href="/dashboard/seguimiento-eta"
+                className="mt-4 inline-block text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+              >
+                Ver reporte de seguimiento →
+              </Link>
             </div>
           </div>
         </div>

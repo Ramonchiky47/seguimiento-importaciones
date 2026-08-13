@@ -48,10 +48,23 @@ export default async function DashboardDetallePage({
   if (!config) notFound();
 
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("seguimiento_importaciones")
-    .select("naviera, agente, pod, pol, oficina, operativo, type, fecha, estatus");
-  let rows = (data ?? []) as Row[];
+  // Paginado — PostgREST recorta a 1000 filas por default y la tabla ya
+  // pasó de eso (ver mismo fix en dashboard/page.tsx).
+  let rows: Row[] = [];
+  {
+    const TAM_PAGINA = 500;
+    let desde = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("seguimiento_importaciones")
+        .select("naviera, agente, pod, pol, oficina, operativo, type, fecha, estatus")
+        .range(desde, desde + TAM_PAGINA - 1);
+      const pagina = (data ?? []) as Row[];
+      rows.push(...pagina);
+      if (pagina.length < TAM_PAGINA) break;
+      desde += TAM_PAGINA;
+    }
+  }
 
   if (mes) rows = rows.filter((r) => r.fecha?.startsWith(mes));
   if (polRaw.length > 0) rows = rows.filter((r) => polRaw.includes(r.pol?.trim() ?? ""));

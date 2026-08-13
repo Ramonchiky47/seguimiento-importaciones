@@ -16,6 +16,7 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { SincronizarButton } from "@/components/SincronizarButton";
 import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { getMyPermissions } from "@/lib/permissions";
+import { calcularDiasDemoras } from "@/lib/dateLabels";
 import type { Importacion } from "@/types/importacion";
 import { FIELD_LABELS, LIST_COLUMNS } from "@/types/importacion";
 
@@ -97,6 +98,9 @@ export default async function ImportacionesPage({
 
   const { data, error, count } = await query;
   const rows = (data ?? []) as Importacion[];
+  for (const row of rows) {
+    row.dias_demoras = calcularDiasDemoras(row.ultimo_dia_libre_demoras);
+  }
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -299,9 +303,18 @@ export default async function ImportacionesPage({
               {rows.map((row) => {
                 const values = row as unknown as Record<string, string | number | null>;
                 const sinOperativo = !row.operativo?.trim();
+                const enDemoras = row.dias_demoras !== null && row.dias_demoras >= 0;
+                const proximoADemoras =
+                  row.dias_demoras !== null && row.dias_demoras > -5 && row.dias_demoras < 0;
                 const rowClass =
                   ESTATUS_ROW_CLASS[row.estatus] ??
-                  (sinOperativo ? "bg-yellow-200 dark:bg-yellow-900" : "");
+                  (enDemoras
+                    ? "bg-red-300 dark:bg-red-800"
+                    : proximoADemoras
+                      ? "bg-orange-300 dark:bg-orange-800"
+                      : sinOperativo
+                        ? "bg-yellow-200 dark:bg-yellow-900"
+                        : "");
                 const rowBg = rowClass || "bg-white dark:bg-slate-900";
                 return (
                   <ClickableRow

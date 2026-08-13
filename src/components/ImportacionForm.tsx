@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { unstable_rethrow } from "next/navigation";
 import type { Importacion } from "@/types/importacion";
 import { ESTATUS_OPTIONS, FIELD_LABELS } from "@/types/importacion";
@@ -13,6 +13,7 @@ function Field({
   locked = false,
   onValueChange,
   wide = false,
+  inputRef,
 }: {
   name: string;
   label: string;
@@ -21,6 +22,7 @@ function Field({
   locked?: boolean;
   onValueChange?: (value: string) => void;
   wide?: boolean;
+  inputRef?: RefObject<HTMLInputElement | null>;
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const isEmpty = value === null || value === undefined || value === "";
@@ -35,6 +37,7 @@ function Field({
         {label}
       </label>
       <input
+        ref={inputRef}
         id={name}
         name={name}
         type={type}
@@ -196,11 +199,35 @@ export function ImportacionForm({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [typeValue, setTypeValue] = useState(initialValue?.type ?? "");
   const isLCLI = typeValue.trim().toUpperCase() === "LCLI";
+  const isFCLI = typeValue.trim().toUpperCase() === "FCLI";
 
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
   const formRef = useRef<HTMLFormElement>(null);
+  const notificacionArriboRef = useRef<HTMLInputElement>(null);
+  const validacion48Ref = useRef<HTMLInputElement>(null);
+  const revalidacion48Ref = useRef<HTMLInputElement>(null);
+
+  // Rellena un campo con (ETA - días) solo mientras siga vacío — si el
+  // operativo ya lo cambió a mano, no se le vuelve a pisar encima.
+  function autocompletarDesdeEta(
+    input: HTMLInputElement | null,
+    nuevaEta: string,
+    diasARestar: number,
+  ) {
+    if (!input || input.value || !nuevaEta) return;
+    const fecha = new Date(`${nuevaEta}T00:00:00Z`);
+    fecha.setUTCDate(fecha.getUTCDate() - diasARestar);
+    input.value = fecha.toISOString().slice(0, 10);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function handleEtaChange(nuevaEta: string) {
+    autocompletarDesdeEta(notificacionArriboRef.current, nuevaEta, 7);
+    autocompletarDesdeEta(validacion48Ref.current, nuevaEta, 2);
+    autocompletarDesdeEta(revalidacion48Ref.current, nuevaEta, 2);
+  }
 
   useEffect(() => {
     function handleBeforeUnload(e: BeforeUnloadEvent) {
@@ -371,24 +398,33 @@ export function ImportacionForm({
             type="date"
             defaultValue={initialValue?.confirmacion_48_horas}
           />
-          <Field name="eta_ata" label={FIELD_LABELS.eta_ata} type="date" defaultValue={initialValue?.eta_ata} />
+          <Field
+            name="eta_ata"
+            label={FIELD_LABELS.eta_ata}
+            type="date"
+            defaultValue={initialValue?.eta_ata}
+            onValueChange={handleEtaChange}
+          />
           <Field
             name="notificacion_arribo_7_dias"
             label={FIELD_LABELS.notificacion_arribo_7_dias}
             type="date"
             defaultValue={initialValue?.notificacion_arribo_7_dias}
+            inputRef={notificacionArriboRef}
           />
           <Field
             name="validacion_48_horas_antes_eta"
             label={FIELD_LABELS.validacion_48_horas_antes_eta}
             type="date"
             defaultValue={initialValue?.validacion_48_horas_antes_eta}
+            inputRef={validacion48Ref}
           />
           <Field
             name="revalidacion_48_horas_antes_eta"
             label={FIELD_LABELS.revalidacion_48_horas_antes_eta}
             type="date"
             defaultValue={initialValue?.revalidacion_48_horas_antes_eta}
+            inputRef={revalidacion48Ref}
           />
           <Field
             name="recepcion_eir"
@@ -405,6 +441,20 @@ export function ImportacionForm({
           Corte y demoras
         </h2>
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+          <Field
+            name="dias_libres_demoras"
+            label={FIELD_LABELS.dias_libres_demoras}
+            type="number"
+            defaultValue={initialValue?.dias_libres_demoras}
+            locked={!isFCLI}
+          />
+          <Field
+            name="ultimo_dia_libre_demoras"
+            label={FIELD_LABELS.ultimo_dia_libre_demoras}
+            type="date"
+            defaultValue={initialValue?.ultimo_dia_libre_demoras}
+            locked
+          />
           <Field
             name="fecha_solicita_corte_naviera"
             label={FIELD_LABELS.fecha_solicita_corte_naviera}
@@ -431,7 +481,7 @@ export function ImportacionForm({
             label={FIELD_LABELS.dias_demoras}
             type="number"
             defaultValue={initialValue?.dias_demoras}
-            locked={isLCLI}
+            locked
           />
         </div>
       </section>

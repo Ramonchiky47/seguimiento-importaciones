@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getMyPermissions } from "@/lib/permissions";
 import { buildImportacionPdf } from "@/lib/importacionPdf";
+import { calcularDiasDemoras } from "@/lib/dateLabels";
 import type { Importacion, Incidencia } from "@/types/importacion";
 
 export async function GET(
@@ -27,6 +28,10 @@ export async function GET(
   if (!row) {
     return new Response("Registro no encontrado.", { status: 404 });
   }
+
+  (row as Importacion).dias_demoras = calcularDiasDemoras(
+    (row as Importacion).ultimo_dia_libre_demoras,
+  );
 
   const { data: incidenciasData } = await supabase
     .from("incidencias_importacion")

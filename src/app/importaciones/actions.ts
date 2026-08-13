@@ -72,9 +72,40 @@ async function enriquecerImportacionDesdeCargolink(
     oficina = (vendedorRow?.plaza as string | undefined) ?? null;
   }
 
+  const payloadConOficina: Record<string, unknown> = { ...payload, oficina };
+
+  // Cargolink no siempre tiene todavía todos los campos (p. ej. un booking
+  // recién creado sin ETA todavía). Si Cargolink no trae dato para un campo,
+  // no se debe borrar lo que ya estaba guardado ahí (capturado a mano o de
+  // una sincronización anterior) — "Actualizar" debe completar/refrescar,
+  // nunca destruir lo que ya se tenía.
+  const camposAFusionar = Object.keys(payloadConOficina);
+  const { data: actual } = await supabase
+    .from("seguimiento_importaciones")
+    .select(camposAFusionar.join(", "))
+    .eq("id", id)
+    .maybeSingle<Record<string, unknown>>();
+
+  // confirmacion_48_horas y notificacion_arribo_7_dias se calculan a partir
+  // de la ETA (ETA - 2 y ETA - 7), pero son solo una sugerencia inicial: el
+  // operativo puede ajustarlas a mano según el caso, y una vez que ya tienen
+  // un valor, "Actualizar" no debe recalcularlas encima y perder ese ajuste.
+  const CAMPOS_SOLO_UNA_VEZ = new Set(["confirmacion_48_horas", "notificacion_arribo_7_dias"]);
+
+  const payloadFinal: Record<string, unknown> = {};
+  for (const campo of camposAFusionar) {
+    const nuevoValor = payloadConOficina[campo];
+    const valorActual = actual?.[campo] ?? null;
+    if (CAMPOS_SOLO_UNA_VEZ.has(campo) && valorActual !== null) {
+      payloadFinal[campo] = valorActual;
+    } else {
+      payloadFinal[campo] = nuevoValor !== null ? nuevoValor : valorActual;
+    }
+  }
+
   const { error: updateError } = await supabase
     .from("seguimiento_importaciones")
-    .update({ ...payload, oficina })
+    .update(payloadFinal)
     .eq("id", id);
 
   if (updateError) return { ok: false, error: updateError.message };
@@ -119,8 +150,12 @@ function buildPayload(formData: FormData) {
     payload[field] = value ? String(value) : null;
   }
 
-  const diasDemoras = formData.get("dias_demoras");
-  payload.dias_demoras = diasDemoras ? Number(diasDemoras) : null;
+  // dias_demoras ya no se captura: ahora es un cálculo (fecha actual -
+  // último día libre de demoras) que se muestra al vuelo, no algo que se
+  // guarde — nunca se incluye en el payload.
+
+  const diasLibresDemoras = formData.get("dias_libres_demoras");
+  payload.dias_libres_demoras = diasLibresDemoras ? Number(diasLibresDemoras) : null;
 
   payload.estatus = String(formData.get("estatus") || "Vigente");
 

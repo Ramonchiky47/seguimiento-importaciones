@@ -6,6 +6,7 @@ import { IncidenciaForm } from "@/components/IncidenciaForm";
 import { CatalogoDeleteButton } from "@/components/CatalogoDeleteButton";
 import { updateImportacion, addIncidencia, deleteIncidencia } from "../actions";
 import { getMyPermissions } from "@/lib/permissions";
+import { calcularDiasDemoras } from "@/lib/dateLabels";
 import type { Importacion, Incidencia } from "@/types/importacion";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,7 @@ export default async function EditarImportacionPage({
   }
 
   const row = data as Importacion;
+  row.dias_demoras = calcularDiasDemoras(row.ultimo_dia_libre_demoras);
   const boundUpdate = updateImportacion.bind(null, row.id);
 
   const { data: operativosData } = await supabase

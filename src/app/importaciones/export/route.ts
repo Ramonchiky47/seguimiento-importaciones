@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getMyPermissions } from "@/lib/permissions";
+import { calcularDiasDemoras } from "@/lib/dateLabels";
 import { FIELD_LABELS, LIST_COLUMNS } from "@/types/importacion";
 
 const SORTABLE_FIELDS = new Set<string>(LIST_COLUMNS);
@@ -68,6 +69,9 @@ export async function GET(request: NextRequest) {
   }
 
   const rows = (data ?? []) as Record<string, string | number | null>[];
+  for (const row of rows) {
+    row.dias_demoras = calcularDiasDemoras(row.ultimo_dia_libre_demoras as string | null);
+  }
 
   const header = LIST_COLUMNS.map((field) => csvEscape(FIELD_LABELS[field] ?? field)).join(",");
   const lines = rows.map((row) =>

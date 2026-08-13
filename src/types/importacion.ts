@@ -28,6 +28,8 @@ export type Importacion = {
   validacion_48_horas_antes_eta: string | null;
   revalidacion_48_horas_antes_eta: string | null;
   recepcion_eir: string | null;
+  dias_libres_demoras: number | null;
+  ultimo_dia_libre_demoras: string | null;
   fecha_solicita_corte_naviera: string | null;
   fecha_recibimos_corte_demoras_naviera: string | null;
   fecha_confirmo_corte_cliente: string | null;
@@ -120,6 +122,8 @@ export const FIELD_SECTIONS: { title: string; fields: readonly string[] }[] = [
   {
     title: "Corte y demoras",
     fields: [
+      "dias_libres_demoras",
+      "ultimo_dia_libre_demoras",
       "fecha_solicita_corte_naviera",
       "fecha_recibimos_corte_demoras_naviera",
       "fecha_confirmo_corte_cliente",
@@ -154,6 +158,8 @@ export const LIST_COLUMNS = [
   "validacion_48_horas_antes_eta",
   "revalidacion_48_horas_antes_eta",
   "recepcion_eir",
+  "dias_libres_demoras",
+  "ultimo_dia_libre_demoras",
   "fecha_solicita_corte_naviera",
   "fecha_recibimos_corte_demoras_naviera",
   "fecha_confirmo_corte_cliente",
@@ -227,6 +233,8 @@ export const FIELD_LABELS: Record<string, string> = {
     "Validación 48 hr antes de la ETA / Fecha que aplican inst. con consolidadora",
   revalidacion_48_horas_antes_eta: "Revalidación 48 hr antes de ETA / Fecha de desconsolidación",
   recepcion_eir: "Recepción EIR",
+  dias_libres_demoras: "Días libres de demoras",
+  ultimo_dia_libre_demoras: "Último día libre de demoras",
   fecha_solicita_corte_naviera: "Fecha en que se solicita corte a naviera",
   fecha_recibimos_corte_demoras_naviera:
     "Fecha recepción corte de demoras naviera",
