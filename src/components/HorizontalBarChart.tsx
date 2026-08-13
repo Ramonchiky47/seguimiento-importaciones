@@ -4,10 +4,12 @@ export function HorizontalBarChart({
   title,
   data,
   href,
+  totalLabel,
 }: {
   title: string;
   data: { label: string; value: number }[];
   href?: string;
+  totalLabel?: string;
 }) {
   const max = Math.max(1, ...data.map((d) => d.value));
 
@@ -17,13 +19,17 @@ export function HorizontalBarChart({
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           {title}
         </h3>
-        {href && (
+        {href ? (
           <Link
             href={href}
             className="text-[10px] font-medium text-slate-500 hover:text-slate-800 hover:underline dark:text-slate-400 dark:hover:text-slate-100"
           >
             Ver detalle →
           </Link>
+        ) : (
+          totalLabel && (
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">{totalLabel}</span>
+          )
         )}
       </div>
       {data.length === 0 ? (

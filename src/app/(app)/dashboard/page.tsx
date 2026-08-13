@@ -544,7 +544,11 @@ export default async function DashboardPage({
               </p>
             </div>
 
-            <HorizontalBarChart title="TEU por naviera (solo FCLI)" data={byTeuNaviera} />
+            <HorizontalBarChart
+              title="TEU por naviera (solo FCLI)"
+              data={byTeuNaviera}
+              totalLabel={`Total: ${granTotalTeu.toLocaleString("es-MX", { maximumFractionDigits: 2 })} TEU`}
+            />
 
             <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
