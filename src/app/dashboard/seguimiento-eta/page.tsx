@@ -61,11 +61,11 @@ export default async function SeguimientoEtaPage({
       const valor = r[campo] as string | null;
       return valor !== null && valor <= hoy;
     })
-    .sort((a, b) => ((a[campo] as string) < (b[campo] as string) ? -1 : 1));
+    .sort((a, b) => (b.booking ?? "").localeCompare(a.booking ?? ""));
 
   const sinDatos = rows
     .filter((r) => r[campo] === null)
-    .sort((a, b) => (a.booking ?? "").localeCompare(b.booking ?? ""));
+    .sort((a, b) => (b.booking ?? "").localeCompare(a.booking ?? ""));
 
   function diasDesde(fecha: string): number {
     const hoyDate = new Date(`${hoy}T00:00:00Z`);
