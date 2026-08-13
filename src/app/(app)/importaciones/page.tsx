@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { logout } from "@/app/login/actions";
 import {
   deleteImportacion,
   actualizarImportacion,
@@ -171,34 +170,10 @@ export default async function ImportacionesPage({
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <RealtimeRefresher table="seguimiento_importaciones" />
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+        <div className="mx-auto max-w-7xl px-6 py-4">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
             Seguimiento de Importaciones
           </h1>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/dashboard"
-              className="text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
-            >
-              Dashboard
-            </Link>
-            {(myPermissions.es_admin || myPermissions.puede_operativos) && (
-              <Link
-                href="/catalogos"
-                className="text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
-              >
-                Catálogos
-              </Link>
-            )}
-            <form action={logout}>
-              <button
-                type="submit"
-                className="text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
-              >
-                Cerrar sesión
-              </button>
-            </form>
-          </div>
         </div>
       </header>
 

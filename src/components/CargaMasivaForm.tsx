@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { BulkImportResult } from "@/app/catalogos/carga-masiva/actions";
+import type { BulkImportResult } from "@/app/(app)/catalogos/carga-masiva/actions";
 
 export function CargaMasivaForm({
   action,

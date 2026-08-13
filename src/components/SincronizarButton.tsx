@@ -6,7 +6,7 @@ import type {
   FilaSincronizacion,
   PrevisualizacionSincronizacion,
   ResultadoSincronizacion,
-} from "@/app/importaciones/actions";
+} from "@/app/(app)/importaciones/actions";
 
 export function SincronizarButton({
   onPrevisualizar,

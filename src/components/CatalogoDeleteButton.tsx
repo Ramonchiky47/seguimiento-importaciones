@@ -2,13 +2,13 @@
 
 import { useTransition } from "react";
 
-export function CatalogoDeleteButton({
+export function CatalogoDeleteButton<T extends number | string>({
   id,
   onDelete,
   confirmMessage = "¿Eliminar este registro del catálogo?",
 }: {
-  id: number;
-  onDelete: (id: number) => Promise<void>;
+  id: T;
+  onDelete: (id: T) => Promise<void>;
   confirmMessage?: string;
 }) {
   const [pending, startTransition] = useTransition();

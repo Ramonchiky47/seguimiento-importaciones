@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { logout } from "@/app/login/actions";
+import { calcularDiasDemoras, fechaHoyMexico } from "@/lib/dateLabels";
 import { StatTile } from "@/components/StatTile";
 import { HorizontalBarChart } from "@/components/HorizontalBarChart";
 import { MonthlyBarChart } from "@/components/MonthlyBarChart";
@@ -22,6 +22,10 @@ type Row = {
   type: string | null;
   contenedor: string | null;
   cantidad_contenedores_tipo: string | null;
+  ultimo_dia_libre_demoras: string | null;
+  notificacion_arribo_7_dias: string | null;
+  validacion_48_horas_antes_eta: string | null;
+  revalidacion_48_horas_antes_eta: string | null;
 };
 
 // Bookings donde el total de contenedores no coincide con la cantidad de
@@ -203,7 +207,7 @@ export default async function DashboardPage({
       const { data } = await supabase
         .from("seguimiento_importaciones")
         .select(
-          "booking, naviera, agente, pod, pol, oficina, operativo, fecha, estatus, type, contenedor, cantidad_contenedores_tipo",
+          "booking, naviera, agente, pod, pol, oficina, operativo, fecha, estatus, type, contenedor, cantidad_contenedores_tipo, ultimo_dia_libre_demoras, notificacion_arribo_7_dias, validacion_48_horas_antes_eta, revalidacion_48_horas_antes_eta",
         )
         .range(desde, desde + TAM_PAGINA - 1);
       const pagina = (data ?? []) as Row[];
@@ -266,6 +270,81 @@ export default async function DashboardPage({
   const totalContenedoresFcl = byContainerType.reduce((sum, d) => sum + d.value, 0);
   const fclSinContenedor = fclRows.filter((r) => !r.contenedor?.trim());
 
+  // TEU por Naviera y Contenedor — cantidad de cada tipo × su TEU en el
+  // catálogo Tipos de Contenedor. Si un tipo no está registrado en el
+  // catálogo (o es una combinación ambigua tipo "20, 40 HC"), su TEU no se
+  // puede calcular: se muestra la cantidad de contenedores en vez de un
+  // valor y se avisa abajo de la tabla qué tipos faltan por registrar.
+  const { data: tiposContenedorData } = await supabase
+    .from("catalogo_tipos_contenedor")
+    .select("tipo_contenedor, teu");
+  const teuPorTipo = new Map<string, number>();
+  for (const t of (tiposContenedorData ?? []) as { tipo_contenedor: string; teu: number }[]) {
+    teuPorTipo.set(t.tipo_contenedor.trim().toUpperCase(), Number(t.teu));
+  }
+
+  type CeldaTeu = { count: number; teu: number | null };
+  const navieraTipoTeu = new Map<string, Map<string, CeldaTeu>>();
+  const tiposPresentesTeu = new Set<string>();
+  const tiposSinTeu = new Set<string>();
+
+  for (const r of fclRows) {
+    const naviera = r.naviera?.trim() || "Sin naviera";
+    for (const { type, count } of parseContenedoresTipo(r.booking, r.cantidad_contenedores_tipo)) {
+      tiposPresentesTeu.add(type);
+      const teuUnitario = teuPorTipo.get(type.trim().toUpperCase());
+      if (teuUnitario === undefined) tiposSinTeu.add(type);
+
+      if (!navieraTipoTeu.has(naviera)) navieraTipoTeu.set(naviera, new Map());
+      const tiposDeNaviera = navieraTipoTeu.get(naviera)!;
+      const celda = tiposDeNaviera.get(type) ?? { count: 0, teu: teuUnitario === undefined ? null : 0 };
+      celda.count += count;
+      if (teuUnitario !== undefined) {
+        celda.teu = (celda.teu ?? 0) + count * teuUnitario;
+      }
+      tiposDeNaviera.set(type, celda);
+    }
+  }
+
+  const tiposTeuOrdenados = Array.from(tiposPresentesTeu).sort();
+  const teuPorNavieraTable = Array.from(navieraTipoTeu.entries())
+    .map(([naviera, tipos]) => {
+      const totalTeu = Array.from(tipos.values()).reduce((sum, c) => sum + (c.teu ?? 0), 0);
+      const totalContenedores = Array.from(tipos.values()).reduce((sum, c) => sum + c.count, 0);
+      return { naviera, tipos, totalTeu, totalContenedores };
+    })
+    .sort((a, b) => b.totalTeu - a.totalTeu);
+  const granTotalTeu = teuPorNavieraTable.reduce((sum, r) => sum + r.totalTeu, 0);
+  const granTotalContenedoresTeu = teuPorNavieraTable.reduce((sum, r) => sum + r.totalContenedores, 0);
+
+  // Centro de seguimiento — qué necesita atención hoy. Siempre sobre el
+  // dataset completo (allRows), sin los filtros de mes/POL/POD de las
+  // gráficas de abajo, porque esto responde "¿qué reviso ahora?", no
+  // "¿cómo se ve un periodo?".
+  const hoy = fechaHoyMexico();
+  const vigentesFcli = allRows.filter(
+    (r) => r.estatus === "Vigente" && r.type?.trim().toUpperCase() === "FCLI",
+  );
+  const esPendiente = (valor: string | null) => valor !== null && valor <= hoy;
+  const pendientesNotificacion = vigentesFcli.filter((r) => esPendiente(r.notificacion_arribo_7_dias)).length;
+  const pendientesValidacion = vigentesFcli.filter((r) => esPendiente(r.validacion_48_horas_antes_eta)).length;
+  const pendientesRevalidacion = vigentesFcli.filter((r) => esPendiente(r.revalidacion_48_horas_antes_eta)).length;
+  const pendientesTotal = vigentesFcli.filter(
+    (r) =>
+      esPendiente(r.notificacion_arribo_7_dias) ||
+      esPendiente(r.validacion_48_horas_antes_eta) ||
+      esPendiente(r.revalidacion_48_horas_antes_eta),
+  ).length;
+
+  const demorasActivas = allRows.filter(
+    (r) => r.estatus === "Vigente" && (calcularDiasDemoras(r.ultimo_dia_libre_demoras) ?? -Infinity) >= 0,
+  ).length;
+
+  const sinContenedorVigente = allRows.filter(
+    (r) =>
+      r.estatus === "Vigente" && r.type?.trim().toUpperCase() === "FCLI" && !r.contenedor?.trim(),
+  ).length;
+
   // Operaciones vigentes por operativo, con desglose FCLI/LCLI. El campo
   // operativo puede traer varios nombres separados por coma en una misma
   // fila (ej. "Adriana del Rosario Avila, EMMANUEL PULIDO"), así que el
@@ -318,28 +397,70 @@ export default async function DashboardPage({
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Dashboard</h1>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/importaciones"
-              className="text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
-            >
-              ← Seguimiento de Importaciones
-            </Link>
-            <form action={logout}>
-              <button
-                type="submit"
-                className="text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
-              >
-                Cerrar sesión
-              </button>
-            </form>
-          </div>
+        <div className="mx-auto max-w-7xl px-6 py-4">
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+            Centro de seguimiento
+          </h1>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+            Lo que necesita tu atención hoy, seguido de métricas y reportes
+          </p>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-8 space-y-6">
+      <main className="mx-auto max-w-7xl px-6 py-8 space-y-8">
+        <div>
+          <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
+            Qué necesita tu atención hoy
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Link
+              href="/dashboard/seguimiento-eta"
+              className="rounded-lg border border-slate-200 bg-white p-5 hover:border-[#c65a1f] dark:border-slate-800 dark:bg-slate-900 dark:hover:border-[#c65a1f]"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Pendientes de hoy
+              </p>
+              <p className="mt-2 text-3xl font-semibold tabular-nums text-slate-900 dark:text-slate-50">
+                {pendientesTotal}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Notif. {pendientesNotificacion} · Valid. {pendientesValidacion} · Reval.{" "}
+                {pendientesRevalidacion}
+              </p>
+            </Link>
+
+            <Link
+              href="/importaciones?estatus=Vigente"
+              className="rounded-lg border border-slate-200 bg-white p-5 hover:border-[#c65a1f] dark:border-slate-800 dark:bg-slate-900 dark:hover:border-[#c65a1f]"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Demoras activas
+              </p>
+              <p className="mt-2 text-3xl font-semibold tabular-nums text-red-600 dark:text-red-400">
+                {demorasActivas}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Bookings vigentes ya en días de demora
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/sin-contenedor"
+              className="rounded-lg border border-slate-200 bg-white p-5 hover:border-[#c65a1f] dark:border-slate-800 dark:bg-slate-900 dark:hover:border-[#c65a1f]"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Sin contenedor registrado
+              </p>
+              <p className="mt-2 text-3xl font-semibold tabular-nums text-slate-900 dark:text-slate-50">
+                {sinContenedorVigente}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Bookings FCLI vigentes sin ese dato
+              </p>
+            </Link>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatTile label="Total de embarques" value={totalCount} />
           <StatTile label="Vigentes" value={countByEstatus.Vigente} />
@@ -458,6 +579,121 @@ export default async function DashboardPage({
               </Link>
             </div>
           </div>
+        </div>
+
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+              TEU por Naviera y Contenedor
+            </h2>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">
+              Total: {granTotalTeu.toLocaleString("es-MX", { maximumFractionDigits: 2 })} TEU ·{" "}
+              {granTotalContenedoresTeu} contenedores
+            </span>
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+            <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+              <thead className="bg-slate-50 dark:bg-slate-800">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">
+                    Naviera
+                  </th>
+                  {tiposTeuOrdenados.map((tipo) => (
+                    <th
+                      key={tipo}
+                      className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400"
+                    >
+                      {tipo}
+                    </th>
+                  ))}
+                  <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">
+                    Total TEU
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {teuPorNavieraTable.map((row) => (
+                  <tr key={row.naviera} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                    <td className="whitespace-nowrap px-4 py-2 text-slate-700 dark:text-slate-300">
+                      {row.naviera}
+                    </td>
+                    {tiposTeuOrdenados.map((tipo) => {
+                      const celda = row.tipos.get(tipo);
+                      return (
+                        <td
+                          key={tipo}
+                          className="whitespace-nowrap px-4 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300"
+                        >
+                          {!celda ? (
+                            "—"
+                          ) : celda.teu === null ? (
+                            <span
+                              className="text-amber-600 dark:text-amber-400"
+                              title="Sin TEU registrado en el catálogo Tipos de Contenedor"
+                            >
+                              {celda.count} ⚠
+                            </span>
+                          ) : (
+                            celda.teu.toLocaleString("es-MX", { maximumFractionDigits: 2 })
+                          )}
+                        </td>
+                      );
+                    })}
+                    <td className="whitespace-nowrap px-4 py-2 text-right font-medium tabular-nums text-slate-900 dark:text-slate-50">
+                      {row.totalTeu.toLocaleString("es-MX", { maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                ))}
+
+                {teuPorNavieraTable.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={tiposTeuOrdenados.length + 2}
+                      className="px-4 py-8 text-center text-slate-400 dark:text-slate-500"
+                    >
+                      No hay datos para estos filtros.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {teuPorNavieraTable.length > 0 && (
+                <tfoot className="bg-slate-50 dark:bg-slate-800">
+                  <tr>
+                    <td className="whitespace-nowrap px-4 py-2 font-medium text-slate-700 dark:text-slate-300">
+                      Total
+                    </td>
+                    {tiposTeuOrdenados.map((tipo) => {
+                      const totalTipo = teuPorNavieraTable.reduce(
+                        (sum, r) => sum + (r.tipos.get(tipo)?.teu ?? 0),
+                        0,
+                      );
+                      return (
+                        <td
+                          key={tipo}
+                          className="whitespace-nowrap px-4 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300"
+                        >
+                          {totalTipo.toLocaleString("es-MX", { maximumFractionDigits: 2 })}
+                        </td>
+                      );
+                    })}
+                    <td className="whitespace-nowrap px-4 py-2 text-right font-semibold tabular-nums text-slate-900 dark:text-slate-50">
+                      {granTotalTeu.toLocaleString("es-MX", { maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+          {tiposSinTeu.size > 0 && (
+            <p className="mt-2 text-[10px] text-amber-600 dark:text-amber-400">
+              ⚠ Sin TEU registrado en el catálogo: {Array.from(tiposSinTeu).sort().join(", ")}. El
+              total no incluye esos contenedores hasta que se registren en{" "}
+              <Link href="/catalogos/tipos-contenedor" className="underline">
+                Catálogos → Tipos de Contenedor
+              </Link>
+              .
+            </p>
+          )}
         </div>
 
         <div>

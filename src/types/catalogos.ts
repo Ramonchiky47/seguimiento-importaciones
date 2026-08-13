@@ -17,6 +17,11 @@ export type CatalogoTerminalPortuaria = {
   nombre: string;
 };
 
+export type CatalogoTipoContenedor = {
+  tipo_contenedor: string;
+  teu: number;
+};
+
 export type AppUser = {
   id: string;
   email: string;
