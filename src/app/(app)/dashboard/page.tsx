@@ -316,6 +316,7 @@ export default async function DashboardPage({
     .sort((a, b) => b.totalTeu - a.totalTeu);
   const granTotalTeu = teuPorNavieraTable.reduce((sum, r) => sum + r.totalTeu, 0);
   const granTotalContenedoresTeu = teuPorNavieraTable.reduce((sum, r) => sum + r.totalContenedores, 0);
+  const byTeuNaviera = teuPorNavieraTable.map((r) => ({ label: r.naviera, value: r.totalTeu }));
 
   // Centro de seguimiento — qué necesita atención hoy. Siempre sobre el
   // dataset completo (allRows), sin los filtros de mes/POL/POD de las
@@ -542,6 +543,8 @@ export default async function DashboardPage({
                 porque no es posible saber cuántos son de cada tipo.
               </p>
             </div>
+
+            <HorizontalBarChart title="TEU por naviera (solo FCLI)" data={byTeuNaviera} />
 
             <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
