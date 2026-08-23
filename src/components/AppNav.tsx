@@ -13,16 +13,24 @@ const NAV_ITEMS = [
 export function AppNav({
   userEmail,
   showCatalogos,
+  reporteVendedoresUrl,
 }: {
   userEmail: string | null;
   showCatalogos: boolean;
+  reporteVendedoresUrl?: string | null;
 }) {
   const pathname = usePathname();
+  const enCatalogos = pathname === "/catalogos" || pathname.startsWith("/catalogos/");
+  const enOperaciones =
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/") ||
+    pathname === "/importaciones" ||
+    pathname.startsWith("/importaciones/");
 
   return (
     <header className="sticky top-0 z-30 bg-[#16232f] text-slate-200 shadow-sm">
       <div className="mx-auto flex max-w-7xl items-center gap-6 px-6 py-3">
-        <Link href="/dashboard" className="flex shrink-0 items-center gap-2">
+        <Link href="/inicio" className="flex shrink-0 items-center gap-2">
           <svg
             viewBox="0 0 24 24"
             width="20"
@@ -36,12 +44,23 @@ export function AppNav({
             <path d="M15.5 8.5 11 11 8.5 15.5 13 13Z" fill="#c65a1f" stroke="none" />
           </svg>
           <span className="hidden text-sm font-semibold tracking-tight text-white sm:inline">
-            Seguimiento de Importaciones
+            {enCatalogos ? "Catálogos" : "Seguimiento de Importaciones"}
           </span>
         </Link>
 
+        <Link
+          href="/inicio"
+          className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+        >
+          ← Regresar al menú
+        </Link>
+
         <nav className="flex items-center gap-1">
-          {NAV_ITEMS.filter((item) => item.href !== "/catalogos" || showCatalogos).map((item) => {
+          {NAV_ITEMS.filter((item) => {
+            if (enCatalogos) return item.href === "/catalogos";
+            if (enOperaciones) return item.href === "/dashboard" || item.href === "/importaciones";
+            return item.href !== "/catalogos" || showCatalogos;
+          }).map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
@@ -58,6 +77,16 @@ export function AppNav({
               </Link>
             );
           })}
+          {!enCatalogos && !enOperaciones && reporteVendedoresUrl && (
+            <a
+              href={reporteVendedoresUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              Reporte de Vendedores
+            </a>
+          )}
         </nav>
 
         <div className="ml-auto flex items-center gap-4">

@@ -14,6 +14,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <AppNav
         userEmail={user?.email ?? null}
         showCatalogos={myPermissions.es_admin || myPermissions.puede_operativos}
+        reporteVendedoresUrl={
+          myPermissions.es_admin || myPermissions.puede_vendedores
+            ? `/api/sso/reporte-ventas?next=${encodeURIComponent("/dashboard?panel=ventas")}`
+            : null
+        }
       />
       {children}
     </>

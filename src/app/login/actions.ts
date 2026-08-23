@@ -14,7 +14,7 @@ export async function login(_prevState: { error: string } | undefined, formData:
     return { error: "Correo o contraseña incorrectos." };
   }
 
-  redirect("/dashboard");
+  redirect("/inicio");
 }
 
 export async function logout() {
