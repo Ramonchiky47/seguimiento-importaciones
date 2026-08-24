@@ -35,5 +35,6 @@ export type AppUser = {
   puede_ver_ventas?: boolean;
   puede_ver_crm?: boolean;
   puede_comisiones?: boolean;
+  puede_pricing?: boolean;
   operativo_asociado?: string | null;
 };

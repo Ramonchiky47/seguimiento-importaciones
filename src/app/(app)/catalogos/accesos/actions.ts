@@ -28,9 +28,10 @@ export async function createAccesoUser(formData: FormData) {
     p_puede_borrar: esAdmin || formData.get("puede_borrar") === "on",
     p_puede_operativos: esAdmin || formData.get("puede_operativos") === "on",
     p_es_master: esAdmin || formData.get("es_master") === "on",
-    p_puede_ver_ventas: esAdmin || formData.get("puede_ver_ventas") === "on",
-    p_puede_ver_crm: esAdmin || formData.get("puede_ver_crm") === "on",
-    p_puede_comisiones: esAdmin || formData.get("puede_comisiones") === "on",
+    p_puede_ver_ventas: formData.get("puede_ver_ventas") === "on",
+    p_puede_ver_crm: formData.get("puede_ver_crm") === "on",
+    p_puede_comisiones: formData.get("puede_comisiones") === "on",
+    p_puede_pricing: formData.get("puede_pricing") === "on",
   });
   if (permError) throw new Error(permError.message);
 
@@ -79,6 +80,7 @@ export async function setAccesoUserPermission(
     puede_ver_ventas: boolean;
     puede_ver_crm: boolean;
     puede_comisiones: boolean;
+    puede_pricing: boolean;
   },
   field:
     | "es_admin"
@@ -88,7 +90,8 @@ export async function setAccesoUserPermission(
     | "es_master"
     | "puede_ver_ventas"
     | "puede_ver_crm"
-    | "puede_comisiones",
+    | "puede_comisiones"
+    | "puede_pricing",
   value: boolean,
 ) {
   const supabase = await createClient();
@@ -104,6 +107,7 @@ export async function setAccesoUserPermission(
     p_puede_ver_ventas: next.puede_ver_ventas,
     p_puede_ver_crm: next.puede_ver_crm,
     p_puede_comisiones: next.puede_comisiones,
+    p_puede_pricing: next.puede_pricing,
   });
   if (error) throw new Error(error.message);
 

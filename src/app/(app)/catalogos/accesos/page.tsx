@@ -94,6 +94,7 @@ export default async function AccesosPage() {
                           puede_ver_ventas: row.puede_ver_ventas ?? false,
                           puede_ver_crm: row.puede_ver_crm ?? false,
                           puede_comisiones: row.puede_comisiones ?? false,
+                          puede_pricing: row.puede_pricing ?? false,
                         }}
                         onChange={boundSetPermission}
                       />

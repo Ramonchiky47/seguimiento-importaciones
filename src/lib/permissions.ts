@@ -8,6 +8,7 @@ export type MyPermissions = {
   puede_ver_ventas: boolean;
   puede_ver_crm: boolean;
   puede_comisiones: boolean;
+  puede_pricing: boolean;
   es_master: boolean;
 };
 
@@ -19,6 +20,7 @@ const DEFAULT_PERMISSIONS: MyPermissions = {
   puede_ver_ventas: false,
   puede_ver_crm: false,
   puede_comisiones: false,
+  puede_pricing: false,
   es_master: false,
 };
 

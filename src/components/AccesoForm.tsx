@@ -141,9 +141,8 @@ export function AccesoForm({
               id="puede_ver_ventas"
               name="puede_ver_ventas"
               type="checkbox"
-              disabled={esAdmin}
               defaultChecked={true}
-              className="h-4 w-4 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
+              className="h-4 w-4 rounded border-slate-300 dark:border-slate-600"
             />
             <label htmlFor="puede_ver_ventas" className="text-sm text-slate-700 dark:text-slate-300">
               Reporte de Ventas
@@ -154,9 +153,8 @@ export function AccesoForm({
               id="puede_ver_crm"
               name="puede_ver_crm"
               type="checkbox"
-              disabled={esAdmin}
               defaultChecked={false}
-              className="h-4 w-4 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
+              className="h-4 w-4 rounded border-slate-300 dark:border-slate-600"
             />
             <label htmlFor="puede_ver_crm" className="text-sm text-slate-700 dark:text-slate-300">
               Comercial
@@ -167,12 +165,23 @@ export function AccesoForm({
               id="puede_comisiones"
               name="puede_comisiones"
               type="checkbox"
-              disabled={esAdmin}
               defaultChecked={false}
-              className="h-4 w-4 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
+              className="h-4 w-4 rounded border-slate-300 dark:border-slate-600"
             />
             <label htmlFor="puede_comisiones" className="text-sm text-slate-700 dark:text-slate-300">
               Administración
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="puede_pricing"
+              name="puede_pricing"
+              type="checkbox"
+              defaultChecked={false}
+              className="h-4 w-4 rounded border-slate-300 dark:border-slate-600"
+            />
+            <label htmlFor="puede_pricing" className="text-sm text-slate-700 dark:text-slate-300">
+              Pricing
             </label>
           </div>
         </div>

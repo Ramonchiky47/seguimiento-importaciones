@@ -11,6 +11,7 @@ type Perms = {
   puede_ver_ventas: boolean;
   puede_ver_crm: boolean;
   puede_comisiones: boolean;
+  puede_pricing: boolean;
 };
 
 const SISTEMA: { field: keyof Perms; label: string }[] = [
@@ -25,6 +26,7 @@ const MODULOS: { field: keyof Perms; label: string }[] = [
   { field: "puede_ver_ventas", label: "Ventas" },
   { field: "puede_ver_crm", label: "Comercial" },
   { field: "puede_comisiones", label: "Administración" },
+  { field: "puede_pricing", label: "Pricing" },
 ];
 
 function resumen(perms: Perms): string {
