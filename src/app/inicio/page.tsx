@@ -131,7 +131,8 @@ export default async function InicioPage() {
     myPermissions.puede_borrar ||
     myPermissions.puede_ver_crm ||
     myPermissions.puede_comisiones ||
-    myPermissions.puede_pricing;
+    myPermissions.puede_pricing ||
+    myPermissions.puede_operaciones;
 
   if (!tienePermisos) {
     redirect("/sin-acceso");
@@ -142,6 +143,7 @@ export default async function InicioPage() {
   const showAdministracion = myPermissions.puede_comisiones;
   const showComercial = myPermissions.puede_ver_crm;
   const showPricing = myPermissions.puede_pricing;
+  const showOperaciones = myPermissions.puede_operaciones;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
@@ -194,13 +196,22 @@ export default async function InicioPage() {
             />
           )}
 
-          <Link href="/dashboard" className="contents">
+          {showOperaciones ? (
+            <Link href="/dashboard" className="contents">
+              <CardShell
+                icon={<IconOperaciones />}
+                title="Operaciones"
+                description="Seguimiento operativo de embarques e importaciones."
+              />
+            </Link>
+          ) : (
             <CardShell
               icon={<IconOperaciones />}
               title="Operaciones"
               description="Seguimiento operativo de embarques e importaciones."
+              disabled
             />
-          </Link>
+          )}
 
           {showComercial ? (
             <a
