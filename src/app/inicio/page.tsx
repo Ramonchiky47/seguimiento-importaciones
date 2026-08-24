@@ -138,12 +138,12 @@ export default async function InicioPage() {
     redirect("/sin-acceso");
   }
 
-  const showVentas = myPermissions.puede_ver_ventas;
+  const showVentas = myPermissions.es_admin || myPermissions.puede_ver_ventas;
   const showCatalogos = myPermissions.es_admin || myPermissions.puede_operativos;
-  const showAdministracion = myPermissions.puede_comisiones;
-  const showComercial = myPermissions.puede_ver_crm;
-  const showPricing = myPermissions.puede_pricing;
-  const showOperaciones = myPermissions.puede_operaciones;
+  const showAdministracion = myPermissions.es_admin || myPermissions.puede_comisiones;
+  const showComercial = myPermissions.es_admin || myPermissions.puede_ver_crm;
+  const showPricing = myPermissions.es_admin || myPermissions.puede_pricing;
+  const showOperaciones = myPermissions.es_admin || myPermissions.puede_operaciones;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">

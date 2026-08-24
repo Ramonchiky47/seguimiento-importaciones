@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   }
 
   const myPermissions = await getMyPermissions();
-  if (!myPermissions.puede_pricing) {
+  if (!myPermissions.es_admin && !myPermissions.puede_pricing) {
     return NextResponse.redirect(new URL("/inicio", requestUrl));
   }
 
