@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   }
 
   const myPermissions = await getMyPermissions();
-  if (!myPermissions.es_admin && !myPermissions.puede_vendedores) {
+  if (!myPermissions.puede_ver_ventas) {
     return NextResponse.redirect(new URL("/inicio", requestUrl));
   }
 

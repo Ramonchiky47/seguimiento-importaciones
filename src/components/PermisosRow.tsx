@@ -8,6 +8,9 @@ type Perms = {
   puede_borrar: boolean;
   puede_operativos: boolean;
   es_master: boolean;
+  puede_ver_ventas: boolean;
+  puede_ver_crm: boolean;
+  puede_comisiones: boolean;
 };
 
 export function PermisosRow({
@@ -85,6 +88,37 @@ export function PermisosRow({
           className="h-3.5 w-3.5 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
         />
         Master
+      </label>
+      <span className="mx-1 hidden h-3.5 w-px bg-slate-200 sm:inline-block dark:bg-slate-700" />
+      <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300">
+        <input
+          type="checkbox"
+          checked={perms.puede_ver_ventas}
+          disabled={pending || perms.es_admin}
+          onChange={toggle("puede_ver_ventas")}
+          className="h-3.5 w-3.5 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
+        />
+        Ventas
+      </label>
+      <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300">
+        <input
+          type="checkbox"
+          checked={perms.puede_ver_crm}
+          disabled={pending || perms.es_admin}
+          onChange={toggle("puede_ver_crm")}
+          className="h-3.5 w-3.5 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
+        />
+        Comercial
+      </label>
+      <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300">
+        <input
+          type="checkbox"
+          checked={perms.puede_comisiones}
+          disabled={pending || perms.es_admin}
+          onChange={toggle("puede_comisiones")}
+          className="h-3.5 w-3.5 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
+        />
+        Administración
       </label>
     </div>
   );

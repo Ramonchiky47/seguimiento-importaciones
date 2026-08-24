@@ -5,8 +5,9 @@ export type MyPermissions = {
   puede_exportar: boolean;
   puede_borrar: boolean;
   puede_operativos: boolean;
-  puede_vendedores: boolean;
-  puede_accesos: boolean;
+  puede_ver_ventas: boolean;
+  puede_ver_crm: boolean;
+  puede_comisiones: boolean;
   es_master: boolean;
 };
 
@@ -15,8 +16,9 @@ const DEFAULT_PERMISSIONS: MyPermissions = {
   puede_exportar: false,
   puede_borrar: false,
   puede_operativos: false,
-  puede_vendedores: false,
-  puede_accesos: false,
+  puede_ver_ventas: false,
+  puede_ver_crm: false,
+  puede_comisiones: false,
   es_master: false,
 };
 

@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   }
 
   const myPermissions = await getMyPermissions();
-  if (!myPermissions.es_admin) {
+  if (!myPermissions.puede_comisiones) {
     return NextResponse.redirect(new URL("/inicio", requestUrl));
   }
 

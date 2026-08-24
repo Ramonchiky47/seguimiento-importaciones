@@ -2,10 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getMyPermissions } from "@/lib/permissions";
-import { toggleAccesoUserActivo, setAccesoUserPermission, setAccesoUserPassword } from "./actions";
+import { toggleAccesoUserActivo, setAccesoUserPermission, setAccesoUserPassword, deleteAccesoUser } from "./actions";
 import { ActivoToggle } from "@/components/ActivoToggle";
 import { PermisosRow } from "@/components/PermisosRow";
 import { PasswordEditor } from "@/components/PasswordEditor";
+import { DeleteUserButton } from "@/components/DeleteUserButton";
 import type { AppUser } from "@/types/catalogos";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,9 @@ export default async function AccesosPage() {
   }
 
   const supabase = await createClient();
+  const {
+    data: { user: currentUser },
+  } = await supabase.auth.getUser();
   const { data, error } = await supabase.rpc("list_app_users");
 
   const rows = (data ?? []) as AppUser[];
@@ -46,7 +50,8 @@ export default async function AccesosPage() {
       <main className="mx-auto max-w-4xl px-6 py-8">
         <p className="mb-4 text-xs text-slate-400 dark:text-slate-500">
           Usuarios que pueden iniciar sesión en esta app. Solo un administrador ve y gestiona esta pantalla.
-          Administrador = acceso total. Los demás solo entran a Operativos si se les marca esa casilla.
+          Administrador = acceso total. Los demás solo ven las tarjetas de inicio (Operativos, Ventas, Comercial,
+          Administración) cuya casilla tengan marcada.
         </p>
 
         {error && (
@@ -64,6 +69,7 @@ export default async function AccesosPage() {
                 <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Permisos</th>
                 <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Contraseña</th>
                 <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Activo</th>
+                <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -84,6 +90,9 @@ export default async function AccesosPage() {
                           puede_borrar: row.puede_borrar ?? false,
                           puede_operativos: row.puede_operativos ?? false,
                           es_master: row.es_master ?? false,
+                          puede_ver_ventas: row.puede_ver_ventas ?? false,
+                          puede_ver_crm: row.puede_ver_crm ?? false,
+                          puede_comisiones: row.puede_comisiones ?? false,
                         }}
                         onChange={boundSetPermission}
                       />
@@ -94,13 +103,18 @@ export default async function AccesosPage() {
                     <td className="whitespace-nowrap px-4 py-3">
                       <ActivoToggle id={row.id} activo={isActive} onToggle={toggleAccesoUserActivo} />
                     </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {row.id !== currentUser?.id && (
+                        <DeleteUserButton id={row.id} email={row.email} onDelete={deleteAccesoUser} />
+                      )}
+                    </td>
                   </tr>
                 );
               })}
 
               {rows.length === 0 && !error && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400 dark:text-slate-500">
                     No hay accesos todavía.
                   </td>
                 </tr>

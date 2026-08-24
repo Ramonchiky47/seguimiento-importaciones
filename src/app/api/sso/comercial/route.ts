@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   }
 
   const myPermissions = await getMyPermissions();
-  if (!myPermissions.es_admin) {
+  if (!myPermissions.puede_ver_crm) {
     return NextResponse.redirect(new URL("/inicio", requestUrl));
   }
 

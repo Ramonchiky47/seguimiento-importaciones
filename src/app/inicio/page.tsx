@@ -116,20 +116,21 @@ export default async function InicioPage() {
   const tienePermisos =
     myPermissions.es_admin ||
     myPermissions.es_master ||
-    myPermissions.puede_vendedores ||
+    myPermissions.puede_ver_ventas ||
     myPermissions.puede_operativos ||
     myPermissions.puede_exportar ||
     myPermissions.puede_borrar ||
-    myPermissions.puede_accesos;
+    myPermissions.puede_ver_crm ||
+    myPermissions.puede_comisiones;
 
   if (!tienePermisos) {
     redirect("/sin-acceso");
   }
 
-  const showVentas = myPermissions.es_admin || myPermissions.puede_vendedores;
+  const showVentas = myPermissions.puede_ver_ventas;
   const showCatalogos = myPermissions.es_admin || myPermissions.puede_operativos;
-  const showAdministracion = myPermissions.es_admin;
-  const showComercial = myPermissions.es_admin;
+  const showAdministracion = myPermissions.puede_comisiones;
+  const showComercial = myPermissions.puede_ver_crm;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
