@@ -248,7 +248,7 @@ export default async function InicioPage() {
 
           {showPricing ? (
             <a
-              href={`/api/sso/pricing?next=${encodeURIComponent("/pricing")}`}
+              href={`/api/sso/pricing?next=${encodeURIComponent("/pricing?panel=pricing")}`}
               target="_blank"
               rel="noopener noreferrer"
               className="contents"

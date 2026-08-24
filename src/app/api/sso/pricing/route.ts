@@ -5,7 +5,7 @@ import { buildWebappSsoUrl, REPORTE_VENDEDORES_URL } from "@/lib/webappSso";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
-  const next = requestUrl.searchParams.get("next") || "/pricing";
+  const next = requestUrl.searchParams.get("next") || "/pricing?panel=pricing";
 
   const supabase = await createClient();
   const {
