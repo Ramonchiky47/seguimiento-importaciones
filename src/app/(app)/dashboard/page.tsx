@@ -140,7 +140,7 @@ export default async function DashboardPage({
     .map(([label, value]) => ({ label, value }))
     .sort((a, b) => b.value - a.value);
   const totalContenedoresFcl = byContainerType.reduce((sum, d) => sum + d.value, 0);
-  const fclSinContenedor = fclRows.filter((r) => !r.contenedor?.trim());
+  const fclSinContenedor = fclRows.filter((r) => !r.contenedor?.trim() && !r.cantidad_contenedores_tipo?.trim());
 
   // TEU por Naviera y Contenedor — cantidad de cada tipo × su TEU en el
   // catálogo Tipos de Contenedor. Si un tipo no está registrado en el
@@ -215,7 +215,10 @@ export default async function DashboardPage({
 
   const sinContenedorVigente = allRows.filter(
     (r) =>
-      r.estatus === "Vigente" && r.type?.trim().toUpperCase() === "FCLI" && !r.contenedor?.trim(),
+      r.estatus === "Vigente" &&
+      r.type?.trim().toUpperCase() === "FCLI" &&
+      !r.contenedor?.trim() &&
+      !r.cantidad_contenedores_tipo?.trim(),
   ).length;
 
   // Operaciones vigentes por operativo, con desglose FCLI/LCLI. El campo

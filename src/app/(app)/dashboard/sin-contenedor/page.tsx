@@ -14,6 +14,7 @@ type Row = {
   pod: string | null;
   fecha: string | null;
   estatus: string;
+  cantidad_contenedores_tipo: string | null;
 };
 
 export default async function SinContenedorPage({
@@ -28,12 +29,12 @@ export default async function SinContenedorPage({
   const supabase = await createClient();
   const { data } = await supabase
     .from("seguimiento_importaciones")
-    .select("id, booking, client, naviera, pol, pod, fecha, estatus")
+    .select("id, booking, client, naviera, pol, pod, fecha, estatus, cantidad_contenedores_tipo")
     .ilike("type", "FCLI")
     .or("contenedor.is.null,contenedor.eq.")
     .order("fecha", { ascending: false });
 
-  let rows = (data ?? []) as Row[];
+  let rows = ((data ?? []) as Row[]).filter((r) => !r.cantidad_contenedores_tipo?.trim());
   if (mes) rows = rows.filter((r) => r.fecha?.startsWith(mes));
   if (polRaw.length > 0) rows = rows.filter((r) => polRaw.includes(r.pol?.trim() ?? ""));
   if (podRaw.length > 0) rows = rows.filter((r) => podRaw.includes(r.pod?.trim() ?? ""));

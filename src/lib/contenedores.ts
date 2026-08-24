@@ -93,6 +93,22 @@ export const DESGLOSE_MANUAL_CONTENEDORES: Record<string, { type: string; count:
     { type: "40 FR", count: 3 },
     { type: "40 HC", count: 3 },
   ],
+  "2606-3016-FCLI": [
+    { type: "40 HC", count: 4 },
+    { type: "40 FR", count: 3 },
+  ],
+  "2605-2273-FCLI": [
+    { type: "40 HC", count: 11 },
+    { type: "40 FR", count: 5 },
+  ],
+  "2605-2501-FCLI": [
+    { type: "40 HC", count: 2 },
+    { type: "20", count: 1 },
+  ],
+  "2605-2623-FCLI": [
+    { type: "20 FR", count: 1 },
+    { type: "40 HC", count: 3 },
+  ],
 };
 
 // Parses strings like "6 contenedores (Tipo 40 HC,40 OT)" produced by
