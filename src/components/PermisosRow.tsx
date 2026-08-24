@@ -13,14 +13,39 @@ type Perms = {
   puede_comisiones: boolean;
 };
 
+const SISTEMA: { field: keyof Perms; label: string }[] = [
+  { field: "es_admin", label: "Admin" },
+  { field: "puede_exportar", label: "Exportar" },
+  { field: "puede_borrar", label: "Borrar" },
+  { field: "es_master", label: "Master" },
+];
+
+const MODULOS: { field: keyof Perms; label: string }[] = [
+  { field: "puede_operativos", label: "Operativos" },
+  { field: "puede_ver_ventas", label: "Ventas" },
+  { field: "puede_ver_crm", label: "Comercial" },
+  { field: "puede_comisiones", label: "Administración" },
+];
+
+function resumen(perms: Perms): string {
+  if (perms.es_admin) return "Administrador (acceso total)";
+  const activos = [...SISTEMA, ...MODULOS]
+    .filter(({ field }) => field !== "es_admin" && perms[field])
+    .map(({ label }) => label);
+  return activos.length > 0 ? activos.join(" · ") : "Sin permisos";
+}
+
 export function PermisosRow({
+  email,
   initial,
   onChange,
 }: {
+  email: string;
   initial: Perms;
   onChange: (current: Perms, field: keyof Perms, value: boolean) => Promise<void>;
 }) {
   const [perms, setPerms] = useState<Perms>(initial);
+  const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const toggle = (field: keyof Perms) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,88 +63,78 @@ export function PermisosRow({
   };
 
   return (
-    <div className="flex flex-wrap gap-3">
-      <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300">
-        <input
-          type="checkbox"
-          checked={perms.es_admin}
-          disabled={pending}
-          onChange={toggle("es_admin")}
-          className="h-3.5 w-3.5 rounded border-slate-300 dark:border-slate-600"
-        />
-        Admin
-      </label>
-      <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300">
-        <input
-          type="checkbox"
-          checked={perms.puede_exportar}
-          disabled={pending || perms.es_admin}
-          onChange={toggle("puede_exportar")}
-          className="h-3.5 w-3.5 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
-        />
-        Exportar
-      </label>
-      <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300">
-        <input
-          type="checkbox"
-          checked={perms.puede_borrar}
-          disabled={pending || perms.es_admin}
-          onChange={toggle("puede_borrar")}
-          className="h-3.5 w-3.5 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
-        />
-        Borrar
-      </label>
-      <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300">
-        <input
-          type="checkbox"
-          checked={perms.puede_operativos}
-          disabled={pending || perms.es_admin}
-          onChange={toggle("puede_operativos")}
-          className="h-3.5 w-3.5 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
-        />
-        Operativos
-      </label>
-      <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300">
-        <input
-          type="checkbox"
-          checked={perms.es_master}
-          disabled={pending || perms.es_admin}
-          onChange={toggle("es_master")}
-          className="h-3.5 w-3.5 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
-        />
-        Master
-      </label>
-      <span className="mx-1 hidden h-3.5 w-px bg-slate-200 sm:inline-block dark:bg-slate-700" />
-      <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300">
-        <input
-          type="checkbox"
-          checked={perms.puede_ver_ventas}
-          disabled={pending || perms.es_admin}
-          onChange={toggle("puede_ver_ventas")}
-          className="h-3.5 w-3.5 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
-        />
-        Ventas
-      </label>
-      <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300">
-        <input
-          type="checkbox"
-          checked={perms.puede_ver_crm}
-          disabled={pending || perms.es_admin}
-          onChange={toggle("puede_ver_crm")}
-          className="h-3.5 w-3.5 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
-        />
-        Comercial
-      </label>
-      <label className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300">
-        <input
-          type="checkbox"
-          checked={perms.puede_comisiones}
-          disabled={pending || perms.es_admin}
-          onChange={toggle("puede_comisiones")}
-          className="h-3.5 w-3.5 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
-        />
-        Administración
-      </label>
-    </div>
+    <>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-600 dark:text-slate-300">{resumen(perms)}</span>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+        >
+          Editar
+        </button>
+      </div>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="mb-1 text-sm font-semibold text-slate-900 dark:text-slate-50">Permisos</p>
+            <p className="mb-4 truncate text-xs text-slate-500 dark:text-slate-400">{email}</p>
+
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              Sistema
+            </p>
+            <div className="mb-4 grid grid-cols-2 gap-2">
+              {SISTEMA.map(({ field, label }) => (
+                <label key={field} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={perms[field]}
+                    disabled={pending || (field !== "es_admin" && perms.es_admin)}
+                    onChange={toggle(field)}
+                    className="h-4 w-4 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              Módulos (tarjetas de inicio)
+            </p>
+            <div className="mb-5 grid grid-cols-2 gap-2">
+              {MODULOS.map(({ field, label }) => (
+                <label key={field} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={perms[field]}
+                    disabled={pending}
+                    onChange={toggle(field)}
+                    className="h-4 w-4 rounded border-slate-300 disabled:opacity-50 dark:border-slate-600"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

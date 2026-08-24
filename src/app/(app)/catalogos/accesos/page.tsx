@@ -84,6 +84,7 @@ export default async function AccesosPage() {
                     </td>
                     <td className="px-4 py-3">
                       <PermisosRow
+                        email={row.email}
                         initial={{
                           es_admin: row.es_admin ?? false,
                           puede_exportar: row.puede_exportar ?? false,
