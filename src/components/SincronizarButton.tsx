@@ -11,9 +11,15 @@ import type {
 export function SincronizarButton({
   onPrevisualizar,
   onConfirmar,
+  basePath = "/importaciones",
+  rangoLabel = "jul 2026 a la fecha",
+  tipoLabel = "FCLI/LCLI",
 }: {
   onPrevisualizar: () => Promise<PrevisualizacionSincronizacion>;
   onConfirmar: (filas: FilaSincronizacion[], totalRevisados: number) => Promise<ResultadoSincronizacion>;
+  basePath?: string;
+  rangoLabel?: string;
+  tipoLabel?: string;
 }) {
   const [buscando, startBuscando] = useTransition();
   const [confirmando, startConfirmando] = useTransition();
@@ -39,7 +45,7 @@ export function SincronizarButton({
         setPreview(null);
 
         const partes = [
-          `Revisados en Cargolink (jul 2026 a la fecha): ${r.totalRevisados}`,
+          `Revisados en Cargolink (${rangoLabel}): ${r.totalRevisados}`,
           `Agregadas: ${r.insertados}`,
           `Completadas con todos sus datos: ${r.enriquecidos}`,
         ];
@@ -51,7 +57,7 @@ export function SincronizarButton({
         // Lleva a la primera página ordenada por lo recién insertado, así
         // los registros nuevos quedan arriba y se ven sin tener que buscar.
         if (r.insertados > 0) {
-          router.push("/importaciones?sort=created_at&dir=desc&page=1");
+          router.push(`${basePath}?sort=created_at&dir=desc&page=1`);
         } else {
           router.refresh();
         }
@@ -67,7 +73,7 @@ export function SincronizarButton({
         type="button"
         disabled={buscando}
         onClick={handleBuscar}
-        title="Busca en Cargolink las referencias FCLI/LCLI de julio 2026 a la fecha que falten por cargar"
+        title={`Busca en Cargolink las referencias ${tipoLabel} de ${rangoLabel} que falten por cargar`}
         className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
       >
         {buscando ? "Buscando…" : "Actualizar referencias"}
@@ -87,7 +93,7 @@ export function SincronizarButton({
                 Referencias nuevas encontradas en Cargolink
               </h2>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Revisadas {preview.totalRevisados} (jul 2026 a la fecha) · {preview.filas.length} no
+                Revisadas {preview.totalRevisados} ({rangoLabel}) · {preview.filas.length} no
                 están cargadas todavía
               </p>
             </div>

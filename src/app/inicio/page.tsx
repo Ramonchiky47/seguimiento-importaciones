@@ -144,7 +144,8 @@ export default async function InicioPage() {
     myPermissions.puede_ver_crm ||
     myPermissions.puede_comisiones ||
     myPermissions.puede_pricing ||
-    myPermissions.puede_operaciones;
+    myPermissions.puede_operaciones ||
+    myPermissions.puede_operaciones_exportacion;
 
   if (!tienePermisos) {
     redirect("/sin-acceso");
@@ -156,6 +157,8 @@ export default async function InicioPage() {
   const showComercial = myPermissions.es_admin || myPermissions.puede_ver_crm;
   const showPricing = myPermissions.es_admin || myPermissions.puede_pricing;
   const showOperaciones = myPermissions.es_admin || myPermissions.puede_operaciones;
+  const showOperacionesExportacion =
+    myPermissions.es_admin || myPermissions.puede_operaciones_exportacion;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
@@ -225,12 +228,22 @@ export default async function InicioPage() {
             />
           )}
 
-          <CardShell
-            icon={<IconOperacionesExportacion />}
-            title="Operaciones Exportación"
-            description="Seguimiento operativo de embarques de exportación."
-            disabled
-          />
+          {showOperacionesExportacion ? (
+            <Link href="/exportaciones" className="contents">
+              <CardShell
+                icon={<IconOperacionesExportacion />}
+                title="Operaciones Exportación"
+                description="Seguimiento operativo de embarques de exportación."
+              />
+            </Link>
+          ) : (
+            <CardShell
+              icon={<IconOperacionesExportacion />}
+              title="Operaciones Exportación"
+              description="Seguimiento operativo de embarques de exportación."
+              disabled
+            />
+          )}
 
           {showComercial ? (
             <a

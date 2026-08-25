@@ -177,6 +177,41 @@ export async function listarReferenciasCargolinkPorRango(
   return encontrados;
 }
 
+const TIPOS_SEGUIMIENTO_EXPORTACION = new Set(["FCLE", "LCLE"]);
+
+// Igual que listarReferenciasCargolinkPorRango, pero para los tipos de
+// exportación (FCLE/LCLE) en vez de importación (FCLI/LCLI).
+export async function listarReferenciasCargolinkExportacionPorRango(
+  fechaDesde: string,
+  fechaHasta: string,
+): Promise<ReferenciaCargolink[]> {
+  const { token, cookie } = await loginCargolink();
+  const filtros = {
+    tipo_fecha: "booking.fecha_creacion",
+    fechai: fechaDesde,
+    fechaf: fechaHasta,
+  };
+
+  const encontrados: ReferenciaCargolink[] = [];
+
+  for (let pagina = 0; pagina < MAX_PAGINAS; pagina++) {
+    const respuesta = await consultarConcentradoPagina(token, cookie, pagina, filtros);
+    const valores = respuesta.valores ?? [];
+    if (valores.length === 0) break;
+
+    for (const b of valores) {
+      const noBooking = b.no_booking?.trim();
+      if (!noBooking || noBooking.length < 4) continue;
+      const tipo = noBooking.slice(-4).toUpperCase();
+      if (TIPOS_SEGUIMIENTO_EXPORTACION.has(tipo)) {
+        encontrados.push({ noBooking, booking: b });
+      }
+    }
+  }
+
+  return encontrados;
+}
+
 export function normalizeFecha(value: unknown): string | null {
   if (typeof value !== "string") return null;
   if (!value || value === "0000-00-00") return null;
@@ -256,6 +291,47 @@ export function mapCargolinkBookingToImportacion(booking: CargolinkBooking, noBo
     notificacion_arribo_7_dias: subtractDays(etaAta, 7),
     // dias_demoras ya no viene de Cargolink: ahora es un cálculo local
     // (fecha actual - último día libre de demoras), ver calcularDiasDemoras.
+    seguro: booking.seguro !== undefined ? booking.seguro?.trim().toUpperCase() === "SI" : null,
+  };
+}
+
+// Igual que mapCargolinkBookingToImportacion, pero para FCLE/LCLE. Se asume
+// la misma regla de "agente" que en importación (FCLE = agente extranjero,
+// LCLE = coloader guardado en nombreNaviera) hasta que se confirme lo
+// contrario con un caso real de exportación LCLE.
+export function mapCargolinkBookingToExportacion(booking: CargolinkBooking, noBookingLocal: string) {
+  const vendedor = booking.nameVend?.trim() || null;
+  const type = noBookingLocal.length > 10 ? noBookingLocal.slice(10) : null;
+
+  const isLCLE = type === "LCLE";
+  const agente =
+    type === "FCLE"
+      ? booking.nameAgenExt?.trim() || null
+      : isLCLE
+        ? booking.nombreNaviera?.trim() || null
+        : booking.agente_cliente?.trim() || null;
+
+  const etaAta = normalizeFecha(booking.buque_eta);
+
+  return {
+    fecha: normalizeFecha(booking.fecha_creacion),
+    type,
+    vendedor,
+    operativo: booking.nameEjec?.trim().replace(/\s+/g, " ") || null,
+    client: booking.nameCust?.trim() || null,
+    agente,
+    naviera: isLCLE ? null : booking.nombreNaviera?.trim() || null,
+    pol: booking.sitioOrigen ? String(booking.sitioOrigen).replace(/\s*-\s*$/, "").trim() : null,
+    pod: booking.sitioDestino?.trim() || null,
+    mbl: booking.no_control?.trim() || null,
+    contenedor: booking.no_contenedores?.trim() || null,
+    cantidad_contenedores_tipo: buildCantidadContenedoresTipo(booking),
+    shipper: extractShipperName(booking.shipper),
+    direccion_recoleccion: booking.dir_recoleccion?.trim() || null,
+    etd_atd: normalizeFecha(booking.fecha_atd),
+    confirmacion_48_horas: subtractDays(normalizeFecha(booking.fecha_atd), 2),
+    eta_ata: etaAta,
+    notificacion_arribo_7_dias: subtractDays(etaAta, 7),
     seguro: booking.seguro !== undefined ? booking.seguro?.trim().toUpperCase() === "SI" : null,
   };
 }

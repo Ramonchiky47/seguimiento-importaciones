@@ -13,6 +13,7 @@ type Perms = {
   puede_comisiones: boolean;
   puede_pricing: boolean;
   puede_operaciones: boolean;
+  puede_operaciones_exportacion: boolean;
 };
 
 const SISTEMA: { field: keyof Perms; label: string }[] = [
@@ -24,6 +25,7 @@ const SISTEMA: { field: keyof Perms; label: string }[] = [
 
 const MODULOS: { field: keyof Perms; label: string }[] = [
   { field: "puede_operaciones", label: "Operaciones" },
+  { field: "puede_operaciones_exportacion", label: "Operaciones Exportación" },
   { field: "puede_operativos", label: "Operativos" },
   { field: "puede_ver_ventas", label: "Ventas" },
   { field: "puede_ver_crm", label: "Comercial" },

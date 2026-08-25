@@ -7,6 +7,7 @@ import { logout } from "@/app/login/actions";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/importaciones", label: "Importaciones" },
+  { href: "/exportaciones", label: "Exportaciones" },
   { href: "/catalogos", label: "Catálogos" },
 ] as const;
 
@@ -26,6 +27,7 @@ export function AppNav({
     pathname.startsWith("/dashboard/") ||
     pathname === "/importaciones" ||
     pathname.startsWith("/importaciones/");
+  const enExportaciones = pathname === "/exportaciones" || pathname.startsWith("/exportaciones/");
 
   return (
     <header className="sticky top-0 z-30 bg-[#16232f] text-slate-200 shadow-sm">
@@ -44,7 +46,11 @@ export function AppNav({
             <path d="M15.5 8.5 11 11 8.5 15.5 13 13Z" fill="#c65a1f" stroke="none" />
           </svg>
           <span className="hidden text-sm font-semibold tracking-tight text-white sm:inline">
-            {enCatalogos ? "Catálogos" : "Seguimiento de Importaciones"}
+            {enCatalogos
+              ? "Catálogos"
+              : enExportaciones
+                ? "Seguimiento de Exportaciones"
+                : "Seguimiento de Importaciones"}
           </span>
         </Link>
 
@@ -59,6 +65,7 @@ export function AppNav({
           {NAV_ITEMS.filter((item) => {
             if (enCatalogos) return item.href === "/catalogos";
             if (enOperaciones) return item.href === "/dashboard" || item.href === "/importaciones";
+            if (enExportaciones) return item.href === "/exportaciones";
             return item.href !== "/catalogos" || showCatalogos;
           }).map((item) => {
             const isActive =

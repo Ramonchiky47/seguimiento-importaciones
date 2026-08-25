@@ -10,6 +10,7 @@ export type MyPermissions = {
   puede_comisiones: boolean;
   puede_pricing: boolean;
   puede_operaciones: boolean;
+  puede_operaciones_exportacion: boolean;
   es_master: boolean;
 };
 
@@ -23,6 +24,7 @@ const DEFAULT_PERMISSIONS: MyPermissions = {
   puede_comisiones: false,
   puede_pricing: false,
   puede_operaciones: false,
+  puede_operaciones_exportacion: false,
   es_master: false,
 };
 

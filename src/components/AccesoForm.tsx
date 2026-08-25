@@ -150,6 +150,18 @@ export function AccesoForm({
           </div>
           <div className="flex items-center gap-2">
             <input
+              id="puede_operaciones_exportacion"
+              name="puede_operaciones_exportacion"
+              type="checkbox"
+              defaultChecked={false}
+              className="h-4 w-4 rounded border-slate-300 dark:border-slate-600"
+            />
+            <label htmlFor="puede_operaciones_exportacion" className="text-sm text-slate-700 dark:text-slate-300">
+              Operaciones Exportación
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
               id="puede_ver_ventas"
               name="puede_ver_ventas"
               type="checkbox"
