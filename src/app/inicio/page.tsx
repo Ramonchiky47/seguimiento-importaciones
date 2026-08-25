@@ -27,6 +27,18 @@ function IconOperaciones() {
   );
 }
 
+function IconOperacionesExportacion() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#c65a1f" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3 20 7.5v9L12 21 4 16.5v-9Z" />
+      <path d="M4 7.5 12 12l8-4.5" />
+      <path d="M12 12v9" />
+      <path d="M15 3.5v4h4" />
+      <path d="M19 3.5 13.5 9" />
+    </svg>
+  );
+}
+
 function IconComercial() {
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#c65a1f" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -212,6 +224,13 @@ export default async function InicioPage() {
               disabled
             />
           )}
+
+          <CardShell
+            icon={<IconOperacionesExportacion />}
+            title="Operaciones Exportación"
+            description="Seguimiento operativo de embarques de exportación."
+            disabled
+          />
 
           {showComercial ? (
             <a
