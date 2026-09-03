@@ -12,7 +12,7 @@ export function SincronizarButton({
   onPrevisualizar,
   onConfirmar,
   basePath = "/importaciones",
-  rangoLabel = "jul 2026 a la fecha",
+  rangoLabel = "ene 2026 a la fecha",
   tipoLabel = "FCLI/LCLI",
 }: {
   onPrevisualizar: () => Promise<PrevisualizacionSincronizacion>;
