@@ -183,6 +183,12 @@ export default async function ReportePricingPage({
             <span className="text-[15px] font-bold text-white">TrackAv2</span>
           </Link>
           <span className="text-sm font-medium text-slate-300">Reporte de Pricing</span>
+          <a
+            href={`/api/sso/pricing?next=${encodeURIComponent("/pricing?panel=pricing")}`}
+            className="text-[13px] font-medium text-slate-300 hover:text-white"
+          >
+            ← Regresar a Pricing
+          </a>
           <div className="ml-auto flex items-center gap-5">
             {user?.email && <span className="hidden text-xs text-slate-400 md:inline">{user.email}</span>}
             <form action={logout}>
