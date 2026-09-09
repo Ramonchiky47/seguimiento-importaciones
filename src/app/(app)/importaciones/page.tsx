@@ -206,7 +206,7 @@ export default async function ImportacionesPage({
             <SincronizarButton
               onPrevisualizar={previsualizarSincronizacion}
               onConfirmar={confirmarSincronizacion}
-              rangoLabel="ene 2026 a la fecha"
+              rangoLabel="ene 2025 a la fecha"
             />
             {myPermissions.puede_exportar && (
               <a

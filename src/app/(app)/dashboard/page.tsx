@@ -6,6 +6,7 @@ import { StatTile } from "@/components/StatTile";
 import { HorizontalBarChart } from "@/components/HorizontalBarChart";
 import { MonthlyBarChart } from "@/components/MonthlyBarChart";
 import { MonthFilter } from "@/components/MonthFilter";
+import { YearFilter } from "@/components/YearFilter";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { ClickableRow } from "@/components/ClickableRow";
 
@@ -59,9 +60,14 @@ function monthlyGroups(rows: Row[]) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string; pol?: string | string[]; pod?: string | string[] }>;
+  searchParams: Promise<{
+    mes?: string;
+    anio?: string;
+    pol?: string | string[];
+    pod?: string | string[];
+  }>;
 }) {
-  const { mes, pol, pod } = await searchParams;
+  const { mes, anio, pol, pod } = await searchParams;
   const polRaw = pol ? (Array.isArray(pol) ? pol : [pol]) : [];
   const podRaw = pod ? (Array.isArray(pod) ? pod : [pod]) : [];
   const supabase = await createClient();
@@ -92,6 +98,9 @@ export default async function DashboardPage({
   const availableMonths = Array.from(
     new Set(allRows.map((r) => r.fecha?.slice(0, 7)).filter((m): m is string => Boolean(m))),
   ).sort((a, b) => b.localeCompare(a));
+  const availableYears = Array.from(
+    new Set(allRows.map((r) => r.fecha?.slice(0, 4)).filter((y): y is string => Boolean(y))),
+  ).sort((a, b) => b.localeCompare(a));
   const availablePol = Array.from(
     new Set(allRows.map((r) => r.pol?.trim()).filter((v): v is string => Boolean(v))),
   ).sort();
@@ -103,6 +112,7 @@ export default async function DashboardPage({
   // charts — the monthly trend chart and KPI tiles always reflect the full dataset.
   const filteredRows = allRows.filter((r) => {
     if (mes && !r.fecha?.startsWith(mes)) return false;
+    if (anio && !r.fecha?.startsWith(anio)) return false;
     if (polRaw.length > 0 && !polRaw.includes(r.pol?.trim() ?? "")) return false;
     if (podRaw.length > 0 && !podRaw.includes(r.pod?.trim() ?? "")) return false;
     return true;
@@ -247,6 +257,7 @@ export default async function DashboardPage({
     const params = new URLSearchParams();
     params.set("estatus", "Vigente");
     if (mes) params.set("mes", mes);
+    if (anio) params.set("anio", anio);
     for (const v of polRaw) params.append("pol", v);
     for (const v of podRaw) params.append("pod", v);
     return `/dashboard/detalle/operativo/${encodeURIComponent(label)}?${params.toString()}`;
@@ -255,6 +266,7 @@ export default async function DashboardPage({
   const teuNavieraHref = (naviera: string) => {
     const params = new URLSearchParams();
     if (mes) params.set("mes", mes);
+    if (anio) params.set("anio", anio);
     for (const v of polRaw) params.append("pol", v);
     for (const v of podRaw) params.append("pod", v);
     const query = params.toString();
@@ -264,6 +276,7 @@ export default async function DashboardPage({
   const detailHref = (dim: string) => {
     const params = new URLSearchParams();
     if (mes) params.set("mes", mes);
+    if (anio) params.set("anio", anio);
     for (const v of polRaw) params.append("pol", v);
     for (const v of podRaw) params.append("pod", v);
     const query = params.toString();
@@ -273,6 +286,7 @@ export default async function DashboardPage({
   const sinContenedorHref = (() => {
     const params = new URLSearchParams();
     if (mes) params.set("mes", mes);
+    if (anio) params.set("anio", anio);
     for (const v of polRaw) params.append("pol", v);
     for (const v of podRaw) params.append("pod", v);
     const query = params.toString();
@@ -361,6 +375,7 @@ export default async function DashboardPage({
             anual de arriba.
           </p>
           <div className="flex flex-wrap items-center gap-2">
+            <YearFilter years={availableYears} />
             <MonthFilter months={availableMonths} />
             <MultiSelectFilter paramName="pol" label="POL" options={availablePol} current={polRaw} />
             <MultiSelectFilter paramName="pod" label="POD" options={availablePod} current={podRaw} />

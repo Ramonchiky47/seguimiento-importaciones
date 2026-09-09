@@ -252,9 +252,9 @@ export type ResultadoSincronizacion = {
   errores: string[];
 };
 
-// Rango pedido por el usuario: desde enero 2026 hasta hoy. "Hoy" se calcula
+// Rango pedido por el usuario: desde enero 2025 hasta hoy. "Hoy" se calcula
 // en hora de México para que no cambie de día antes de tiempo por UTC.
-const SYNC_FECHA_DESDE = "2026-01-01";
+const SYNC_FECHA_DESDE = "2025-01-01";
 function syncFechaHasta(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
 }

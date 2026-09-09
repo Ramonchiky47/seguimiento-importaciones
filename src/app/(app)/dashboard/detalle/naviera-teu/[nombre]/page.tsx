@@ -27,6 +27,7 @@ export default async function NavieraTeuBookingsPage({
   params: Promise<{ nombre: string }>;
   searchParams: Promise<{
     mes?: string;
+    anio?: string;
     pol?: string | string[];
     pod?: string | string[];
   }>;
@@ -34,7 +35,7 @@ export default async function NavieraTeuBookingsPage({
   const { nombre } = await params;
   const naviera = decodeURIComponent(nombre);
   const esSinNaviera = naviera === "Sin naviera";
-  const { mes, pol, pod } = await searchParams;
+  const { mes, anio, pol, pod } = await searchParams;
   const polRaw = pol ? (Array.isArray(pol) ? pol : [pol]) : [];
   const podRaw = pod ? (Array.isArray(pod) ? pod : [pod]) : [];
 
@@ -60,6 +61,7 @@ export default async function NavieraTeuBookingsPage({
   let rows = (data ?? []) as Row[];
 
   if (mes) rows = rows.filter((r) => r.fecha?.startsWith(mes));
+  if (anio) rows = rows.filter((r) => r.fecha?.startsWith(anio));
   if (polRaw.length > 0) rows = rows.filter((r) => polRaw.includes(r.pol?.trim() ?? ""));
   if (podRaw.length > 0) rows = rows.filter((r) => podRaw.includes(r.pod?.trim() ?? ""));
 
@@ -77,6 +79,7 @@ export default async function NavieraTeuBookingsPage({
 
   const backParams = new URLSearchParams();
   if (mes) backParams.set("mes", mes);
+  if (anio) backParams.set("anio", anio);
   for (const v of polRaw) backParams.append("pol", v);
   for (const v of podRaw) backParams.append("pod", v);
   const backQuery = backParams.toString();
@@ -84,6 +87,7 @@ export default async function NavieraTeuBookingsPage({
 
   const activeFilters = [
     mes ? formatMonthLabel(mes) : null,
+    anio ? `Año: ${anio}` : null,
     polRaw.length > 0 ? `POL: ${polRaw.join(", ")}` : null,
     podRaw.length > 0 ? `POD: ${podRaw.join(", ")}` : null,
   ].filter(Boolean);
