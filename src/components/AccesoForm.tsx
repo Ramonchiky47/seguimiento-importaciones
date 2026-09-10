@@ -208,6 +208,18 @@ export function AccesoForm({
               Pricing
             </label>
           </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="puede_transporte_terrestre"
+              name="puede_transporte_terrestre"
+              type="checkbox"
+              defaultChecked={false}
+              className="h-4 w-4 rounded border-slate-300 dark:border-slate-600"
+            />
+            <label htmlFor="puede_transporte_terrestre" className="text-sm text-slate-700 dark:text-slate-300">
+              Pricing Terrestre Internacional
+            </label>
+          </div>
         </div>
       </div>
 

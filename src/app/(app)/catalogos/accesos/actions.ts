@@ -34,6 +34,7 @@ export async function createAccesoUser(formData: FormData) {
     p_puede_pricing: formData.get("puede_pricing") === "on",
     p_puede_operaciones: formData.get("puede_operaciones") === "on",
     p_puede_operaciones_exportacion: formData.get("puede_operaciones_exportacion") === "on",
+    p_puede_transporte_terrestre: formData.get("puede_transporte_terrestre") === "on",
   });
   if (permError) throw new Error(permError.message);
 
@@ -85,6 +86,7 @@ export async function setAccesoUserPermission(
     puede_pricing: boolean;
     puede_operaciones: boolean;
     puede_operaciones_exportacion: boolean;
+    puede_transporte_terrestre: boolean;
   },
   field:
     | "es_admin"
@@ -97,7 +99,8 @@ export async function setAccesoUserPermission(
     | "puede_comisiones"
     | "puede_pricing"
     | "puede_operaciones"
-    | "puede_operaciones_exportacion",
+    | "puede_operaciones_exportacion"
+    | "puede_transporte_terrestre",
   value: boolean,
 ) {
   const supabase = await createClient();
@@ -116,6 +119,7 @@ export async function setAccesoUserPermission(
     p_puede_pricing: next.puede_pricing,
     p_puede_operaciones: next.puede_operaciones,
     p_puede_operaciones_exportacion: next.puede_operaciones_exportacion,
+    p_puede_transporte_terrestre: next.puede_transporte_terrestre,
   });
   if (error) throw new Error(error.message);
 

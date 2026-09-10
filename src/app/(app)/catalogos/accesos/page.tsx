@@ -97,6 +97,7 @@ export default async function AccesosPage() {
                           puede_pricing: row.puede_pricing ?? false,
                           puede_operaciones: row.puede_operaciones ?? true,
                           puede_operaciones_exportacion: row.puede_operaciones_exportacion ?? false,
+                          puede_transporte_terrestre: row.puede_transporte_terrestre ?? false,
                         }}
                         onChange={boundSetPermission}
                       />

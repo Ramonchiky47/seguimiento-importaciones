@@ -14,6 +14,7 @@ type Perms = {
   puede_pricing: boolean;
   puede_operaciones: boolean;
   puede_operaciones_exportacion: boolean;
+  puede_transporte_terrestre: boolean;
 };
 
 const SISTEMA: { field: keyof Perms; label: string }[] = [
@@ -31,6 +32,7 @@ const MODULOS: { field: keyof Perms; label: string }[] = [
   { field: "puede_ver_crm", label: "Comercial" },
   { field: "puede_comisiones", label: "Administración" },
   { field: "puede_pricing", label: "Pricing" },
+  { field: "puede_transporte_terrestre", label: "Pricing Terrestre Internacional" },
 ];
 
 function resumen(perms: Perms): string {

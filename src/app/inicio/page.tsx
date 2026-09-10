@@ -69,6 +69,18 @@ function IconPricing() {
   );
 }
 
+function IconTransporteTerrestre() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#c65a1f" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 16V7a1 1 0 0 1 1-1h9v10" />
+      <path d="M13 10h4l4 3v3h-2" />
+      <path d="M3 16h1" />
+      <circle cx="7.5" cy="16.5" r="1.8" />
+      <circle cx="17.5" cy="16.5" r="1.8" />
+    </svg>
+  );
+}
+
 function IconAdministracion() {
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#c65a1f" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -145,7 +157,8 @@ export default async function InicioPage() {
     myPermissions.puede_comisiones ||
     myPermissions.puede_pricing ||
     myPermissions.puede_operaciones ||
-    myPermissions.puede_operaciones_exportacion;
+    myPermissions.puede_operaciones_exportacion ||
+    myPermissions.puede_transporte_terrestre;
 
   if (!tienePermisos) {
     redirect("/sin-acceso");
@@ -156,6 +169,8 @@ export default async function InicioPage() {
   const showAdministracion = myPermissions.es_admin || myPermissions.puede_comisiones;
   const showComercial = myPermissions.es_admin || myPermissions.puede_ver_crm;
   const showPricing = myPermissions.es_admin || myPermissions.puede_pricing;
+  const showTransporteTerrestre =
+    myPermissions.es_admin || myPermissions.puede_transporte_terrestre;
   const showOperaciones = myPermissions.es_admin || myPermissions.puede_operaciones;
   const showOperacionesExportacion =
     myPermissions.es_admin || myPermissions.puede_operaciones_exportacion;
@@ -307,6 +322,28 @@ export default async function InicioPage() {
               icon={<IconPricing />}
               title="Pricing"
               description="Tarifas y configuración de precios."
+              disabled
+            />
+          )}
+
+          {showTransporteTerrestre ? (
+            <a
+              href={`/api/sso/transporte-terrestre?next=${encodeURIComponent("/transporte-terrestre?panel=transporte-terrestre")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="contents"
+            >
+              <CardShell
+                icon={<IconTransporteTerrestre />}
+                title="Pricing Terrestre Internacional"
+                description="Tarifas y cotizaciones de transporte terrestre internacional."
+              />
+            </a>
+          ) : (
+            <CardShell
+              icon={<IconTransporteTerrestre />}
+              title="Pricing Terrestre Internacional"
+              description="Tarifas y cotizaciones de transporte terrestre internacional."
               disabled
             />
           )}

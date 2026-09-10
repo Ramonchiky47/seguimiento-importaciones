@@ -38,5 +38,6 @@ export type AppUser = {
   puede_pricing?: boolean;
   puede_operaciones?: boolean;
   puede_operaciones_exportacion?: boolean;
+  puede_transporte_terrestre?: boolean;
   operativo_asociado?: string | null;
 };
