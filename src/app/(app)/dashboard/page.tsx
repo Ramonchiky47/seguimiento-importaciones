@@ -44,17 +44,22 @@ function topGroups(rows: Row[], field: keyof Row, limit: number) {
     .slice(0, limit);
 }
 
-function monthlyGroups(rows: Row[]) {
+// A diferencia de un rolling de los últimos 12 meses (lo que hacía antes),
+// esto arma las 12 barras Ene-Dic de UN año calendario específico, en ese
+// orden, con 0 en los meses sin embarques — así la gráfica siempre se lee
+// de izquierda a derecha como un año completo, no como una ventana que se
+// va recorriendo con el tiempo.
+function monthlyGroups(rows: Row[], anio: string) {
   const counts = new Map<string, number>();
   for (const r of rows) {
-    if (!r.fecha) continue;
+    if (!r.fecha || !r.fecha.startsWith(anio)) continue;
     const month = r.fecha.slice(0, 7);
     counts.set(month, (counts.get(month) ?? 0) + 1);
   }
-  return Array.from(counts.entries())
-    .map(([month, value]) => ({ month, value }))
-    .sort((a, b) => a.month.localeCompare(b.month))
-    .slice(-12);
+  return Array.from({ length: 12 }, (_, i) => {
+    const month = `${anio}-${String(i + 1).padStart(2, "0")}`;
+    return { month, value: counts.get(month) ?? 0 };
+  });
 }
 
 export default async function DashboardPage({
@@ -108,6 +113,10 @@ export default async function DashboardPage({
     new Set(allRows.map((r) => r.pod?.trim()).filter((v): v is string => Boolean(v))),
   ).sort();
 
+  // Año que muestra "Embarques por mes": el que se elija en el filtro, o el
+  // año en curso (hora de México) si no se ha elegido ninguno todavía.
+  const anioGrafica = anio || fechaHoyMexico().slice(0, 4);
+
   // The month/POL/POD filters apply only to the "embarques por X" breakdown
   // charts — the monthly trend chart and KPI tiles always reflect the full dataset.
   const filteredRows = allRows.filter((r) => {
@@ -129,7 +138,7 @@ export default async function DashboardPage({
     { Vigente: 0, Finalizado: 0, Cancelado: 0 },
   );
 
-  const byMonth = monthlyGroups(allRows);
+  const byMonth = monthlyGroups(allRows, anioGrafica);
   const byNaviera = topGroups(filteredRows, "naviera", 8);
   const byAgente = topGroups(filteredRows, "agente", 8);
   const byPod = topGroups(filteredRows, "pod", 8);
@@ -367,12 +376,12 @@ export default async function DashboardPage({
           <StatTile label="Cancelados" value={countByEstatus.Cancelado} accent="red" />
         </div>
 
-        <MonthlyBarChart title="Embarques por mes" data={byMonth} />
+        <MonthlyBarChart title={`Embarques por mes (${anioGrafica})`} data={byMonth} />
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Estos filtros solo afectan las gráficas de embarques de abajo — no afectan la gráfica
-            anual de arriba.
+            El filtro de año también cambia el año de la gráfica de arriba (por default, el año en
+            curso). Mes, POL y POD solo afectan las gráficas de embarques de abajo.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <YearFilter years={availableYears} />
