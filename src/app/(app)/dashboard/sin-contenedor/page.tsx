@@ -41,7 +41,7 @@ export default async function SinContenedorPage({
 
   let rows = ((data ?? []) as Row[]).filter((r) => !r.cantidad_contenedores_tipo?.trim());
   if (mes) rows = rows.filter((r) => r.fecha?.startsWith(mes));
-  if (anio) rows = rows.filter((r) => r.fecha?.startsWith(anio));
+  if (anio && anio !== "todos") rows = rows.filter((r) => r.fecha?.startsWith(anio));
   if (polRaw.length > 0) rows = rows.filter((r) => polRaw.includes(r.pol?.trim() ?? ""));
   if (podRaw.length > 0) rows = rows.filter((r) => podRaw.includes(r.pod?.trim() ?? ""));
 
@@ -55,7 +55,7 @@ export default async function SinContenedorPage({
 
   const activeFilters = [
     mes ? formatMonthLabel(mes) : null,
-    anio ? `Año: ${anio}` : null,
+    anio && anio !== "todos" ? `Año: ${anio}` : null,
     polRaw.length > 0 ? `POL: ${polRaw.join(", ")}` : null,
     podRaw.length > 0 ? `POD: ${podRaw.join(", ")}` : null,
   ].filter(Boolean);

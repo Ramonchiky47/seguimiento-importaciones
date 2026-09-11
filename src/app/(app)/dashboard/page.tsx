@@ -113,15 +113,24 @@ export default async function DashboardPage({
     new Set(allRows.map((r) => r.pod?.trim()).filter((v): v is string => Boolean(v))),
   ).sort();
 
-  // Año que muestra "Embarques por mes": el que se elija en el filtro, o el
-  // año en curso (hora de México) si no se ha elegido ninguno todavía.
-  const anioGrafica = anio || fechaHoyMexico().slice(0, 4);
+  // El filtro de año por default muestra el año en curso (hora de México),
+  // no "todos los años" — "todos" ahora es una elección explícita del
+  // usuario (anio=todos en la URL), no simplemente la ausencia del
+  // parámetro, para poder distinguir "nunca lo tocó" de "sí eligió todos".
+  const anioActual = fechaHoyMexico().slice(0, 4);
+  const anioSeleccionado = anio ?? anioActual;
+  const anioFiltro = anioSeleccionado === "todos" ? null : anioSeleccionado;
+
+  // Año que muestra "Embarques por mes": el año filtrado, o el año en curso
+  // si el filtro está en "todos los años" (una gráfica Ene-Dic no tiene
+  // forma sensata de mostrar varios años a la vez).
+  const anioGrafica = anioFiltro || anioActual;
 
   // The month/POL/POD filters apply only to the "embarques por X" breakdown
   // charts — the monthly trend chart and KPI tiles always reflect the full dataset.
   const filteredRows = allRows.filter((r) => {
     if (mes && !r.fecha?.startsWith(mes)) return false;
-    if (anio && !r.fecha?.startsWith(anio)) return false;
+    if (anioFiltro && !r.fecha?.startsWith(anioFiltro)) return false;
     if (polRaw.length > 0 && !polRaw.includes(r.pol?.trim() ?? "")) return false;
     if (podRaw.length > 0 && !podRaw.includes(r.pod?.trim() ?? "")) return false;
     return true;
@@ -266,7 +275,7 @@ export default async function DashboardPage({
     const params = new URLSearchParams();
     params.set("estatus", "Vigente");
     if (mes) params.set("mes", mes);
-    if (anio) params.set("anio", anio);
+    params.set("anio", anioSeleccionado);
     for (const v of polRaw) params.append("pol", v);
     for (const v of podRaw) params.append("pod", v);
     return `/dashboard/detalle/operativo/${encodeURIComponent(label)}?${params.toString()}`;
@@ -275,7 +284,7 @@ export default async function DashboardPage({
   const teuNavieraHref = (naviera: string) => {
     const params = new URLSearchParams();
     if (mes) params.set("mes", mes);
-    if (anio) params.set("anio", anio);
+    params.set("anio", anioSeleccionado);
     for (const v of polRaw) params.append("pol", v);
     for (const v of podRaw) params.append("pod", v);
     const query = params.toString();
@@ -285,7 +294,7 @@ export default async function DashboardPage({
   const detailHref = (dim: string) => {
     const params = new URLSearchParams();
     if (mes) params.set("mes", mes);
-    if (anio) params.set("anio", anio);
+    params.set("anio", anioSeleccionado);
     for (const v of polRaw) params.append("pol", v);
     for (const v of podRaw) params.append("pod", v);
     const query = params.toString();
@@ -295,7 +304,7 @@ export default async function DashboardPage({
   const sinContenedorHref = (() => {
     const params = new URLSearchParams();
     if (mes) params.set("mes", mes);
-    if (anio) params.set("anio", anio);
+    params.set("anio", anioSeleccionado);
     for (const v of polRaw) params.append("pol", v);
     for (const v of podRaw) params.append("pod", v);
     const query = params.toString();
@@ -384,7 +393,7 @@ export default async function DashboardPage({
             curso). Mes, POL y POD solo afectan las gráficas de embarques de abajo.
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <YearFilter years={availableYears} />
+            <YearFilter years={availableYears} currentYear={anioActual} />
             <MonthFilter months={availableMonths} />
             <MultiSelectFilter paramName="pol" label="POL" options={availablePol} current={polRaw} />
             <MultiSelectFilter paramName="pod" label="POD" options={availablePod} current={podRaw} />
