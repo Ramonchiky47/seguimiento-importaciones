@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { YearFilter } from "@/components/YearFilter";
+import { ActualizarMaritimaButton } from "@/components/ActualizarMaritimaButton";
+import { getMyPermissions } from "@/lib/permissions";
+import { actualizarOperacionesMaritima } from "./actions";
 
 export const dynamic = "force-dynamic";
+// "Actualizar" descarga de Cargolink durante ~3-4 min (ver actions.ts).
+export const maxDuration = 300;
 
 // Espejo de Cargolink: Operaciones Importacion > Servicios maritimos. Solo
 // lectura — la tabla operaciones_maritima se llena con una carga desde
@@ -43,11 +49,21 @@ export default async function OperacionesMaritimaPage({
     sort?: string;
     dir?: string;
     type?: string | string[];
+    anio?: string;
     page?: string;
   }>;
 }) {
-  const { q, sort, dir, type, page } = await searchParams;
+  const { q, sort, dir, type, anio, page } = await searchParams;
   const supabase = await createClient();
+  const myPermissions = await getMyPermissions();
+
+  // Igual que el dashboard: sin parámetro se muestra el año en curso;
+  // "todos" es una elección explícita.
+  const anioActual = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+  }).format(new Date());
+  const anioSeleccionado = anio ?? anioActual;
 
   const sortField = sort && SORTABLE_FIELDS.has(sort) ? sort : "fecha";
   const sortAscending = dir === "asc";
@@ -78,6 +94,10 @@ export default async function OperacionesMaritimaPage({
     query = query.in("type", typeRaw);
   }
 
+  if (/^\d{4}$/.test(anioSeleccionado)) {
+    query = query.gte("fecha", `${anioSeleccionado}-01-01`).lte("fecha", `${anioSeleccionado}-12-31`);
+  }
+
   const { data, error, count } = await query;
   const rows = (data ?? []) as unknown as Record<string, string | number | null>[];
   const totalCount = count ?? 0;
@@ -89,6 +109,17 @@ export default async function OperacionesMaritimaPage({
     .order("sincronizado_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  const { data: primera } = await supabase
+    .from("operaciones_maritima")
+    .select("fecha")
+    .not("fecha", "is", null)
+    .order("fecha", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const primerAnio = Number(primera?.fecha?.slice(0, 4)) || Number(anioActual);
+  const availableYears: string[] = [];
+  for (let y = Number(anioActual); y >= primerAnio; y--) availableYears.push(String(y));
+
   const ultimaCarga = ultima?.sincronizado_at
     ? new Intl.DateTimeFormat("es-MX", {
         timeZone: "America/Mexico_City",
@@ -101,6 +132,7 @@ export default async function OperacionesMaritimaPage({
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     for (const v of typeRaw) params.append("type", v);
+    if (anio) params.set("anio", anio);
     return params;
   };
 
@@ -143,6 +175,7 @@ export default async function OperacionesMaritimaPage({
             {typeRaw.map((v) => (
               <input key={v} type="hidden" name="type" value={v} />
             ))}
+            {anio && <input type="hidden" name="anio" value={anio} />}
             <input
               name="q"
               defaultValue={q ?? ""}
@@ -157,6 +190,12 @@ export default async function OperacionesMaritimaPage({
             </button>
           </form>
           <MultiSelectFilter paramName="type" label="Type" options={TYPE_OPTIONS} current={typeRaw} />
+          <YearFilter years={availableYears} currentYear={anioActual} />
+          {myPermissions.es_admin && (
+            <div className="ml-auto">
+              <ActualizarMaritimaButton onActualizar={actualizarOperacionesMaritima} />
+            </div>
+          )}
         </div>
 
         {error && (
