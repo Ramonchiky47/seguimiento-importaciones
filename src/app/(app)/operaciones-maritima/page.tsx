@@ -95,6 +95,9 @@ export default async function OperacionesMaritimaPage({
   const typeRaw = type ? (Array.isArray(type) ? type : [type]) : [];
   const ejecutivoRaw = ejecutivo ? (Array.isArray(ejecutivo) ? ejecutivo : [ejecutivo]) : [];
 
+  const term = (q ?? "").replace(/[,()]/g, " ").trim();
+  const anioFiltro = /^\d{4}$/.test(anioSeleccionado) ? Number(anioSeleccionado) : null;
+
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -108,14 +111,13 @@ export default async function OperacionesMaritimaPage({
   ) => {
     let qb = supabase.from("operaciones_maritima").select(columnas, opciones);
     if (q) {
-      const term = q.replace(/[,()]/g, " ").trim();
       qb = qb.or(
         `no_booking.ilike.%${term}%,cliente.ilike.%${term}%,mbl.ilike.%${term}%,ejecutivo.ilike.%${term}%,contenedores.ilike.%${term}%,agente_extranjero.ilike.%${term}%`,
       );
     }
     if (typeRaw.length > 0) qb = qb.in("type", typeRaw);
     if (ejecutivoRaw.length > 0) qb = qb.in("ejecutivo", ejecutivoRaw);
-    if (/^\d{4}$/.test(anioSeleccionado)) {
+    if (anioFiltro) {
       qb = qb.gte("fecha", `${anioSeleccionado}-01-01`).lte("fecha", `${anioSeleccionado}-12-31`);
     }
     if (filtroTarjeta === "sin_eta") qb = qb.is("eta", null);
@@ -136,11 +138,21 @@ export default async function OperacionesMaritimaPage({
   ]);
   const [conteoTotal, ...conteoTarjetas] = conteos.map((c) => c.count ?? 0);
 
-  const { data: ejecutivosData } = await supabase
-    .from("operaciones_maritima_ejecutivos")
-    .select("ejecutivo")
-    .order("ejecutivo");
-  const availableEjecutivos = (ejecutivosData ?? []).map((r) => r.ejecutivo as string);
+  // Solo ejecutivos con bookings bajo los demás filtros activos; los ya
+  // seleccionados se conservan para poder quitarlos.
+  const { data: ejecutivosData } = await supabase.rpc("operaciones_maritima_ejecutivos", {
+    p_anio: anioFiltro,
+    p_types: typeRaw.length > 0 ? typeRaw : null,
+    p_q: term || null,
+    p_tarjeta: tarjetaActiva,
+    p_hoy: hoy,
+  });
+  const availableEjecutivos = Array.from(
+    new Set([
+      ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((r) => r.ejecutivo),
+      ...ejecutivoRaw,
+    ]),
+  ).sort((a, b) => a.localeCompare(b, "es"));
   const rows = (data ?? []) as unknown as Record<string, string | number | null>[];
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
