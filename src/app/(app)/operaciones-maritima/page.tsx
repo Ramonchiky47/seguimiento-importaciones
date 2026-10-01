@@ -66,12 +66,13 @@ export default async function OperacionesMaritimaPage({
     sort?: string;
     dir?: string;
     type?: string | string[];
+    ejecutivo?: string | string[];
     anio?: string;
     tarjeta?: string;
     page?: string;
   }>;
 }) {
-  const { q, sort, dir, type, anio, tarjeta, page } = await searchParams;
+  const { q, sort, dir, type, ejecutivo, anio, tarjeta, page } = await searchParams;
   const supabase = await createClient();
   const myPermissions = await getMyPermissions();
 
@@ -92,6 +93,7 @@ export default async function OperacionesMaritimaPage({
     sort && SORTABLE_FIELDS.has(sort) ? sort : tarjetaActiva === "demora" ? "dias_demora" : "fecha";
   const sortAscending = sort ? dir === "asc" : false;
   const typeRaw = type ? (Array.isArray(type) ? type : [type]) : [];
+  const ejecutivoRaw = ejecutivo ? (Array.isArray(ejecutivo) ? ejecutivo : [ejecutivo]) : [];
 
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
@@ -112,6 +114,7 @@ export default async function OperacionesMaritimaPage({
       );
     }
     if (typeRaw.length > 0) qb = qb.in("type", typeRaw);
+    if (ejecutivoRaw.length > 0) qb = qb.in("ejecutivo", ejecutivoRaw);
     if (/^\d{4}$/.test(anioSeleccionado)) {
       qb = qb.gte("fecha", `${anioSeleccionado}-01-01`).lte("fecha", `${anioSeleccionado}-12-31`);
     }
@@ -132,6 +135,12 @@ export default async function OperacionesMaritimaPage({
     ...TARJETAS.map((t) => consulta("id_booking", { count: "exact", head: true }, t.key)),
   ]);
   const [conteoTotal, ...conteoTarjetas] = conteos.map((c) => c.count ?? 0);
+
+  const { data: ejecutivosData } = await supabase
+    .from("operaciones_maritima_ejecutivos")
+    .select("ejecutivo")
+    .order("ejecutivo");
+  const availableEjecutivos = (ejecutivosData ?? []).map((r) => r.ejecutivo as string);
   const rows = (data ?? []) as unknown as Record<string, string | number | null>[];
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -165,6 +174,7 @@ export default async function OperacionesMaritimaPage({
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     for (const v of typeRaw) params.append("type", v);
+    for (const v of ejecutivoRaw) params.append("ejecutivo", v);
     if (anio) params.set("anio", anio);
     if (tarjetaActiva) params.set("tarjeta", tarjetaActiva);
     return params;
@@ -245,6 +255,9 @@ export default async function OperacionesMaritimaPage({
             {typeRaw.map((v) => (
               <input key={v} type="hidden" name="type" value={v} />
             ))}
+            {ejecutivoRaw.map((v) => (
+              <input key={v} type="hidden" name="ejecutivo" value={v} />
+            ))}
             {anio && <input type="hidden" name="anio" value={anio} />}
             {tarjetaActiva && <input type="hidden" name="tarjeta" value={tarjetaActiva} />}
             <input
@@ -261,6 +274,12 @@ export default async function OperacionesMaritimaPage({
             </button>
           </form>
           <MultiSelectFilter paramName="type" label="Type" options={TYPE_OPTIONS} current={typeRaw} />
+          <MultiSelectFilter
+            paramName="ejecutivo"
+            label="Ejecutivo"
+            options={availableEjecutivos}
+            current={ejecutivoRaw}
+          />
           <YearFilter years={availableYears} currentYear={anioActual} />
           {myPermissions.es_admin && (
             <div className="ml-auto">
