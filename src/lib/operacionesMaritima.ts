@@ -126,22 +126,3 @@ export async function descargarOperacionesRecientes(
 
   return { registros, total, completo: total > 0 && registros.length >= total };
 }
-
-// Datos de Cargolink que se pueden corregir a mano desde el detalle. La
-// corrección se guarda en operaciones_maritima.correcciones y la vista
-// operaciones_maritima_vista la aplica encima, así la carga programada (que
-// solo escribe las columnas de Cargolink) nunca la pisa. Si se agrega un
-// campo aquí, agregarlo también en la vista.
-export const CAMPOS_CORREGIBLES = [
-  { field: "ejecutivo", label: "Ejecutivo", tipo: "text" },
-  { field: "mbl", label: "MBL", tipo: "text" },
-  { field: "contenedores", label: "Contenedores", tipo: "text" },
-  { field: "etd_atd", label: "ETD/ATD", tipo: "date" },
-  { field: "eta", label: "ETA", tipo: "date" },
-  { field: "ata", label: "ATA", tipo: "date" },
-  { field: "revalidacion", label: "Revalidación", tipo: "date" },
-  { field: "telex_house_bl", label: "Telex HBL", tipo: "date" },
-  { field: "telex_master_bl", label: "Telex MBL", tipo: "date" },
-  { field: "regreso_vacio", label: "Regreso de vacío", tipo: "date" },
-  { field: "dias_libres_demora", label: "Días libres de demoras", tipo: "number" },
-] as const;
