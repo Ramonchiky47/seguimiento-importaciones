@@ -67,7 +67,10 @@ export function mapOperacionMaritima(x: CargolinkBooking): OperacionMaritimaRow 
     revalidacion: soloFecha(x.fecha_revalidacion),
     telex_house_bl: soloFecha(x.fecha_telex_house_bl),
     telex_master_bl: soloFecha(x.fecha_telex_master_bl),
-    regreso_vacio: soloFecha(x.fecha_maniobra_vacio),
+    // Etapa "REGRESO DE VACIO": fecha_maniobra_vacio siempre viene vacío; la
+    // fecha real es la de la etapa marcada como FINALIZADO.
+    regreso_vacio:
+      x.his_mov_entrega_vacio === "FINALIZADO" ? soloFecha(x.his_fecha_entrega_vacio) : null,
     solicitud_garantia: soloFecha(x.fecha_solicitud_garantia),
     regreso_garantia: soloFecha(x.fecha_regreso_garantia),
     // En Cargolink "dias_demora" son los días libres pactados, no la demora acumulada.
