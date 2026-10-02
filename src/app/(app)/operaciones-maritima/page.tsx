@@ -34,6 +34,7 @@ const COLUMNS = [
   { field: "telex_house_bl", label: "Telex HBL" },
   { field: "telex_master_bl", label: "Telex MBL" },
   { field: "regreso_vacio", label: "Regreso de vacío" },
+  { field: "dias_libres_demora", label: "Días libres de demoras" },
   { field: "dias_demora", label: "Días demora" },
 ] as const;
 
@@ -109,7 +110,9 @@ export default async function OperacionesMaritimaPage({
     opciones: { count: "exact"; head?: boolean },
     filtroTarjeta: TarjetaKey | null,
   ) => {
-    let qb = supabase.from("operaciones_maritima").select(columnas, opciones);
+    // La vista agrega dias_demora calculado al día de hoy (ver migración
+    // operaciones_maritima_dias_demora).
+    let qb = supabase.from("operaciones_maritima_vista").select(columnas, opciones);
     if (q) {
       qb = qb.or(
         `no_booking.ilike.%${term}%,cliente.ilike.%${term}%,mbl.ilike.%${term}%,ejecutivo.ilike.%${term}%,contenedores.ilike.%${term}%,agente_extranjero.ilike.%${term}%`,

@@ -70,7 +70,8 @@ export function mapOperacionMaritima(x: CargolinkBooking): OperacionMaritimaRow 
     regreso_vacio: soloFecha(x.fecha_maniobra_vacio),
     solicitud_garantia: soloFecha(x.fecha_solicitud_garantia),
     regreso_garantia: soloFecha(x.fecha_regreso_garantia),
-    dias_demora: entero(x.dias_demora),
+    // En Cargolink "dias_demora" son los días libres pactados, no la demora acumulada.
+    dias_libres_demora: entero(x.dias_demora),
     ultimo_movimiento_fecha: fechaHora(x.ultimo_movimiento_fecha),
     datos,
   };
