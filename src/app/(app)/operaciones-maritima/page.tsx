@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { ClickableRow } from "@/components/ClickableRow";
 import { YearFilter } from "@/components/YearFilter";
 import { ActualizarMaritimaButton } from "@/components/ActualizarMaritimaButton";
 import { getMyPermissions } from "@/lib/permissions";
@@ -349,7 +350,11 @@ export default async function OperacionesMaritimaPage({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {rows.map((row) => (
-                <tr key={row.id_booking} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                <ClickableRow
+                  key={row.id_booking}
+                  href={`/operaciones-maritima/${row.id_booking}`}
+                  className="hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                >
                   {COLUMNS.map(({ field }) => (
                     <td
                       key={field}
@@ -362,7 +367,7 @@ export default async function OperacionesMaritimaPage({
                       {row[field] ?? "—"}
                     </td>
                   ))}
-                </tr>
+                </ClickableRow>
               ))}
 
               {rows.length === 0 && !error && (
