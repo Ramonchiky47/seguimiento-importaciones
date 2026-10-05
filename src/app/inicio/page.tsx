@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getMyPermissions } from "@/lib/permissions";
 import { logout } from "@/app/login/actions";
+import { CardShell, IconPricing } from "@/components/ModuloCard";
 
 export const dynamic = "force-dynamic";
 
@@ -60,27 +61,6 @@ function IconCatalogos() {
   );
 }
 
-function IconPricing() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#c65a1f" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12.6 3.5H5a1.5 1.5 0 0 0-1.5 1.5v7.6c0 .4.16.78.44 1.06l8.9 8.9c.58.58 1.53.58 2.12 0l7.6-7.6c.58-.58.58-1.53 0-2.12l-8.9-8.9a1.5 1.5 0 0 0-1.06-.44Z" />
-      <circle cx="8.5" cy="8.5" r="1.5" fill="#c65a1f" stroke="none" />
-    </svg>
-  );
-}
-
-function IconTransporteTerrestre() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#c65a1f" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 16V7a1 1 0 0 1 1-1h9v10" />
-      <path d="M13 10h4l4 3v3h-2" />
-      <path d="M3 16h1" />
-      <circle cx="7.5" cy="16.5" r="1.8" />
-      <circle cx="17.5" cy="16.5" r="1.8" />
-    </svg>
-  );
-}
-
 function IconAdministracion() {
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#c65a1f" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -90,61 +70,13 @@ function IconAdministracion() {
   );
 }
 
-function CardIcon({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#c65a1f1a]">
-      {children}
-    </div>
-  );
-}
-
-function CardShell({
-  icon,
-  title,
-  description,
-  disabled,
-  fullWidth,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  disabled?: boolean;
-  fullWidth?: boolean;
-}) {
-  return (
-    <div
-      className={`group flex w-full flex-none flex-col gap-3.5 rounded-2xl border p-6 ${fullWidth ? "sm:col-span-2" : ""} ${
-        disabled
-          ? "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/40"
-          : "border-slate-200 bg-white transition-all hover:-translate-y-0.5 hover:border-[#c65a1f] hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
-      }`}
-    >
-      <CardIcon>{icon}</CardIcon>
-      <div className="flex-1">
-        <h2 className={`mb-1.5 text-[17px] font-bold ${disabled ? "text-slate-400 dark:text-slate-600" : "text-slate-900 dark:text-slate-50"}`}>
-          {title}
-        </h2>
-        <p className={`text-[13.5px] leading-relaxed ${disabled ? "text-slate-400 dark:text-slate-600" : "text-slate-500 dark:text-slate-400"}`}>
-          {description}
-        </p>
-      </div>
-      {disabled ? (
-        <span className="text-xs font-semibold text-slate-400 dark:text-slate-600">Próximamente</span>
-      ) : (
-        <span className="text-[13px] font-semibold text-[#c65a1f] opacity-0 transition-opacity group-hover:opacity-100">
-          Entrar →
-        </span>
-      )}
-    </div>
-  );
-}
-
 export default async function InicioPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const myPermissions = await getMyPermissions();
+  const { data: puedeTransporteNacional } = await supabase.rpc("puedo_transporte_nacional");
 
   const tienePermisos =
     myPermissions.es_admin ||
@@ -158,7 +90,8 @@ export default async function InicioPage() {
     myPermissions.puede_pricing ||
     myPermissions.puede_operaciones ||
     myPermissions.puede_operaciones_exportacion ||
-    myPermissions.puede_transporte_terrestre;
+    myPermissions.puede_transporte_terrestre ||
+    puedeTransporteNacional === true;
 
   if (!tienePermisos) {
     redirect("/sin-acceso");
@@ -168,9 +101,13 @@ export default async function InicioPage() {
   const showCatalogos = myPermissions.es_admin || myPermissions.puede_operativos;
   const showAdministracion = myPermissions.es_admin || myPermissions.puede_comisiones;
   const showComercial = myPermissions.es_admin || myPermissions.puede_ver_crm;
-  const showPricing = myPermissions.es_admin || myPermissions.puede_pricing;
-  const showTransporteTerrestre =
-    myPermissions.es_admin || myPermissions.puede_transporte_terrestre;
+  // Pricing agrupa Marítimo/Aéreo, Terrestre Internacional y Terrestre
+  // Nacional (ver /pricing); se habilita con cualquiera de los tres permisos.
+  const showPricing =
+    myPermissions.es_admin ||
+    myPermissions.puede_pricing ||
+    myPermissions.puede_transporte_terrestre ||
+    puedeTransporteNacional === true;
   const showOperaciones = myPermissions.es_admin || myPermissions.puede_operaciones;
   const showOperacionesExportacion =
     myPermissions.es_admin || myPermissions.puede_operaciones_exportacion;
@@ -305,45 +242,18 @@ export default async function InicioPage() {
           )}
 
           {showPricing ? (
-            <a
-              href={`/api/sso/pricing?next=${encodeURIComponent("/pricing?panel=pricing")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="contents"
-            >
+            <Link href="/pricing" className="contents">
               <CardShell
                 icon={<IconPricing />}
                 title="Pricing"
-                description="Tarifas y configuración de precios."
+                description="Marítimo / Aéreo, Terrestre Internacional y Terrestre Nacional."
               />
-            </a>
+            </Link>
           ) : (
             <CardShell
               icon={<IconPricing />}
               title="Pricing"
-              description="Tarifas y configuración de precios."
-              disabled
-            />
-          )}
-
-          {showTransporteTerrestre ? (
-            <a
-              href={`/api/sso/transporte-terrestre?next=${encodeURIComponent("/transporte-terrestre?panel=transporte-terrestre")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="contents"
-            >
-              <CardShell
-                icon={<IconTransporteTerrestre />}
-                title="Pricing Terrestre Internacional"
-                description="Tarifas y cotizaciones de transporte terrestre internacional."
-              />
-            </a>
-          ) : (
-            <CardShell
-              icon={<IconTransporteTerrestre />}
-              title="Pricing Terrestre Internacional"
-              description="Tarifas y cotizaciones de transporte terrestre internacional."
+              description="Marítimo / Aéreo, Terrestre Internacional y Terrestre Nacional."
               disabled
             />
           )}
