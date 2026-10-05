@@ -38,6 +38,14 @@ export async function createAccesoUser(formData: FormData) {
   });
   if (permError) throw new Error(permError.message);
 
+  if (formData.get("puede_transporte_nacional") === "on") {
+    const { error: nacionalError } = await supabase.rpc("set_app_user_transporte_nacional", {
+      p_user_id: newUserId,
+      p_valor: true,
+    });
+    if (nacionalError) throw new Error(nacionalError.message);
+  }
+
   revalidatePath("/catalogos/accesos");
   redirect("/catalogos/accesos");
 }
@@ -87,6 +95,7 @@ export async function setAccesoUserPermission(
     puede_operaciones: boolean;
     puede_operaciones_exportacion: boolean;
     puede_transporte_terrestre: boolean;
+    puede_transporte_nacional: boolean;
   },
   field:
     | "es_admin"
@@ -100,10 +109,22 @@ export async function setAccesoUserPermission(
     | "puede_pricing"
     | "puede_operaciones"
     | "puede_operaciones_exportacion"
-    | "puede_transporte_terrestre",
+    | "puede_transporte_terrestre"
+    | "puede_transporte_nacional",
   value: boolean,
 ) {
   const supabase = await createClient();
+
+  // Va aparte: set_app_user_permissions no incluye este permiso.
+  if (field === "puede_transporte_nacional") {
+    const { error } = await supabase.rpc("set_app_user_transporte_nacional", {
+      p_user_id: userId,
+      p_valor: value,
+    });
+    if (error) throw new Error(error.message);
+    revalidatePath("/catalogos/accesos");
+    return;
+  }
   const next = { ...current, [field]: value };
 
   const { error } = await supabase.rpc("set_app_user_permissions", {

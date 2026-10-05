@@ -22,6 +22,13 @@ export default async function AccesosPage() {
     data: { user: currentUser },
   } = await supabase.auth.getUser();
   const { data, error } = await supabase.rpc("list_app_users");
+  const { data: nacionalData } = await supabase.rpc("list_app_users_transporte_nacional");
+  const transporteNacional = new Map(
+    ((nacionalData ?? []) as { user_id: string; puede_transporte_nacional: boolean }[]).map((r) => [
+      r.user_id,
+      r.puede_transporte_nacional,
+    ]),
+  );
 
   const rows = (data ?? []) as AppUser[];
 
@@ -98,6 +105,7 @@ export default async function AccesosPage() {
                           puede_operaciones: row.puede_operaciones ?? true,
                           puede_operaciones_exportacion: row.puede_operaciones_exportacion ?? false,
                           puede_transporte_terrestre: row.puede_transporte_terrestre ?? false,
+                          puede_transporte_nacional: transporteNacional.get(row.id) ?? false,
                         }}
                         onChange={boundSetPermission}
                       />
