@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import {
   DIAS_REZAGO,
+  EJECUTIVO_TODOS,
   ESTADOS,
   ETIQUETA_TARJETA,
   TONO_TARJETA,
   VALOR_TARJETA,
   claseTarjeta,
+  ejecutivosTrack,
   fechaCorta,
   type EstadoHito,
 } from "@/lib/track";
@@ -50,7 +52,7 @@ export default async function MiDiaPage({
 }) {
   const { nivel, ejecutivo, page } = await searchParams;
   const nivelActivo: Nivel = nivel && NIVEL_KEYS.has(nivel) ? (nivel as Nivel) : "pendientes";
-  const ejecutivoRaw = ejecutivo ? (Array.isArray(ejecutivo) ? ejecutivo : [ejecutivo]) : [];
+  const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
 
@@ -108,11 +110,16 @@ export default async function MiDiaPage({
     const params = new URLSearchParams();
     const n = cambios.nivel ?? nivelActivo;
     if (n !== "pendientes") params.set("nivel", n);
-    for (const v of ejecutivoRaw) params.append("ejecutivo", v);
+    for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
     if (cambios.page && cambios.page > 1) params.set("page", String(cambios.page));
     const q = params.toString();
     return q ? `?${q}` : "?";
   };
+
+  const hrefTodos = `?${new URLSearchParams([
+    ...(nivelActivo !== "pendientes" ? [["nivel", nivelActivo]] : []),
+    ["ejecutivo", EJECUTIVO_TODOS],
+  ]).toString()}`;
 
   const tituloLista = NIVELES.find((n) => n.key === nivelActivo)?.label ?? "Pendientes";
   const pagerClass = (disabled: boolean) =>
@@ -126,7 +133,7 @@ export default async function MiDiaPage({
         <p className="text-sm text-slate-600 dark:text-slate-400">
           Solo lo que requiere acción. Un hito sale de la lista cuando se marca en Cargolink.
         </p>
-        <MultiSelectFilter paramName="ejecutivo" label="Ejecutivo" options={availableEjecutivos} current={ejecutivoRaw} />
+        <TrackEjecutivoFilter options={availableEjecutivos} filtro={ejecutivoRaw} hrefTodos={hrefTodos} />
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">

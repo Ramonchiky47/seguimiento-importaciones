@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { MultiSelectFilter } from "@/components/MultiSelectFilter";
-import { DIAS_REZAGO, ETIQUETA_TARJETA, TONO_TARJETA, VALOR_TARJETA, claseTarjeta } from "@/lib/track";
+import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
+import {
+  DIAS_REZAGO,
+  EJECUTIVO_TODOS,
+  ETIQUETA_TARJETA,
+  TONO_TARJETA,
+  VALOR_TARJETA,
+  claseTarjeta,
+  ejecutivosTrack,
+} from "@/lib/track";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +54,7 @@ export default async function TableroPage({
 }) {
   const { periodo, ejecutivo } = await searchParams;
   const periodoActivo = PERIODOS.some((p) => p.key === periodo) ? (periodo as string) : "30";
-  const ejecutivoRaw = ejecutivo ? (Array.isArray(ejecutivo) ? ejecutivo : [ejecutivo]) : [];
+  const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
 
   const supabase = await createClient();
   const [{ data, error }, { data: ejecutivosData }] = await Promise.all([
@@ -70,9 +78,18 @@ export default async function TableroPage({
   const periodoHref = (key: string) => {
     const params = new URLSearchParams();
     if (key !== "30") params.set("periodo", key);
-    for (const v of ejecutivoRaw) params.append("ejecutivo", v);
+    for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
     const q = params.toString();
     return q ? `?${q}` : "?";
+  };
+
+  // Los enlaces a Mi día / Embarques conservan el ejecutivo elegido.
+  const conEjecutivo = (ruta: string) => {
+    const [path, query] = ruta.split("?");
+    const params = new URLSearchParams(query ?? "");
+    for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
+    const s = params.toString();
+    return s ? `${path}?${s}` : path;
   };
 
   const totalHitos = r?.cumplimiento.reduce((s, c) => s + c.total, 0) ?? 0;
@@ -82,12 +99,12 @@ export default async function TableroPage({
 
   const kpis = r
     ? [
-        { label: "Embarques activos", valor: r.activos, nota: "Últimos 180 días, sin regreso de vacío", tono: TONO_TARJETA.neutro, href: "/track/embarques" },
+        { label: "Embarques activos", valor: r.activos, nota: "Últimos 180 días, sin regreso de vacío", tono: TONO_TARJETA.neutro, href: conEjecutivo("/track/embarques") },
         { label: "Hitos a tiempo", valor: pctGeneral === null ? "—" : `${pctGeneral} %`, nota: `Meta ${META_A_TIEMPO} % · compromisos del periodo`, tono: pctGeneral !== null && pctGeneral >= META_A_TIEMPO ? TONO_TARJETA.azul : TONO_TARJETA.ambar, href: null },
-        { label: `Atrasados (≤ ${DIAS_REZAGO} d)`, valor: r.atrasados, nota: "Hitos sin marcar", tono: TONO_TARJETA.rojo, href: "/track/mi-dia?nivel=atrasado" },
-        { label: "En demora", valor: r.en_demora, nota: `${r.dias_demora.toLocaleString("es-MX")} días de demora acumulados`, tono: TONO_TARJETA.rojo, href: "/track/embarques?etapa=En%20demora" },
-        { label: "Falta dato", valor: r.falta_dato, nota: "Embarques sin ETA o días libres", tono: TONO_TARJETA.violeta, href: "/track/mi-dia?nivel=falta_dato" },
-        { label: "Rezago", valor: r.rezago, nota: `Hitos con más de ${DIAS_REZAGO} días sin marcar`, tono: TONO_TARJETA.gris, href: "/track/mi-dia?nivel=rezago" },
+        { label: `Atrasados (≤ ${DIAS_REZAGO} d)`, valor: r.atrasados, nota: "Hitos sin marcar", tono: TONO_TARJETA.rojo, href: conEjecutivo("/track/mi-dia?nivel=atrasado") },
+        { label: "En demora", valor: r.en_demora, nota: `${r.dias_demora.toLocaleString("es-MX")} días de demora acumulados`, tono: TONO_TARJETA.rojo, href: conEjecutivo("/track/embarques?etapa=En%20demora") },
+        { label: "Falta dato", valor: r.falta_dato, nota: "Embarques sin ETA o días libres", tono: TONO_TARJETA.violeta, href: conEjecutivo("/track/mi-dia?nivel=falta_dato") },
+        { label: "Rezago", valor: r.rezago, nota: `Hitos con más de ${DIAS_REZAGO} días sin marcar`, tono: TONO_TARJETA.gris, href: conEjecutivo("/track/mi-dia?nivel=rezago") },
       ]
     : [];
 
@@ -110,7 +127,14 @@ export default async function TableroPage({
             </Link>
           ))}
         </div>
-        <MultiSelectFilter paramName="ejecutivo" label="Ejecutivo" options={availableEjecutivos} current={ejecutivoRaw} />
+        <TrackEjecutivoFilter
+          options={availableEjecutivos}
+          filtro={ejecutivoRaw}
+          hrefTodos={`?${new URLSearchParams([
+            ...(periodoActivo !== "30" ? [["periodo", periodoActivo]] : []),
+            ["ejecutivo", EJECUTIVO_TODOS],
+          ]).toString()}`}
+        />
       </div>
 
       {error && (
@@ -148,7 +172,7 @@ export default async function TableroPage({
                   return (
                     <Link
                       key={e.key}
-                      href={`/track/embarques?etapa=${encodeURIComponent(e.key)}`}
+                      href={conEjecutivo(`/track/embarques?etapa=${encodeURIComponent(e.key)}`)}
                       className="grid grid-cols-[110px_minmax(0,1fr)_48px] items-center gap-3 rounded text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       <span className="text-slate-700 dark:text-slate-300">{e.key}</span>

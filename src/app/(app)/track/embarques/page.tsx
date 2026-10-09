@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { ClickableRow } from "@/components/ClickableRow";
-import { ESTADOS, fechaCorta, type EstadoHito } from "@/lib/track";
+import { EJECUTIVO_TODOS, ESTADOS, ejecutivosTrack, fechaCorta, type EstadoHito } from "@/lib/track";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +33,7 @@ export default async function EmbarquesPage({
 }) {
   const { q, etapa, ejecutivo, page } = await searchParams;
   const etapaActiva = etapa && ETAPAS.includes(etapa) ? etapa : null;
-  const ejecutivoRaw = ejecutivo ? (Array.isArray(ejecutivo) ? ejecutivo : [ejecutivo]) : [];
+  const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
   const term = (q ?? "").replace(/[,()]/g, " ").trim();
@@ -72,7 +72,7 @@ export default async function EmbarquesPage({
     if (q) params.set("q", q);
     const et = cambios.etapa === undefined ? etapaActiva : cambios.etapa;
     if (et) params.set("etapa", et);
-    for (const v of ejecutivoRaw) params.append("ejecutivo", v);
+    for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
     if (cambios.page && cambios.page > 1) params.set("page", String(cambios.page));
     const s = params.toString();
     return s ? `?${s}` : "?";
@@ -87,7 +87,7 @@ export default async function EmbarquesPage({
       <div className="flex flex-wrap items-center gap-2">
         <form className="flex gap-2">
           {etapaActiva && <input type="hidden" name="etapa" value={etapaActiva} />}
-          {ejecutivoRaw.map((v) => (
+          {ejecutivoEnUrl.map((v) => (
             <input key={v} type="hidden" name="ejecutivo" value={v} />
           ))}
           <label htmlFor="buscar-embarque" className="sr-only">
@@ -107,7 +107,15 @@ export default async function EmbarquesPage({
             Buscar
           </button>
         </form>
-        <MultiSelectFilter paramName="ejecutivo" label="Ejecutivo" options={availableEjecutivos} current={ejecutivoRaw} />
+        <TrackEjecutivoFilter
+          options={availableEjecutivos}
+          filtro={ejecutivoRaw}
+          hrefTodos={`?${new URLSearchParams([
+            ...(q ? [["q", q]] : []),
+            ...(etapaActiva ? [["etapa", etapaActiva]] : []),
+            ["ejecutivo", EJECUTIVO_TODOS],
+          ]).toString()}`}
+        />
         <div role="group" aria-label="Etapa" className="flex flex-wrap gap-1">
           {[null, ...ETAPAS].map((et) => (
             <Link

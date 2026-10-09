@@ -58,3 +58,21 @@ export function claseTarjeta(activa: boolean, tono: string = TONO_TARJETA.neutro
 export const ETIQUETA_TARJETA =
   "text-[10px] font-bold uppercase leading-tight tracking-wide text-slate-500 dark:text-slate-400";
 export const VALOR_TARJETA = "text-[22px] font-extrabold tabular-nums text-slate-900 dark:text-slate-50";
+
+// Track está en prueba con un solo ejecutivo: sin parámetro en la URL se
+// filtra por EJECUTIVO_DEFAULT; "Todos" es la elección explícita de ver a
+// todo el equipo (desmarcar todo en el filtro regresa al default).
+export const EJECUTIVO_DEFAULT = "Jorge Mora";
+export const EJECUTIVO_TODOS = "Todos";
+
+export function ejecutivosTrack(param: string | string[] | undefined): {
+  // Ejecutivos por los que se filtra (vacío = todos).
+  filtro: string[];
+  // Valores a conservar en los enlaces para no perder la elección.
+  enUrl: string[];
+} {
+  const raw = param ? (Array.isArray(param) ? param : [param]) : [];
+  if (raw.length === 0) return { filtro: [EJECUTIVO_DEFAULT], enUrl: [] };
+  if (raw.includes(EJECUTIVO_TODOS)) return { filtro: [], enUrl: [EJECUTIVO_TODOS] };
+  return { filtro: raw, enUrl: raw };
+}
