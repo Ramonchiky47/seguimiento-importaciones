@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getMyPermissions } from "@/lib/permissions";
+import { getMyPermissions, obtenerUsuario } from "@/lib/permissions";
 import { toggleAccesoUserActivo, setAccesoUserPermission, setAccesoUserPassword, deleteAccesoUser } from "./actions";
 import { ActivoToggle } from "@/components/ActivoToggle";
 import { PermisosRow } from "@/components/PermisosRow";
@@ -18,9 +18,7 @@ export default async function AccesosPage() {
   }
 
   const supabase = await createClient();
-  const {
-    data: { user: currentUser },
-  } = await supabase.auth.getUser();
+  const currentUser = await obtenerUsuario();
   const { data, error } = await supabase.rpc("list_app_users");
   const { data: nacionalData } = await supabase.rpc("list_app_users_transporte_nacional");
   const transporteNacional = new Map(

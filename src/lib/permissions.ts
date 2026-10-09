@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 
 export type MyPermissions = {
@@ -30,9 +31,20 @@ const DEFAULT_PERMISSIONS: MyPermissions = {
   es_master: false,
 };
 
-export async function getMyPermissions(): Promise<MyPermissions> {
+// cache(): una sola consulta por petición aunque la llamen el layout, el
+// layout de la sección y la página (antes eran 2–3 viajes a Supabase).
+export const getMyPermissions = cache(async (): Promise<MyPermissions> => {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("get_my_permissions");
   if (error || !data || !data[0]) return DEFAULT_PERMISSIONS;
   return data[0] as MyPermissions;
-}
+});
+
+// Usuario de la sesión, también una sola vez por petición.
+export const obtenerUsuario = cache(async () => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+});

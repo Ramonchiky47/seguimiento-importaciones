@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getMyPermissions } from "@/lib/permissions";
+import { getMyPermissions, obtenerUsuario } from "@/lib/permissions";
 import { AsignarClienteForm, QuitarClienteBoton } from "@/components/AsignarClienteForm";
 import { asignarCliente, quitarCliente } from "./actions";
 
@@ -27,9 +27,7 @@ export default async function ClientesAsignadosPage({
   const myPermissions = await getMyPermissions();
   const esAdmin = myPermissions.es_admin;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await obtenerUsuario();
 
   const [{ data: operativosData }, { data: asignacionesData }, { data: catalogoData }] = await Promise.all([
     supabase.from("catalogo_operativos").select("id, nombre_operativo, activo, user_id").order("nombre_operativo"),

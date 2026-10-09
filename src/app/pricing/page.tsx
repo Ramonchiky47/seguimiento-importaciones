@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getMyPermissions } from "@/lib/permissions";
+import { getMyPermissions, obtenerUsuario } from "@/lib/permissions";
 import { logout } from "@/app/login/actions";
 import {
   CardShell,
@@ -16,9 +16,7 @@ export const dynamic = "force-dynamic";
 // vendedores vía SSO, con su propio permiso.
 export default async function PricingPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await obtenerUsuario();
   const myPermissions = await getMyPermissions();
   const { data: puedeTransporteNacional } = await supabase.rpc("puedo_transporte_nacional");
 

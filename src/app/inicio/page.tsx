@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getMyPermissions } from "@/lib/permissions";
+import { getMyPermissions, obtenerUsuario } from "@/lib/permissions";
 import { logout } from "@/app/login/actions";
 import { CardShell, IconPricing } from "@/components/ModuloCard";
 
@@ -72,9 +72,7 @@ function IconAdministracion() {
 
 export default async function InicioPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await obtenerUsuario();
   const myPermissions = await getMyPermissions();
   const { data: puedeTransporteNacional } = await supabase.rpc("puedo_transporte_nacional");
 

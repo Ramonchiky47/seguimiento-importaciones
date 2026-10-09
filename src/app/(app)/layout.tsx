@@ -1,13 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
-import { getMyPermissions } from "@/lib/permissions";
+import { getMyPermissions, obtenerUsuario } from "@/lib/permissions";
 import { AppNav } from "@/components/AppNav";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const myPermissions = await getMyPermissions();
+  // En paralelo y en caché: la sección y la página reutilizan estos resultados.
+  const [user, myPermissions] = await Promise.all([obtenerUsuario(), getMyPermissions()]);
 
   return (
     <>

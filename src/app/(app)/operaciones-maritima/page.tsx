@@ -5,7 +5,7 @@ import { FilaOperacion, OperacionDetalleModal } from "@/components/OperacionDeta
 import { YearFilter } from "@/components/YearFilter";
 import { ESTATUS_OPCIONES, claseFilaEstatus, estatusBooking, mismoNombre } from "@/lib/track";
 import { ActualizarMaritimaButton } from "@/components/ActualizarMaritimaButton";
-import { getMyPermissions } from "@/lib/permissions";
+import { getMyPermissions, obtenerUsuario } from "@/lib/permissions";
 import { actualizarOperacionesMaritima } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -125,9 +125,7 @@ export default async function OperacionesMaritimaPage({
   const { data: puedeEditarCargolink } = await supabase.rpc("puedo_editar_cargolink");
   // Prueba de clientes asignados: aviso y marca ✓✓ en los bookings donde el
   // ejecutivo en Cargolink es el mismo operativo de la sesión.
-  const {
-    data: { user: usuario },
-  } = await supabase.auth.getUser();
+  const usuario = await obtenerUsuario();
   const [{ data: miOperativo }, { data: restringido }, { data: permitidos }] = await Promise.all([
     usuario
       ? supabase.from("catalogo_operativos").select("nombre_operativo").eq("user_id", usuario.id).maybeSingle()

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getMyPermissions } from "@/lib/permissions";
+import { getMyPermissions, obtenerUsuario } from "@/lib/permissions";
 import { parseContenedoresTipo } from "@/lib/contenedores";
 import { HorizontalBarChart } from "@/components/HorizontalBarChart";
 import { MonthFilter } from "@/components/MonthFilter";
@@ -52,9 +52,7 @@ export default async function ReportePricingPage({
   const polRaw = pol ? (Array.isArray(pol) ? pol : [pol]) : [];
   const podRaw = pod ? (Array.isArray(pod) ? pod : [pod]) : [];
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await obtenerUsuario();
 
   // PostgREST recorta cada select a 1000 filas por default — se pagina igual
   // que en /dashboard para no truncar los totales.
