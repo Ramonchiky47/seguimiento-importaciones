@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      // Subida de documentos a Cargolink (Vercel acepta hasta ~4.5 MB por
+      // petición).
+      bodySizeLimit: "4mb",
+    },
+  },
   async headers() {
     if (process.env.NODE_ENV === "production") {
       return [];

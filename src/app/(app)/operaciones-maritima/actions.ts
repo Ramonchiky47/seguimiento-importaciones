@@ -13,6 +13,8 @@ import {
   leerBookingMaritimo,
   leerCatalogosSeguro,
   leerOrigen,
+  listarDocumentosBooking,
+  subirDocumentoBooking,
   leerTransbordos,
   mapOperacionMaritima,
   type FilaTransbordo,
@@ -481,5 +483,112 @@ export async function catalogosCargolink(): Promise<{
     return await leerCatalogosSeguro(session);
   } catch {
     return { aseguradoras: [], incoterms: [] };
+  }
+}
+
+// ---- Documentos del booking en Cargolink (se suben a un tipo existente).
+
+export type DocumentoBooking = {
+  idConfig: string;
+  nombre: string;
+  idDoc: string | null;
+  url: string | null;
+  fechaUpload: string | null;
+  usuario: string | null;
+};
+
+function mapDocumento(d: Record<string, string | null>): DocumentoBooking {
+  return {
+    idConfig: String(d.id ?? ""),
+    nombre: d.nombre ?? "Documento",
+    idDoc: d.idDoc ?? null,
+    url: d.url ? `https://fwd.cargolink.mx/${d.url}` : null,
+    fechaUpload: d.fecha_upload ?? null,
+    usuario: d.upload_usuario ?? null,
+  };
+}
+
+export async function documentosCargolink(idBooking: number): Promise<{ ok: boolean; mensaje: string; documentos: DocumentoBooking[] }> {
+  const myPermissions = await getMyPermissions();
+  if (!myPermissions.es_admin && !myPermissions.puede_operaciones) {
+    return { ok: false, mensaje: "Sin permiso de operaciones.", documentos: [] };
+  }
+  try {
+    const session = await loginCargolink();
+    const docs = await listarDocumentosBooking(session, idBooking);
+    return { ok: true, mensaje: "", documentos: docs.map(mapDocumento) };
+  } catch (e) {
+    return { ok: false, mensaje: e instanceof Error ? e.message : "Error al leer documentos.", documentos: [] };
+  }
+}
+
+const MAX_ARCHIVO = 4 * 1024 * 1024;
+
+export async function subirDocumentoCargolink(idBooking: number, formData: FormData): Promise<ResultadoEtapa> {
+  const supabase = await createClient();
+  const { data: puedeEditar } = await supabase.rpc("puedo_editar_cargolink");
+  if (puedeEditar !== true) return { ok: false, mensaje: "No tienes autorización para editar en Cargolink (piloto)." };
+
+  const idConfig = String(formData.get("idConfig") ?? "");
+  const archivo = formData.get("archivo");
+  if (!idConfig) return { ok: false, mensaje: "Elige el tipo de documento." };
+  if (!(archivo instanceof File) || archivo.size === 0) return { ok: false, mensaje: "Elige un archivo." };
+  if (archivo.size > MAX_ARCHIVO) return { ok: false, mensaje: "El archivo pesa más de 4 MB." };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const [{ data: op }, { data: operativo }] = await Promise.all([
+    supabase.from("operaciones_maritima").select("no_booking").eq("id_booking", idBooking).maybeSingle(),
+    user
+      ? supabase.from("catalogo_operativos").select("nombre_operativo").eq("user_id", user.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  if (!op?.no_booking) return { ok: false, mensaje: "Operación no encontrada." };
+
+  const bitacora = async (ok: boolean, mensaje: string, antes: unknown, despues: unknown, valores: unknown) => {
+    await supabase.from("bitacora_cargolink").insert({
+      id_booking: idBooking,
+      no_booking: op.no_booking,
+      etapa: "documentos",
+      accion: "SUBIR_DOCUMENTO",
+      valores,
+      valores_antes: antes,
+      valores_despues: despues,
+      usuario_email: user?.email ?? null,
+      usuario_nombre: (operativo?.nombre_operativo as string | undefined) ?? user?.email ?? null,
+      ok,
+      mensaje,
+    });
+  };
+
+  try {
+    const session = await loginCargolink();
+    const antes = (await listarDocumentosBooking(session, idBooking)).map(mapDocumento);
+    const tipo = antes.find((d) => d.idConfig === idConfig);
+    if (!tipo) return { ok: false, mensaje: "Ese tipo de documento no existe en el booking." };
+    const valores = { documento: tipo.nombre, archivo: archivo.name };
+
+    await subirDocumentoBooking(session, idBooking, idConfig, tipo.idDoc, archivo);
+
+    // Confirmar releyendo: el tipo debe tener archivo con fecha de subida nueva.
+    const despues = (await listarDocumentosBooking(session, idBooking)).map(mapDocumento);
+    const tipoDespues = despues.find((d) => d.idConfig === idConfig);
+    const subio = Boolean(tipoDespues?.url) && tipoDespues?.fechaUpload !== tipo.fechaUpload;
+    const mensaje = subio
+      ? `${archivo.name} subido a Cargolink como ${tipo.nombre}.`
+      : "Cargolink no mostró el archivo después de subirlo.";
+    await bitacora(
+      subio,
+      mensaje,
+      { documento: tipo.nombre, archivo: tipo.url ? "con archivo" : "sin archivo" },
+      { documento: tipo.nombre, archivo: tipoDespues?.url ? `${archivo.name}` : "sin archivo" },
+      valores,
+    );
+    return { ok: subio, mensaje };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error al subir a Cargolink.";
+    await bitacora(false, msg, null, null, { archivo: archivo.name });
+    return { ok: false, mensaje: msg };
   }
 }

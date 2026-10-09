@@ -208,9 +208,15 @@ export default async function BitacoraPage({
                     </AbrirOperacionBoton>
                   </td>
                   <td className="px-3 py-2.5">
-                    <p className="font-semibold text-slate-900 dark:text-slate-100">{etapa?.label ?? r.etapa}</p>
+                    <p className="font-semibold text-slate-900 dark:text-slate-100">
+                      {etapa?.label ?? (r.etapa === "documentos" ? "Documentos" : r.etapa)}
+                    </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {r.accion === "ELIMINAR_FILA" ? "Borrar fila" : (accion?.label ?? r.accion)}
+                      {r.accion === "ELIMINAR_FILA"
+                        ? "Borrar fila"
+                        : r.accion === "SUBIR_DOCUMENTO"
+                          ? "Subir documento"
+                          : (accion?.label ?? r.accion)}
                     </p>
                   </td>
                   <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">

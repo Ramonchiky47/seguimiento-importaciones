@@ -8,6 +8,9 @@ import { ETAPAS_CARGOLINK, ETAPA_POR_HITO, type AccionEtapa, type EtapaCargolink
 import {
   eliminarFilaTransbordoCargolink,
   catalogosCargolink,
+  documentosCargolink,
+  subirDocumentoCargolink,
+  type DocumentoBooking,
   guardarEtapaCargolink,
   guardarTransbordosCargolink,
   leerTransbordosCargolink,
@@ -1093,6 +1096,10 @@ function EtapaDetalle({
           )
         )}
 
+        {etapa.clave === "seguro" && (
+          <DocumentosCargolink idBooking={idBooking} noBooking={String(op.no_booking ?? "")} puedeSubir={puedeEditar} />
+        )}
+
         {puedeEditarEtapa && editable && (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
             {editable.filas ? (
@@ -1107,5 +1114,141 @@ function EtapaDetalle({
         )}
       </div>
     </dialog>
+  );
+}
+
+// Documentos del booking en Cargolink: cada tipo configurado (MANIFIESTO,
+// ACUSE, …) con su archivo; se sube a un tipo existente.
+function DocumentosCargolink({
+  idBooking,
+  noBooking,
+  puedeSubir,
+}: {
+  idBooking: number;
+  noBooking: string;
+  puedeSubir: boolean;
+}) {
+  const [docs, setDocs] = useState<DocumentoBooking[] | null>(null);
+  const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [pending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const recargar = useCallback(() => {
+    documentosCargolink(idBooking).then((r) => {
+      setDocs(r.documentos);
+      if (!r.ok) setMensaje({ ok: false, texto: r.mensaje });
+    });
+  }, [idBooking]);
+
+  useEffect(() => {
+    let vigente = true;
+    documentosCargolink(idBooking).then((r) => {
+      if (!vigente) return;
+      setDocs(r.documentos);
+      if (!r.ok) setMensaje({ ok: false, texto: r.mensaje });
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [idBooking]);
+
+  return (
+    <section className="space-y-3 rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+      <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-50">Documentos en Cargolink</h4>
+      {docs === null ? (
+        <p className="text-sm text-slate-500">Leyendo documentos de Cargolink…</p>
+      ) : docs.length === 0 ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">El booking no tiene tipos de documento configurados en Cargolink.</p>
+      ) : (
+        <ul className="divide-y divide-slate-100 rounded-md border border-slate-200 dark:divide-slate-800 dark:border-slate-700">
+          {docs.map((d) => (
+            <li key={`${d.idConfig}-${d.idDoc ?? "nuevo"}`} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+              <span className="font-medium text-slate-800 dark:text-slate-200">{d.nombre}</span>
+              {d.url ? (
+                <span className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                  {d.usuario ?? ""} {d.fechaUpload ? `· ${fechaCorta(d.fechaUpload)}` : ""}
+                  <a href={d.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 hover:underline dark:text-blue-400">
+                    Ver archivo
+                  </a>
+                </span>
+              ) : (
+                <span className="text-xs text-slate-400">Sin archivo</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {puedeSubir && docs && docs.length > 0 && (
+        <form
+          ref={formRef}
+          action={(fd) => {
+            const tipo = docs.find((d) => d.idConfig === fd.get("idConfig"));
+            const archivo = fd.get("archivo");
+            const nombreArchivo = archivo instanceof File ? archivo.name : "";
+            const reemplaza = tipo?.url ? ` Reemplazará el archivo que ya tiene ${tipo.nombre}.` : "";
+            if (
+              !window.confirm(
+                `Este archivo se subirá a Cargolink, en el booking ${noBooking}, como ${tipo?.nombre ?? "documento"}: ${nombreArchivo}.${reemplaza}\n\n¿Continuar?`,
+              )
+            ) {
+              return;
+            }
+            setMensaje(null);
+            startTransition(async () => {
+              const r = await subirDocumentoCargolink(idBooking, fd);
+              setMensaje({ ok: r.ok, texto: r.mensaje });
+              if (r.ok) formRef.current?.reset();
+              recargar();
+            });
+          }}
+          className="flex flex-wrap items-end gap-2"
+        >
+          <label className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
+            Tipo de documento
+            <select
+              name="idConfig"
+              required
+              defaultValue=""
+              className="min-h-10 min-w-48 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+            >
+              <option value="" disabled>
+                Elige…
+              </option>
+              {docs.map((d) => (
+                <option key={`${d.idConfig}-${d.idDoc ?? "nuevo"}`} value={d.idConfig}>
+                  {d.nombre}
+                  {d.url ? " (reemplazar)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-60 flex-1 flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
+            Archivo (máx. 4 MB)
+            <input
+              name="archivo"
+              type="file"
+              required
+              className="min-h-10 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={pending}
+            className="min-h-10 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
+          >
+            {pending ? "Subiendo…" : "Subir a Cargolink"}
+          </button>
+        </form>
+      )}
+      {mensaje && (
+        <p
+          role={mensaje.ok ? "status" : "alert"}
+          className={`text-sm ${mensaje.ok ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}
+        >
+          {mensaje.texto}
+        </p>
+      )}
+    </section>
   );
 }

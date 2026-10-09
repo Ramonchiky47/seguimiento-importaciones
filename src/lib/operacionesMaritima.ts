@@ -258,3 +258,42 @@ export async function leerOrigen(session: CargolinkSession, idBooking: number): 
   const valores = (data?.valores ?? []) as Record<string, unknown>[];
   return valores[0] ?? {};
 }
+
+// ---- Documentos del booking (expediente "BOOKING" de Cargolink). Cada tipo
+// de documento configurado (MANIFIESTO, ACUSE, …) admite un archivo.
+export type DocumentoCargolink = Record<string, string | null>;
+
+export async function listarDocumentosBooking(session: CargolinkSession, idBooking: number): Promise<DocumentoCargolink[]> {
+  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api&fn=consultaDocumentos&tabla=BOOKING&id_cliente=${idBooking}`;
+  const res = await fetch(url, { headers: { Cookie: session.cookie } });
+  if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status} al leer documentos.`);
+  const data = await res.json();
+  return (data?.valores ?? []) as DocumentoCargolink[];
+}
+
+// Igual que la pantalla de Cargolink: primero registraDocumentos (devuelve el
+// id del documento) y luego el archivo a uploadDocGeneral.php.
+export async function subirDocumentoBooking(
+  session: CargolinkSession,
+  idBooking: number,
+  idConfig: string,
+  idDocExistente: string | null,
+  archivo: File,
+): Promise<string> {
+  const urlRegistro = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api&fn=registraDocumentos&id_config=${encodeURIComponent(idConfig)}&id_cliente=${idBooking}&idDoc=${encodeURIComponent(idDocExistente ?? "")}&tabla=BOOKING`;
+  const reg = await fetch(urlRegistro, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: session.cookie },
+  });
+  if (!reg.ok) throw new Error(`Cargolink respondió con error ${reg.status} al registrar el documento.`);
+  const datosRegistro = (await reg.json().catch(() => ({}))) as { id?: string | number };
+  const insertId = datosRegistro.id;
+  if (!insertId) throw new Error("Cargolink no devolvió el id del documento.");
+
+  const form = new FormData();
+  form.append("file", archivo, archivo.name);
+  const urlSubida = `${BASE_URL}/ws/uploadDocGeneral.php?token=${session.token}&id=${encodeURIComponent(String(insertId))}&cliente=${idBooking}&desde=BOOKING`;
+  const sub = await fetch(urlSubida, { method: "POST", headers: { Cookie: session.cookie }, body: form });
+  if (!sub.ok) throw new Error(`Cargolink respondió con error ${sub.status} al subir el archivo.`);
+  return String(insertId);
+}
