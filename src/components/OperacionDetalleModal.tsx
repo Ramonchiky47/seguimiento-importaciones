@@ -60,6 +60,98 @@ const FASES_CARGOLINK: { fase: string; etapas: { label: string; clave: string }[
   },
 ];
 
+// Datos de Cargolink que se muestran al abrir cada etapa: [etiqueta, campo
+// del booking], y la etapa editable (ETAPAS_CARGOLINK) cuando aplica.
+const DETALLE_ETAPA: Record<string, { campos: [string, string][]; editar?: string }> = {
+  origen: {
+    campos: [
+      ["Fecha estimada de salida", "fecha_estimada"],
+      ["Número de control (MBL / reserva)", "no_control"],
+      ["Control entre agentes (HBL)", "no_agentes"],
+      ["Número de viaje", "no_viaje"],
+      ["Buque", "buque"],
+      ["Shipper", "shipper"],
+      ["Dirección de recolección", "dir_recoleccion"],
+      ["Agente del cliente", "agente_cliente"],
+    ],
+  },
+  mercancia: {
+    campos: [
+      ["Mercancía", "mercancia"],
+      ["Contenedores", "noContenedores"],
+      ["Embalaje", "tipo_embalaje"],
+      ["Total de embalajes", "totalEmbalaje"],
+      ["Valor de la mercancía", "valor_mercancia"],
+      ["Moneda", "moneda"],
+      ["Peligroso", "peligroso"],
+      ["IMO / UN", "imo"],
+    ],
+  },
+  seguro: {
+    campos: [
+      ["Seguro", "seguro"],
+      ["Asegurar por", "segurar_por"],
+      ["Valor asegurado", "valor_mercancia"],
+      ["Fecha del seguro", "seguro_fecha"],
+      ["Póliza", "numero_poliza_seguro"],
+      ["Alcance", "seguro_alcance"],
+    ],
+  },
+  atd: { campos: [["Fecha de zarpe (ATD)", "fecha_atd"]], editar: "atd" },
+  aviso_atd: { campos: [["Fecha de zarpe", "fecha_atd"], ["Días restantes para facturar", "dias_restantes_facturacion"]] },
+  eta: { campos: [["Fecha estimada de arribo", "buque_eta"]], editar: "eta" },
+  alertFech: {
+    campos: [["Arribo estimado (ETA)", "buque_eta"], ["Instrucciones de revalidación", "inst_revalidacion"], ["Idioma", "lang"]],
+    editar: "aviso_eta",
+  },
+  transbordo: { campos: [], editar: "transbordo" },
+  manifiesto: { campos: [["Fecha de acuse", "fecha_acuse"], ["Número de acuse", "no_acuse"]] },
+  kpi: { campos: [] },
+  hbl_telex: { campos: [["Fecha HBL telex", "fecha_telex_house_bl"]], editar: "hbl" },
+  mbl_telex: { campos: [["Fecha MBL telex", "fecha_telex_master_bl"]], editar: "mbl" },
+  facturacion: {
+    campos: [
+      ["Solicitud de facturación", "fecha_Solfacturacion"],
+      ["Folio de factura", "folio_fact"],
+      ["Factura", "folioFactura"],
+      ["Fecha de factura", "fechaFactura"],
+      ["Fecha de pago", "fecha_pago"],
+    ],
+  },
+  rev: { campos: [["Fecha de revalidación", "fecha_revalidacion"], ["Pre-proforma", "fecha_pre_pro"]], editar: "rev" },
+  ata: { campos: [["Fecha de arribo efectivo (ATA)", "fecha_ata"], ["Días libres de demora", "dias_demora"]], editar: "ata" },
+  alertAta: {
+    campos: [["Arribo efectivo (ATA)", "fecha_ata"], ["Días libres de demora", "dias_demora"], ["Instrucciones de revalidación", "inst_revalidacion"]],
+    editar: "aviso_ata",
+  },
+  factura_extra: { campos: [["Solicitud de facturas extras", "fecha_SolFacExtras"]] },
+  demoras: { campos: [["Días libres de demora", "dias_demora"]] },
+  entrega_vacio: {
+    campos: [["Fecha de regreso de vacío", "fecha_maniobra_entrega"], ["Solicitud de garantía", "fecha_solicitud_garantia"]],
+    editar: "vacio",
+  },
+  entrega_demoras: { campos: [] },
+  garantia: {
+    campos: [
+      ["Tipo de solicitud", "garantia_tipo_solicitud"],
+      ["Fecha de solicitud", "garantia_fecha_solicitud"],
+      ["Solicitud de devolución", "garantia_fecha_solicitud_devolucion"],
+      ["Monto", "monto_pago_garantia"],
+      ["Moneda", "garantia_moneda"],
+      ["Regreso de garantía", "fecha_regreso_garantia"],
+      ["Observaciones", "garantia_observaciones"],
+    ],
+  },
+};
+
+// "2026-09-28" o "2026-09-28 10:00:00" → "28 sep"; vacíos de Cargolink → null.
+function valorEtapa(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s || s.startsWith("0000") || s === "0" || s === "0.00" || s === "0.000") return null;
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? fechaCorta(s) : s;
+}
+
 const ESTATUS_ETAPA: Record<string, { label: string; clase: string; tarjeta: string }> = {
   FINALIZADO: {
     label: "Finalizado",
@@ -103,6 +195,8 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editando, setEditando] = useState<number | null>(null);
+  // Etapa de Cargolink abierta en la ventana de detalle (clave his_mov_*).
+  const [etapaAbierta, setEtapaAbierta] = useState<{ clave: string; label: string; n: number } | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   // Estado del refresco contra Cargolink al abrir la ventana.
   const [refresco, setRefresco] = useState<{ estado: "cargando" | "ok" | "error"; mensaje: string } | null>(null);
@@ -146,6 +240,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
       setHitos([]);
       setError(null);
       setEditando(null);
+      setEtapaAbierta(null);
       setAviso(null);
       setCargando(true);
       dialogRef.current?.showModal();
@@ -215,6 +310,21 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
       aria-labelledby="operacion-detalle-titulo"
       className="m-auto max-h-[90vh] w-[min(1100px,calc(100vw-32px))] overflow-hidden rounded-xl bg-slate-50 p-0 shadow-2xl backdrop:bg-slate-900/50 dark:bg-slate-950"
     >
+      {idBooking !== null && op && etapaAbierta && (
+        <EtapaDetalle
+          etapa={etapaAbierta}
+          op={op}
+          idBooking={idBooking}
+          puedeEditar={puedeEditar}
+          onCerrar={() => setEtapaAbierta(null)}
+          onGuardado={(mensaje) => {
+            huboCambios.current = true;
+            setEtapaAbierta(null);
+            setAviso(mensaje);
+            cargar(idBooking);
+          }}
+        />
+      )}
       {idBooking !== null && (
         <div className="flex max-h-[90vh] flex-col">
           <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
@@ -423,10 +533,13 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                               const fecha = datos[`his_fecha_${et.clave}`];
                               const est = mov ? ESTATUS_ETAPA[mov] : undefined;
                               return (
-                                <li
-                                  key={et.clave}
-                                  className={`flex min-h-[64px] flex-col justify-between gap-1.5 rounded-lg border px-3 py-2 ${est?.tarjeta ?? TARJETA_SIN_COMENZAR}`}
-                                >
+                                <li key={et.clave} className="flex">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEtapaAbierta({ clave: et.clave, label: et.label, n: inicio + i + 1 })}
+                                    aria-label={`Ver datos de ${et.label}`}
+                                    className={`flex min-h-[64px] w-full flex-col justify-between gap-1.5 rounded-lg border px-3 py-2 text-left transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-blue-700 ${est?.tarjeta ?? TARJETA_SIN_COMENZAR}`}
+                                  >
                                   <span className="flex items-baseline gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
                                     <span className="text-xs tabular-nums text-slate-400">{inicio + i + 1}</span>
                                     {et.label}
@@ -441,6 +554,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                                     </span>
                                     {fecha && <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{fechaCorta(fecha)}</span>}
                                   </span>
+                                  </button>
                                 </li>
                               );
                             })}
@@ -785,5 +899,151 @@ function EditorTransbordo({
         </p>
       )}
     </div>
+  );
+}
+
+// Ventana con los datos de una etapa de Cargolink (y su editor si aplica).
+function EtapaDetalle({
+  etapa,
+  op,
+  idBooking,
+  puedeEditar,
+  onCerrar,
+  onGuardado,
+}: {
+  etapa: { clave: string; label: string; n: number };
+  op: Operacion;
+  idBooking: number;
+  puedeEditar: boolean;
+  onCerrar: () => void;
+  onGuardado: (mensaje: string) => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const datos = (op.datos ?? {}) as Record<string, string>;
+  const mov = datos[`his_mov_${etapa.clave}`];
+  const fecha = datos[`his_fecha_${etapa.clave}`];
+  const est = mov ? ESTATUS_ETAPA[mov] : undefined;
+  const detalle = DETALLE_ETAPA[etapa.clave] ?? { campos: [] };
+  const editable = detalle.editar ? ETAPAS_CARGOLINK[detalle.editar] : undefined;
+  const puedeEditarEtapa = puedeEditar && editable && mov !== "FINALIZADO" && mov !== "NO_APLICA";
+  const campos = detalle.campos
+    .map(([label, key]) => [label, valorEtapa(datos[key] ?? op[key])] as const)
+    .filter(([, v]) => v !== null);
+  const [filasTransbordo, setFilasTransbordo] = useState<FilaTransbordoForm[] | null>(null);
+
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+
+  // Transbordo: sus filas se leen de Cargolink.
+  useEffect(() => {
+    if (etapa.clave !== "transbordo" || puedeEditarEtapa) return;
+    let vigente = true;
+    leerTransbordosCargolink(idBooking).then((r) => {
+      if (vigente) setFilasTransbordo(r.filas);
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [etapa.clave, idBooking, puedeEditarEtapa]);
+
+  return (
+    <dialog
+      ref={ref}
+      onClose={onCerrar}
+      onClick={(e) => {
+        if (e.target === ref.current) ref.current?.close();
+      }}
+      aria-labelledby="etapa-detalle-titulo"
+      className="m-auto max-h-[85vh] w-[min(760px,calc(100vw-32px))] overflow-y-auto rounded-xl bg-white p-0 shadow-2xl backdrop:bg-slate-900/40 dark:bg-slate-900"
+    >
+      <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+        <div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Etapa {etapa.n} · {String(op.no_booking ?? "")}
+          </p>
+          <h3 id="etapa-detalle-titulo" className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+            {etapa.label}
+          </h3>
+          <p className="mt-1 flex items-center gap-2 text-sm">
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${est?.clase ?? "text-slate-500 ring-1 ring-slate-200 dark:ring-slate-700"}`}>
+              {est?.label ?? (mov ? mov : "Sin comenzar")}
+            </span>
+            {fecha && <span className="text-xs text-slate-500 dark:text-slate-400">Marcada el {fechaCorta(fecha)}</span>}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => ref.current?.close()}
+          aria-label="Cerrar"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="space-y-4 p-5">
+        {campos.length > 0 ? (
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+            {campos.map(([label, valor]) => (
+              <div key={label} className="rounded-md border border-slate-200 px-3 py-2 dark:border-slate-700">
+                <dt className="text-xs text-slate-500 dark:text-slate-400">{label}</dt>
+                <dd className="whitespace-pre-line break-words text-sm font-medium text-slate-900 dark:text-slate-100">{valor}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          etapa.clave !== "transbordo" && (
+            <p className="text-sm text-slate-500 dark:text-slate-400">Esta etapa no tiene datos capturados en Cargolink (solo su estatus).</p>
+          )
+        )}
+
+        {etapa.clave === "transbordo" && !puedeEditarEtapa && (
+          filasTransbordo === null ? (
+            <p className="text-sm text-slate-500">Leyendo transbordos de Cargolink…</p>
+          ) : filasTransbordo.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">Sin filas de transbordo.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-100 text-left text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  <tr>
+                    {(ETAPAS_CARGOLINK.transbordo.filas ?? []).map((c) => (
+                      <th key={c.key} scope="col" className="px-2 py-2 font-semibold">{c.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filasTransbordo.map((f, i) => (
+                    <tr key={f.id_booking_transbordo ?? i}>
+                      {(ETAPAS_CARGOLINK.transbordo.filas ?? []).map((c) => (
+                        <td key={c.key} className="px-2 py-2">
+                          {valorEtapa(f[c.key as keyof FilaTransbordoForm]) ?? "—"}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
+
+        {puedeEditarEtapa && editable && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            {editable.filas ? (
+              <EditorTransbordo etapa={editable} noBooking={String(op.no_booking ?? "")} idBooking={idBooking} onGuardado={onGuardado} />
+            ) : (
+              <EditorEtapa etapa={editable} op={op} idBooking={idBooking} onGuardado={onGuardado} />
+            )}
+          </div>
+        )}
+        {!puedeEditarEtapa && editable && puedeEditar && (
+          <p className="text-xs text-slate-500 dark:text-slate-400">Etapa {est?.label.toLowerCase() ?? "cerrada"} en Cargolink: ya no se puede editar.</p>
+        )}
+      </div>
+    </dialog>
   );
 }
