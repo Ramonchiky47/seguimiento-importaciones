@@ -44,13 +44,15 @@ export default async function EmbarquesPage({
 }) {
   const { q, etapa, ejecutivo, estatus, page } = await searchParams;
   const etapaActiva = etapa && ETAPAS.includes(etapa) ? etapa : null;
-  const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
+  const supabase = await createClient();
+  // Operativo con clientes asignados: Track ya viene acotado a sus clientes.
+  const { data: restringido } = await supabase.rpc("track_usuario_restringido");
+  const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo, restringido === true);
   const estatusSel = estatusBooking(estatus);
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
   const term = (q ?? "").replace(/[,()]/g, " ").trim();
 
-  const supabase = await createClient();
   let query = supabase
     .from("track_embarques")
     .select(

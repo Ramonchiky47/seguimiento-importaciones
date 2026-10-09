@@ -8,6 +8,7 @@ const TABS = [
   { href: "/track/tablero", label: "Tablero" },
   { href: "/track/embarques", label: "Embarques" },
   { href: "/track/bitacora", label: "Bitácora" },
+  { href: "/track/clientes", label: "Clientes asignados" },
 ];
 
 export function TrackTabs() {

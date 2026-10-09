@@ -77,12 +77,14 @@ export default async function MiDiaPage({
 }) {
   const { nivel, ejecutivo, estatus, page } = await searchParams;
   const nivelActivo: Nivel = nivel && NIVEL_KEYS.has(nivel) ? (nivel as Nivel) : "pendientes";
-  const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
+  const supabase = await createClient();
+  // Operativo con clientes asignados: Track ya viene acotado a sus clientes.
+  const { data: restringido } = await supabase.rpc("track_usuario_restringido");
+  const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo, restringido === true);
   const estatusSel = estatusBooking(estatus);
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
 
-  const supabase = await createClient();
 
   const { data, error } = await supabase.rpc("track_mi_dia", {
     p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,

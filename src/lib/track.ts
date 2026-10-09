@@ -65,14 +65,19 @@ export const VALOR_TARJETA = "text-[22px] font-extrabold tabular-nums text-slate
 export const EJECUTIVO_DEFAULT = "Jorge Mora";
 export const EJECUTIVO_TODOS = "Todos";
 
-export function ejecutivosTrack(param: string | string[] | undefined): {
+// Con sinDefault (usuario que solo ve sus clientes asignados) no se aplica
+// EJECUTIVO_DEFAULT: sus clientes ya acotan la vista.
+export function ejecutivosTrack(
+  param: string | string[] | undefined,
+  sinDefault = false,
+): {
   // Ejecutivos por los que se filtra (vacío = todos).
   filtro: string[];
   // Valores a conservar en los enlaces para no perder la elección.
   enUrl: string[];
 } {
   const raw = param ? (Array.isArray(param) ? param : [param]) : [];
-  if (raw.length === 0) return { filtro: [EJECUTIVO_DEFAULT], enUrl: [] };
+  if (raw.length === 0) return sinDefault ? { filtro: [], enUrl: [] } : { filtro: [EJECUTIVO_DEFAULT], enUrl: [] };
   if (raw.includes(EJECUTIVO_TODOS)) return { filtro: [], enUrl: [EJECUTIVO_TODOS] };
   return { filtro: raw, enUrl: raw };
 }
