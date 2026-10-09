@@ -174,3 +174,35 @@ export async function guardarEtapaCargolink(
     return { ok: false, mensaje: msg };
   }
 }
+
+// Al abrir la ventana de indicadores: relee ESE booking de Cargolink (solo
+// lectura) y actualiza su fila en la app, para no depender de la última
+// carga programada.
+export async function refrescarOperacionDesdeCargolink(idBooking: number): Promise<ResultadoEtapa> {
+  const myPermissions = await getMyPermissions();
+  if (!myPermissions.es_admin && !myPermissions.puede_operaciones) {
+    return { ok: false, mensaje: "Sin permiso de operaciones." };
+  }
+  const supabase = await createClient();
+  const { data: op } = await supabase
+    .from("operaciones_maritima")
+    .select("no_booking")
+    .eq("id_booking", idBooking)
+    .maybeSingle();
+  if (!op?.no_booking) return { ok: false, mensaje: "Operación no encontrada." };
+
+  try {
+    const session = await loginCargolink();
+    const booking = await leerBookingMaritimo(session, op.no_booking as string);
+    if (!booking) {
+      return { ok: false, mensaje: "No aparece en Servicios marítimos de Cargolink (¿archivado?)." };
+    }
+    const { error } = await supabase.rpc("refrescar_operacion_maritima", {
+      p_row: { ...mapOperacionMaritima(booking), sincronizado_at: new Date().toISOString() },
+    });
+    if (error) return { ok: false, mensaje: `No se pudo actualizar en la app: ${error.message}` };
+    return { ok: true, mensaje: "Actualizado desde Cargolink." };
+  } catch (e) {
+    return { ok: false, mensaje: e instanceof Error ? e.message : "Error al consultar Cargolink." };
+  }
+}

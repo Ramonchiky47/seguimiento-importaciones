@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, useTransition } fro
 import { createClient } from "@/lib/supabase/client";
 import { ESTADOS, fechaCorta, type EstadoHito } from "@/lib/track";
 import { ETAPAS_CARGOLINK, ETAPA_POR_HITO, type AccionEtapa, type EtapaCargolink } from "@/lib/etapasCargolink";
-import { guardarEtapaCargolink } from "@/app/(app)/operaciones-maritima/actions";
+import { guardarEtapaCargolink, refrescarOperacionDesdeCargolink } from "@/app/(app)/operaciones-maritima/actions";
 
 // Ventana emergente con todos los indicadores de una operación marítima.
 // Se abre desde FilaOperacion (evento "abrir-operacion" con el id_booking)
@@ -96,7 +96,11 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   const [error, setError] = useState<string | null>(null);
   const [editando, setEditando] = useState<number | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Estado del refresco contra Cargolink al abrir la ventana.
+  const [refresco, setRefresco] = useState<{ estado: "cargando" | "ok" | "error"; mensaje: string } | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // Booking abierto ahora; respuestas de uno anterior se ignoran.
+  const idActual = useRef<number | null>(null);
 
   const cerrar = useCallback(() => {
     dialogRef.current?.close();
@@ -113,6 +117,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
           .eq("id_booking", id)
           .order("orden"),
       ]).then(([opRes, hitosRes]) => {
+        if (idActual.current !== id) return;
         if (opRes.error) setError(opRes.error.message);
         setOp((opRes.data as Operacion | null) ?? null);
         setHitos((hitosRes.data ?? []) as Hito[]);
@@ -123,6 +128,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   useEffect(() => {
     const abrir = (e: Event) => {
       const id = (e as CustomEvent<number>).detail;
+      idActual.current = id;
       setIdBooking(id);
       setOp(null);
       setHitos([]);
@@ -131,7 +137,19 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
       setAviso(null);
       setCargando(true);
       dialogRef.current?.showModal();
+      // Primero lo que ya tiene la app (inmediato); luego se relee el booking
+      // de Cargolink y, si llegó bien, se vuelve a cargar con lo actualizado.
       cargar(id);
+      setRefresco({ estado: "cargando", mensaje: "Actualizando desde Cargolink…" });
+      refrescarOperacionDesdeCargolink(id).then((r) => {
+        if (idActual.current !== id) return;
+        if (r.ok) {
+          setRefresco({ estado: "ok", mensaje: "Datos actualizados desde Cargolink" });
+          cargar(id);
+        } else {
+          setRefresco({ estado: "error", mensaje: `No se pudo actualizar desde Cargolink: ${r.mensaje}` });
+        }
+      });
     };
     window.addEventListener(EVENTO_ABRIR_OPERACION, abrir);
     return () => window.removeEventListener(EVENTO_ABRIR_OPERACION, abrir);
@@ -188,6 +206,25 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
               {op && (
                 <p className="truncate text-sm text-slate-600 dark:text-slate-400">
                   {texto(op.cliente)} · {texto(op.origen)} → {texto(op.destino)} · {texto(op.modo_transportacion)}
+                </p>
+              )}
+              {refresco && (
+                <p
+                  role="status"
+                  className={`mt-1 flex items-center gap-1.5 text-xs ${
+                    refresco.estado === "error"
+                      ? "text-red-700 dark:text-red-400"
+                      : refresco.estado === "ok"
+                        ? "text-green-700 dark:text-green-400"
+                        : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  {refresco.estado === "cargando" && (
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin" aria-hidden="true">
+                      <path d="M21 12a9 9 0 1 1-9-9" />
+                    </svg>
+                  )}
+                  {refresco.mensaje}
                 </p>
               )}
             </div>
