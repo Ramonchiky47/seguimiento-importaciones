@@ -72,9 +72,17 @@ const VALOR_TARJETA = "text-[22px] font-extrabold tabular-nums text-slate-900 da
 // border normal no se queda pegado a la celda sticky, una sombra sí.
 const COLUMNA_FIJA_BORDE = "shadow-[inset_-1px_0_0_rgb(203_213_225)] dark:shadow-[inset_-1px_0_0_rgb(51_65_85)]";
 
-// Rojo = en demora, ámbar = vence en 0 a 4 días.
-function DiasDemora({ valor }: { valor: number | null }) {
+// Rojo = en demora, ámbar = vence en 0 a 4 días, verde = el vacío regresó
+// a tiempo (la vista deja la demora en 0 y ya no la calcula).
+function DiasDemora({ valor, regresado }: { valor: number | null; regresado: boolean }) {
   if (valor === null || valor === undefined) return <>—</>;
+  if (regresado && valor === 0) {
+    return (
+      <span className="inline-block rounded bg-green-100 px-1.5 py-0.5 font-semibold text-green-800 dark:bg-green-950 dark:text-green-300">
+        Sin demora
+      </span>
+    );
+  }
   const clase =
     valor > 0
       ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
@@ -396,7 +404,7 @@ export default async function OperacionesMaritimaPage({
                       } ${field === "dias_libres_demora" || field === "dias_demora" ? "text-center" : ""}`}
                     >
                       {field === "dias_demora" ? (
-                        <DiasDemora valor={row[field] as number | null} />
+                        <DiasDemora valor={row[field] as number | null} regresado={row.regreso_vacio !== null} />
                       ) : (
                         (row[field] ?? "—")
                       )}
