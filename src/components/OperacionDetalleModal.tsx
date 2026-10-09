@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ESTADOS, fechaCorta, type EstadoHito } from "@/lib/track";
 import { ETAPAS_CARGOLINK, ETAPA_POR_HITO, type AccionEtapa, type EtapaCargolink } from "@/lib/etapasCargolink";
@@ -101,6 +102,10 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   const dialogRef = useRef<HTMLDialogElement>(null);
   // Booking abierto ahora; respuestas de uno anterior se ignoran.
   const idActual = useRef<number | null>(null);
+  // Si se refrescó desde Cargolink o se guardó una etapa, la tabla de atrás
+  // quedó desactualizada: se recarga al cerrar la ventana.
+  const huboCambios = useRef(false);
+  const router = useRouter();
 
   const cerrar = useCallback(() => {
     dialogRef.current?.close();
@@ -144,6 +149,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
       refrescarOperacionDesdeCargolink(id).then((r) => {
         if (idActual.current !== id) return;
         if (r.ok) {
+          huboCambios.current = true;
           setRefresco({ estado: "ok", mensaje: "Datos actualizados desde Cargolink" });
           cargar(id);
         } else {
@@ -189,7 +195,13 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   return (
     <dialog
       ref={dialogRef}
-      onClose={() => setIdBooking(null)}
+      onClose={() => {
+        setIdBooking(null);
+        if (huboCambios.current) {
+          huboCambios.current = false;
+          router.refresh();
+        }
+      }}
       onClick={(e) => {
         if (e.target === dialogRef.current) cerrar();
       }}
@@ -355,6 +367,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                                       op={op}
                                       idBooking={idBooking}
                                       onGuardado={(mensaje) => {
+                                        huboCambios.current = true;
                                         setEditando(null);
                                         setAviso(mensaje);
                                         cargar(idBooking);
