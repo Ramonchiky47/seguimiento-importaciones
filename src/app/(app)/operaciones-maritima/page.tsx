@@ -4,7 +4,7 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { FilaOperacion, OperacionDetalleModal } from "@/components/OperacionDetalleModal";
 import { YearFilter } from "@/components/YearFilter";
 import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
-import { ESTATUS_DEFAULT, claseFilaEstatus, estatusBooking } from "@/lib/track";
+import { ESTATUS_DEFAULT, claseFilaEstatus, estatusBooking, mismoNombre } from "@/lib/track";
 import { ActualizarMaritimaButton } from "@/components/ActualizarMaritimaButton";
 import { getMyPermissions } from "@/lib/permissions";
 import { actualizarOperacionesMaritima } from "./actions";
@@ -124,6 +124,20 @@ export default async function OperacionesMaritimaPage({
   const myPermissions = await getMyPermissions();
   // Admins y usuarios autorizados en editores_cargolink (piloto).
   const { data: puedeEditarCargolink } = await supabase.rpc("puedo_editar_cargolink");
+  // Prueba de clientes asignados: aviso y marca ✓✓ en los bookings donde el
+  // ejecutivo en Cargolink es el mismo operativo de la sesión.
+  const {
+    data: { user: usuario },
+  } = await supabase.auth.getUser();
+  const [{ data: miOperativo }, { data: restringido }, { data: permitidos }] = await Promise.all([
+    usuario
+      ? supabase.from("catalogo_operativos").select("nombre_operativo").eq("user_id", usuario.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase.rpc("track_usuario_restringido"),
+    supabase.rpc("track_clientes_permitidos"),
+  ]);
+  const nombreOperativo = (miOperativo?.nombre_operativo as string | undefined) ?? null;
+  const clientesAsignados = restringido === true ? ((permitidos ?? []) as unknown[]).length : 0;
 
   // Igual que el dashboard: sin parámetro se muestra el año en curso;
   // "todos" es una elección explícita.
@@ -305,6 +319,12 @@ export default async function OperacionesMaritimaPage({
               Bitácora de cambios
             </Link>
           </p>
+          {clientesAsignados > 0 && (
+            <p className="mt-1 inline-block rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+              Viendo solo tus {clientesAsignados} {clientesAsignados === 1 ? "cliente asignado" : "clientes asignados"} ·{" "}
+              <span aria-hidden="true">✓✓</span> = en Cargolink eres el ejecutivo
+            </p>
+          )}
         </div>
       </header>
 
@@ -431,6 +451,17 @@ export default async function OperacionesMaritimaPage({
                     >
                       {field === "dias_demora" ? (
                         <DiasDemora valor={row[field] as number | null} regresado={row.regreso_vacio !== null} />
+                      ) : field === "no_booking" && nombreOperativo && mismoNombre(row.ejecutivo as string | null, nombreOperativo) ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          {row[field]}
+                          <span
+                            title={`En Cargolink el ejecutivo es ${String(row.ejecutivo)}`}
+                            aria-label="En Cargolink eres el ejecutivo"
+                            className="text-xs font-bold text-blue-700 dark:text-blue-400"
+                          >
+                            ✓✓
+                          </span>
+                        </span>
                       ) : (
                         (row[field] ?? "—")
                       )}

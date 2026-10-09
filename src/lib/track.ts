@@ -104,3 +104,21 @@ export function claseFilaEstatus(statusBooking: unknown): string {
   if (String(statusBooking) === "0") return "bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-500";
   return "";
 }
+
+// ¿El ejecutivo de Cargolink es el mismo operativo? Compara sin acentos ni
+// mayúsculas y por palabras: "ADRIANA ÁVILA" coincide con "Adriana del
+// Rosario Avila" (todas las palabras de uno están en el otro).
+export function mismoNombre(a: string | null | undefined, b: string | null | undefined): boolean {
+  const palabras = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase()
+      .split(/[^A-Z0-9]+/)
+      .filter((w) => w.length > 2);
+  if (!a || !b) return false;
+  const pa = palabras(a);
+  const pb = palabras(b);
+  if (pa.length === 0 || pb.length === 0) return false;
+  return pa.every((w) => pb.includes(w)) || pb.every((w) => pa.includes(w));
+}
