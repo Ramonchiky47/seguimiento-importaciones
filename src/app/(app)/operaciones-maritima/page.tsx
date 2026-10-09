@@ -363,17 +363,19 @@ export default async function OperacionesMaritimaPage({
 
         <div className="max-h-[70vh] overflow-auto rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <table className="min-w-full divide-y divide-slate-200 text-xs dark:divide-slate-800">
-            <thead className="sticky top-0 z-20 bg-slate-100 dark:bg-slate-800">
+            {/* sticky va en cada <th> y no en <thead>: Safari dibuja copias
+                desfasadas de los títulos con un <thead> sticky al desplazar. */}
+            <thead>
               <tr>
                 {COLUMNS.map(({ field, label }) => {
                   const isActive = sortField === field;
                   return (
                     <th
                       key={field}
-                      className={`whitespace-nowrap px-3 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 ${
+                      className={`sticky top-0 whitespace-nowrap bg-slate-100 px-3 py-2.5 text-left font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300 ${
                         field === "no_booking"
-                          ? `sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 ${COLUMNA_FIJA_BORDE}`
-                          : ""
+                          ? "left-0 z-30 shadow-[inset_-1px_-1px_0_rgb(203_213_225)] dark:shadow-[inset_-1px_-1px_0_rgb(51_65_85)]"
+                          : "z-20 shadow-[inset_0_-1px_0_rgb(203_213_225)] dark:shadow-[inset_0_-1px_0_rgb(51_65_85)]"
                       }`}
                     >
                       <Link
