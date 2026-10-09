@@ -227,3 +227,23 @@ export async function eliminarTransbordoEnCargolink(session: CargolinkSession, i
   const res = await fetch(url, { method: "POST", headers: { Cookie: session.cookie } });
   if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status} al eliminar el transbordo.`);
 }
+
+// Catálogos de la pantalla de Seguro (consultaAseguradoras / consultaIncoterm).
+export async function leerCatalogosSeguro(session: CargolinkSession): Promise<{
+  aseguradoras: { valor: string; label: string }[];
+  incoterms: { valor: string; label: string }[];
+}> {
+  const get = async (fn: string) => {
+    const res = await fetch(`${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api&fn=${fn}`, {
+      headers: { Cookie: session.cookie },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data?.valores ?? []) as Record<string, string>[];
+  };
+  const [aseg, inco] = await Promise.all([get("consultaAseguradoras"), get("consultaIncoterm")]);
+  return {
+    aseguradoras: aseg.map((a) => ({ valor: String(a.id_aseguradora), label: a.nombre })),
+    incoterms: inco.map((i) => ({ valor: i.tipo, label: i.tipo })),
+  };
+}

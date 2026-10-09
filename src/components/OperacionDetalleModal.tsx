@@ -7,6 +7,7 @@ import { ESTADOS, fechaCorta, type EstadoHito } from "@/lib/track";
 import { ETAPAS_CARGOLINK, ETAPA_POR_HITO, type AccionEtapa, type EtapaCargolink } from "@/lib/etapasCargolink";
 import {
   eliminarFilaTransbordoCargolink,
+  catalogosCargolink,
   guardarEtapaCargolink,
   guardarTransbordosCargolink,
   leerTransbordosCargolink,
@@ -90,12 +91,19 @@ const DETALLE_ETAPA: Record<string, { campos: [string, string][]; editar?: strin
   seguro: {
     campos: [
       ["Seguro", "seguro"],
-      ["Asegurar por", "segurar_por"],
-      ["Valor asegurado", "valor_mercancia"],
-      ["Fecha del seguro", "seguro_fecha"],
-      ["Póliza", "numero_poliza_seguro"],
+      ["Asegurado por (1)", "segurar_por"],
+      ["Moneda (1)", "moneda"],
+      ["Valor (1)", "valor_mercancia"],
+      ["Fecha de aseguramiento (1)", "seguro_fecha"],
+      ["Asegurado por (2)", "segurar_por2"],
+      ["Moneda (2)", "moneda2"],
+      ["Valor (2)", "valor_mercancia2"],
+      ["Fecha de aseguramiento (2)", "seguro_fecha2"],
+      ["Incoterm", "intercom"],
       ["Alcance", "seguro_alcance"],
+      ["Póliza", "numero_poliza_seguro"],
     ],
+    editar: "seguro",
   },
   atd: { campos: [["Fecha de zarpe (ATD)", "fecha_atd"]], editar: "atd" },
   aviso_atd: { campos: [["Fecha de zarpe", "fecha_atd"], ["Días restantes para facturar", "dias_restantes_facturacion"]] },
@@ -640,10 +648,33 @@ function EditorEtapa({
     etapa.campos.map((c) => {
       const v = c.actual.startsWith("datos.") ? datos[c.actual.slice(6)] : op[c.actual];
       const s = v === null || v === undefined ? "" : String(v);
-      return [c.key, c.tipo === "date" ? (s.startsWith("0000") ? "" : s.slice(0, 10)) : s];
+      if (c.tipo === "date") return [c.key, s.startsWith("0000") ? "" : s.slice(0, 10)];
+      // Cargolink guarda "0" / "0.00" cuando no hay dato.
+      if ((c.tipo === "decimal" || c.tipo === "select") && /^0(\.0+)?$/.test(s)) return [c.key, ""];
+      return [c.key, s];
     }),
   );
   const [valores, setValores] = useState<Record<string, string>>(inicial);
+  // Listas que vienen de Cargolink (aseguradoras, incoterms).
+  const usaCatalogos = etapa.campos.some((c) => c.catalogo);
+  const [catalogos, setCatalogos] = useState<Record<string, { valor: string; label: string }[]>>({});
+  useEffect(() => {
+    if (!usaCatalogos) return;
+    let vigente = true;
+    catalogosCargolink().then((r) => {
+      if (vigente) setCatalogos(r);
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [usaCatalogos]);
+  const opcionesDe = (c: EtapaCargolink["campos"][number]) => {
+    const base = c.opciones ?? (c.catalogo ? (catalogos[c.catalogo] ?? []) : []);
+    const actual = valores[c.key];
+    // Conserva el valor actual aunque no venga en la lista.
+    return actual && !base.some((o) => o.valor === actual) ? [...base, { valor: actual, label: actual }] : base;
+  };
+  const grupos = Array.from(new Set(etapa.campos.map((c) => c.grupo ?? "")));
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -672,26 +703,48 @@ function EditorEtapa({
       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
         {etapa.label} <span className="font-normal text-slate-500 dark:text-slate-400">· se guarda en Cargolink sin notificar al cliente</span>
       </p>
-      {etapa.campos.length > 0 && (
-        <div className="flex flex-wrap gap-3">
-          {etapa.campos.map((c) => (
-            <label key={c.key} className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
-              <span>
-                {c.label}
-                {c.requerido && <span className="text-red-600"> *</span>}
-              </span>
-              <input
-                type={c.tipo}
-                min={c.tipo === "number" ? 0 : undefined}
-                max={c.tipo === "number" ? 365 : undefined}
-                value={valores[c.key] ?? ""}
-                onChange={(e) => setValores((v) => ({ ...v, [c.key]: e.target.value }))}
-                className="min-h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-              />
-            </label>
-          ))}
-        </div>
-      )}
+      {grupos.map((g) => (
+        <fieldset key={g || "campos"} className="space-y-2">
+          {g && <legend className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{g}</legend>}
+          <div className="flex flex-wrap gap-3">
+            {etapa.campos
+              .filter((c) => (c.grupo ?? "") === g)
+              .map((c) => {
+                const clase =
+                  "min-h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
+                const cambiar = (valor: string) => setValores((v) => ({ ...v, [c.key]: valor }));
+                return (
+                  <label key={c.key} className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
+                    <span>
+                      {c.label}
+                      {c.requerido && <span className="text-red-600"> *</span>}
+                    </span>
+                    {c.tipo === "select" ? (
+                      <select value={valores[c.key] ?? ""} onChange={(e) => cambiar(e.target.value)} className={`${clase} min-w-40`}>
+                        <option value="">—</option>
+                        {opcionesDe(c).map((o) => (
+                          <option key={o.valor} value={o.valor}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type={c.tipo === "decimal" ? "text" : c.tipo}
+                        inputMode={c.tipo === "decimal" ? "decimal" : undefined}
+                        min={c.tipo === "number" ? 0 : undefined}
+                        max={c.tipo === "number" ? 365 : undefined}
+                        value={valores[c.key] ?? ""}
+                        onChange={(e) => cambiar(e.target.value)}
+                        className={`${clase} ${c.tipo === "text" ? "min-w-72" : ""}`}
+                      />
+                    )}
+                  </label>
+                );
+              })}
+          </div>
+        </fieldset>
+      ))}
       <div className="flex flex-wrap gap-2">
         {etapa.acciones.map((a) => (
           <button

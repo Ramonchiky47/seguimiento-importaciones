@@ -11,6 +11,7 @@ import {
   guardarEtapaEnCargolink,
   guardarTransbordosEnCargolink,
   leerBookingMaritimo,
+  leerCatalogosSeguro,
   leerTransbordos,
   mapOperacionMaritima,
   type FilaTransbordo,
@@ -128,6 +129,11 @@ export async function guardarEtapaCargolink(
     if (v) {
       if (c.tipo === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return { ok: false, mensaje: `${c.label}: fecha no válida.` };
       if (c.tipo === "number" && !/^\d{1,3}$/.test(v)) return { ok: false, mensaje: `${c.label}: número no válido.` };
+      if (c.tipo === "decimal" && !/^\d{1,12}(\.\d{1,2})?$/.test(v)) return { ok: false, mensaje: `${c.label}: importe no válido.` };
+      if (c.tipo === "text" && v.length > 300) return { ok: false, mensaje: `${c.label}: máximo 300 caracteres.` };
+      if (c.tipo === "select" && c.opciones && !c.opciones.some((o) => o.valor === v)) {
+        return { ok: false, mensaje: `${c.label}: opción no válida.` };
+      }
       cambios[c.key] = v;
     }
   }
@@ -160,7 +166,11 @@ export async function guardarEtapaCargolink(
       notificarCliente: false,
       notificarCorresponsal: false,
     };
-    const respuesta = await guardarEtapaEnCargolink(session, etapa.fn, accion.status, payload);
+    let respuesta = await guardarEtapaEnCargolink(session, etapa.fn, accion.status, payload);
+    // Seguro: Cargolink guarda primero la etapa y luego los datos del seguro.
+    if (etapa.fn2 && respuesta.status_conexion === "OK") {
+      respuesta = await guardarEtapaEnCargolink(session, etapa.fn2, accion.status, payload);
+    }
     if (respuesta.status_conexion !== "OK") {
       const msg = `Cargolink no confirmó el guardado: ${JSON.stringify(respuesta).slice(0, 200)}`;
       await bitacora(false, msg, cambios);
@@ -444,5 +454,20 @@ export async function eliminarFilaTransbordoCargolink(idBooking: number, idTrans
     return { ok: !sigue, mensaje };
   } catch (e) {
     return { ok: false, mensaje: e instanceof Error ? e.message : "Error al comunicarse con Cargolink." };
+  }
+}
+
+// Listas de Cargolink para el formulario de Seguro.
+export async function catalogosCargolink(): Promise<{
+  aseguradoras: { valor: string; label: string }[];
+  incoterms: { valor: string; label: string }[];
+}> {
+  const myPermissions = await getMyPermissions();
+  if (!myPermissions.es_admin && !myPermissions.puede_operaciones) return { aseguradoras: [], incoterms: [] };
+  try {
+    const session = await loginCargolink();
+    return await leerCatalogosSeguro(session);
+  } catch {
+    return { aseguradoras: [], incoterms: [] };
   }
 }

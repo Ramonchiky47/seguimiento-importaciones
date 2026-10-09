@@ -7,10 +7,16 @@
 export type CampoEtapa = {
   key: string; // campo del booking de Cargolink
   label: string;
-  tipo: "date" | "number";
+  // number = entero (días); decimal = importe; select = lista (opciones fijas
+  // o un catálogo de Cargolink).
+  tipo: "date" | "number" | "decimal" | "text" | "select";
   requerido: boolean;
   // Columna de operaciones_maritima_vista (o datos.<key>) con el valor actual.
   actual: string;
+  opciones?: { valor: string; label: string }[];
+  catalogo?: "aseguradoras" | "incoterms";
+  // Encabezado para agrupar campos en el formulario.
+  grupo?: string;
 };
 
 export type AccionEtapa = {
@@ -26,6 +32,9 @@ export type EtapaCargolink = {
   fn: string;
   desdeEtapa?: string;
   mov: string; // his_mov_* de la etapa
+  // Segunda llamada con el mismo booking y status (Seguro: registraHistorialDocs
+  // y luego registraSeguro, como la pantalla de Cargolink).
+  fn2?: string;
   campos: CampoEtapa[];
   acciones: AccionEtapa[];
   // Etapa de filas (Transbordo): columnas de cada fila; se guarda con su
@@ -40,6 +49,10 @@ const FINALIZAR_AVISO: AccionEtapa = { status: "NO", label: "Finalizar (sin noti
 // En los avisos Cargolink no guarda NO_APLICA: "No aplica" deja la etapa
 // FINALIZADO (confirmado el 2026-10-09 con 2609-4329-FCLI).
 const NO_APLICA_AVISO: AccionEtapa = { status: "NO_APLICA", label: "No aplica", resultado: "FINALIZADO" };
+
+// Mismas listas que la pantalla de Seguro de Cargolink.
+const ASEGURADO_POR = ["CONTENEDOR", "MERCANCIA", "AMBOS"].map((v) => ({ valor: v, label: v }));
+const MONEDAS = ["USD", "MXN", "EUR"].map((v) => ({ valor: v, label: v }));
 
 export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
   atd: {
@@ -66,6 +79,30 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     mov: "his_mov_alertFech",
     campos: [],
     acciones: [GUARDAR, FINALIZAR_AVISO, NO_APLICA_AVISO],
+  },
+  seguro: {
+    key: "seguro",
+    label: "Seguro de mercancía",
+    fn: "registraHistorialDocs",
+    fn2: "registraSeguro",
+    desdeEtapa: "SEGURO_MERCANCIA",
+    mov: "his_mov_seguro",
+    campos: [
+      { key: "segurar_por", label: "Asegurado por", tipo: "select", requerido: false, actual: "datos.segurar_por", opciones: ASEGURADO_POR, grupo: "Renglón 1" },
+      { key: "moneda", label: "Moneda", tipo: "select", requerido: false, actual: "datos.moneda", opciones: MONEDAS, grupo: "Renglón 1" },
+      { key: "valor_mercancia", label: "Valor", tipo: "decimal", requerido: false, actual: "datos.valor_mercancia", grupo: "Renglón 1" },
+      { key: "intercom", label: "Incoterm", tipo: "select", requerido: false, actual: "datos.intercom", catalogo: "incoterms", grupo: "Renglón 1" },
+      { key: "seguro_fecha", label: "Fecha de aseguramiento", tipo: "date", requerido: false, actual: "datos.seguro_fecha", grupo: "Renglón 1" },
+      { key: "id_seguradora", label: "Aseguradora", tipo: "select", requerido: false, actual: "datos.id_seguradora", catalogo: "aseguradoras", grupo: "Renglón 1" },
+      { key: "segurar_por2", label: "Asegurado por", tipo: "select", requerido: false, actual: "datos.segurar_por2", opciones: ASEGURADO_POR, grupo: "Renglón 2" },
+      { key: "moneda2", label: "Moneda", tipo: "select", requerido: false, actual: "datos.moneda2", opciones: MONEDAS, grupo: "Renglón 2" },
+      { key: "valor_mercancia2", label: "Valor", tipo: "decimal", requerido: false, actual: "datos.valor_mercancia2", grupo: "Renglón 2" },
+      { key: "seguro_fecha2", label: "Fecha de aseguramiento", tipo: "date", requerido: false, actual: "datos.seguro_fecha2", grupo: "Renglón 2" },
+      { key: "id_seguradora2", label: "Aseguradora", tipo: "select", requerido: false, actual: "datos.id_seguradora2", catalogo: "aseguradoras", grupo: "Renglón 2" },
+      { key: "seguro_alcance", label: "Alcance del seguro", tipo: "text", requerido: false, actual: "datos.seguro_alcance", grupo: "Póliza" },
+      { key: "numero_poliza_seguro", label: "Número de póliza", tipo: "text", requerido: false, actual: "datos.numero_poliza_seguro", grupo: "Póliza" },
+    ],
+    acciones: [GUARDAR, FINALIZAR, NO_APLICA],
   },
   transbordo: {
     key: "transbordo",
