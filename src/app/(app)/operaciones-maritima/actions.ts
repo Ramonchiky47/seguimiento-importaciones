@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMyPermissions } from "@/lib/permissions";
-import { loginCargolink } from "@/lib/cargolink";
+import { loginCargolink, type CargolinkBooking } from "@/lib/cargolink";
 import { ETAPAS_CARGOLINK } from "@/lib/etapasCargolink";
 import {
   descargarOperacionesRecientes,
@@ -12,6 +12,7 @@ import {
   guardarTransbordosEnCargolink,
   leerBookingMaritimo,
   leerCatalogosSeguro,
+  leerOrigen,
   leerTransbordos,
   mapOperacionMaritima,
   type FilaTransbordo,
@@ -142,7 +143,10 @@ export async function guardarEtapaCargolink(
     const session = await loginCargolink();
     const booking = await leerBookingMaritimo(session, noBooking);
     if (!booking) return { ok: false, mensaje: `No se encontró ${noBooking} en Servicios marítimos de Cargolink.` };
-    valoresAntes = camposEtapa(booking);
+    // Origen: sus datos viven en el registro de origen (consultaOrigen).
+    const esOrigen = etapa.guardado === "origen";
+    const origen = esOrigen ? await leerOrigen(session, idBooking) : {};
+    valoresAntes = camposEtapa({ ...booking, ...origen });
     estatusAntes = (booking[etapa.mov] as string | undefined) || "SIN_COMENZAR";
     if (booking[etapa.mov] === "FINALIZADO") {
       return { ok: false, mensaje: `${etapa.label} ya está finalizada en Cargolink; ahí tampoco se puede editar.` };
@@ -156,9 +160,13 @@ export async function guardarEtapaCargolink(
       }
     }
 
+    const cambiosOrigen = Object.fromEntries(
+      Object.entries(cambios).filter(([k]) => etapa.campos.find((c) => c.key === k)?.fuente === "origen"),
+    );
+    const cambiosBooking = Object.fromEntries(Object.entries(cambios).filter(([k]) => !(k in cambiosOrigen)));
     const payload = {
       ...booking,
-      ...cambios,
+      ...cambiosBooking,
       ...(etapa.desdeEtapa ? { desdeEtapa: etapa.desdeEtapa } : {}),
       // Nunca notificar al cliente desde la app.
       emailCliente: "",
@@ -166,7 +174,9 @@ export async function guardarEtapaCargolink(
       notificarCliente: false,
       notificarCorresponsal: false,
     };
-    let respuesta = await guardarEtapaEnCargolink(session, etapa.fn, accion.status, payload);
+    // Origen manda {alta: origen, booking} como su pantalla en Cargolink.
+    const cuerpo = esOrigen ? ({ alta: { ...origen, ...cambiosOrigen }, booking: payload } as unknown as CargolinkBooking) : payload;
+    let respuesta = await guardarEtapaEnCargolink(session, etapa.fn, accion.status, cuerpo);
     // Seguro: Cargolink guarda primero la etapa y luego los datos del seguro.
     if (etapa.fn2 && respuesta.status_conexion === "OK") {
       respuesta = await guardarEtapaEnCargolink(session, etapa.fn2, accion.status, payload);
@@ -178,7 +188,9 @@ export async function guardarEtapaCargolink(
     }
 
     // Confirmar releyendo de Cargolink: estatus de la etapa y valores.
-    const despues = await leerBookingMaritimo(session, noBooking);
+    const despuesBooking = await leerBookingMaritimo(session, noBooking);
+    const despuesOrigen = esOrigen && despuesBooking ? await leerOrigen(session, idBooking) : {};
+    const despues = despuesBooking ? { ...despuesBooking, ...despuesOrigen } : null;
     valoresDespues = camposEtapa(despues);
     estatusDespues = despues ? ((despues[etapa.mov] as string | undefined) || "SIN_COMENZAR") : null;
     if (!despues) {
@@ -195,7 +207,7 @@ export async function guardarEtapaCargolink(
     }
 
     const { error: errRefresco } = await supabase.rpc("refrescar_operacion_maritima", {
-      p_row: { ...mapOperacionMaritima(despues), sincronizado_at: new Date().toISOString() },
+      p_row: { ...mapOperacionMaritima(despuesBooking as CargolinkBooking), sincronizado_at: new Date().toISOString() },
     });
     const mensaje = `${etapa.label}: ${accion.label.toLowerCase()} en Cargolink.${
       errRefresco ? " (La app se actualizará en la próxima carga.)" : ""

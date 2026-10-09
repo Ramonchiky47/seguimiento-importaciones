@@ -17,6 +17,9 @@ export type CampoEtapa = {
   catalogo?: "aseguradoras" | "incoterms";
   // Encabezado para agrupar campos en el formulario.
   grupo?: string;
+  // "origen" = el valor vive en el registro de origen (consultaOrigen), no en
+  // el booking.
+  fuente?: "origen";
 };
 
 export type AccionEtapa = {
@@ -35,6 +38,8 @@ export type EtapaCargolink = {
   // Segunda llamada con el mismo booking y status (Seguro: registraHistorialDocs
   // y luego registraSeguro, como la pantalla de Cargolink).
   fn2?: string;
+  // Origen: se guarda con registraOrigen mandando {alta: origen, booking}.
+  guardado?: "origen";
   campos: CampoEtapa[];
   acciones: AccionEtapa[];
   // Etapa de filas (Transbordo): columnas de cada fila; se guarda con su
@@ -79,6 +84,63 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     mov: "his_mov_alertFech",
     campos: [],
     acciones: [GUARDAR, FINALIZAR_AVISO, NO_APLICA_AVISO],
+  },
+  origen: {
+    key: "origen",
+    label: "Origen",
+    fn: "registraOrigen",
+    guardado: "origen",
+    mov: "his_mov_origen",
+    campos: [
+      { key: "contacto", label: "Fecha de contacto", tipo: "date", requerido: false, actual: "datos.contacto", fuente: "origen" },
+      { key: "fecha_estimada", label: "Fecha estimada de salida", tipo: "date", requerido: false, actual: "datos.fecha_estimada", fuente: "origen" },
+      { key: "no_control", label: "Número de control (MBL / reserva)", tipo: "text", requerido: false, actual: "datos.no_control", fuente: "origen" },
+      { key: "no_agentes", label: "Control entre agentes (HBL)", tipo: "text", requerido: false, actual: "datos.no_agentes", fuente: "origen" },
+      { key: "no_viaje", label: "Número de viaje", tipo: "text", requerido: false, actual: "datos.no_viaje", fuente: "origen" },
+      { key: "buque", label: "Buque", tipo: "text", requerido: false, actual: "datos.buque" },
+    ],
+    // En Cargolink Origen solo tiene Guardar y Guardar y finalizar.
+    acciones: [GUARDAR, FINALIZAR],
+  },
+  aviso_atd: {
+    key: "aviso_atd",
+    label: "Aviso ATD",
+    fn: "notificacionBookingCliente",
+    desdeEtapa: "TRANSITO_AVISO_ATD",
+    mov: "his_mov_aviso_atd",
+    campos: [],
+    // Cargolink: "Finalizar" (NO), "Notificar y finalizar" (SI, no se usa) y No aplica.
+    acciones: [FINALIZAR_AVISO, NO_APLICA],
+  },
+  manifiesto: {
+    key: "manifiesto",
+    label: "Transmisión de manifiesto",
+    fn: "registraHistorialDocs",
+    desdeEtapa: "MANIFIESTO",
+    mov: "his_mov_manifiesto",
+    campos: [
+      { key: "fecha_acuse", label: "Fecha del acuse", tipo: "date", requerido: true, actual: "datos.fecha_acuse" },
+      { key: "no_acuse", label: "Número del acuse", tipo: "text", requerido: true, actual: "datos.no_acuse" },
+    ],
+    acciones: [GUARDAR, FINALIZAR, NO_APLICA],
+  },
+  kpi: {
+    key: "kpi",
+    label: "KPIs aviso arribo",
+    fn: "notificacionBookingCliente",
+    desdeEtapa: "AVISO_KPI",
+    mov: "his_mov_kpi",
+    campos: [],
+    acciones: [GUARDAR, FINALIZAR_AVISO],
+  },
+  demoras: {
+    key: "demoras",
+    label: "KPI aviso demoras",
+    fn: "notificacionBookingCliente",
+    desdeEtapa: "AVISO_DEMORAS",
+    mov: "his_mov_demoras",
+    campos: [],
+    acciones: [GUARDAR, FINALIZAR_AVISO, NO_APLICA],
   },
   seguro: {
     key: "seguro",

@@ -75,6 +75,7 @@ const DETALLE_ETAPA: Record<string, { campos: [string, string][]; editar?: strin
       ["Dirección de recolección", "dir_recoleccion"],
       ["Agente del cliente", "agente_cliente"],
     ],
+    editar: "origen",
   },
   mercancia: {
     campos: [
@@ -106,15 +107,18 @@ const DETALLE_ETAPA: Record<string, { campos: [string, string][]; editar?: strin
     editar: "seguro",
   },
   atd: { campos: [["Fecha de zarpe (ATD)", "fecha_atd"]], editar: "atd" },
-  aviso_atd: { campos: [["Fecha de zarpe", "fecha_atd"], ["Días restantes para facturar", "dias_restantes_facturacion"]] },
+  aviso_atd: {
+    campos: [["Fecha de zarpe", "fecha_atd"], ["Días restantes para facturar", "dias_restantes_facturacion"]],
+    editar: "aviso_atd",
+  },
   eta: { campos: [["Fecha estimada de arribo", "buque_eta"]], editar: "eta" },
   alertFech: {
     campos: [["Arribo estimado (ETA)", "buque_eta"], ["Instrucciones de revalidación", "inst_revalidacion"], ["Idioma", "lang"]],
     editar: "aviso_eta",
   },
   transbordo: { campos: [], editar: "transbordo" },
-  manifiesto: { campos: [["Fecha de acuse", "fecha_acuse"], ["Número de acuse", "no_acuse"]] },
-  kpi: { campos: [] },
+  manifiesto: { campos: [["Fecha de acuse", "fecha_acuse"], ["Número de acuse", "no_acuse"]], editar: "manifiesto" },
+  kpi: { campos: [], editar: "kpi" },
   hbl_telex: { campos: [["Fecha HBL telex", "fecha_telex_house_bl"]], editar: "hbl" },
   mbl_telex: { campos: [["Fecha MBL telex", "fecha_telex_master_bl"]], editar: "mbl" },
   facturacion: {
@@ -133,7 +137,7 @@ const DETALLE_ETAPA: Record<string, { campos: [string, string][]; editar?: strin
     editar: "aviso_ata",
   },
   factura_extra: { campos: [["Solicitud de facturas extras", "fecha_SolFacExtras"]] },
-  demoras: { campos: [["Días libres de demora", "dias_demora"]] },
+  demoras: { campos: [["Días libres de demora", "dias_demora"]], editar: "demoras" },
   entrega_vacio: {
     campos: [["Fecha de regreso de vacío", "fecha_maniobra_entrega"], ["Solicitud de garantía", "fecha_solicitud_garantia"]],
     editar: "vacio",

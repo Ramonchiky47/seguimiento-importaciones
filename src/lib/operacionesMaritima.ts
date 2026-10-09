@@ -247,3 +247,14 @@ export async function leerCatalogosSeguro(session: CargolinkSession): Promise<{
     incoterms: inco.map((i) => ({ valor: i.tipo, label: i.tipo })),
   };
 }
+
+// Registro de origen del booking (consultaOrigen): contacto, fecha estimada de
+// salida, número de control (MBL), control entre agentes (HBL), viaje.
+export async function leerOrigen(session: CargolinkSession, idBooking: number): Promise<Record<string, unknown>> {
+  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api&fn=consultaOrigen&booking=${idBooking}`;
+  const res = await fetch(url, { headers: { Cookie: session.cookie } });
+  if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status} al leer el origen.`);
+  const data = await res.json();
+  const valores = (data?.valores ?? []) as Record<string, unknown>[];
+  return valores[0] ?? {};
+}
