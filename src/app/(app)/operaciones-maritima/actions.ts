@@ -63,18 +63,17 @@ export async function guardarEtapaCargolink(
   status: string,
   valores: Record<string, string>,
 ): Promise<ResultadoEtapa> {
-  // PILOTO: solo administradores escriben en Cargolink mientras se prueba
-  // cada etapa en real. Para abrirlo al equipo: es_admin || puede_operaciones
-  // (aquí y en EDICION_SOLO_ADMIN de operaciones-maritima/page.tsx).
-  const myPermissions = await getMyPermissions();
-  if (!myPermissions.es_admin) {
-    return { ok: false, mensaje: "Por ahora solo los administradores pueden editar en Cargolink (piloto)." };
+  // PILOTO: escriben en Cargolink los administradores y los usuarios de la
+  // tabla editores_cargolink (función puedo_editar_cargolink).
+  const supabase = await createClient();
+  const { data: puedeEditar } = await supabase.rpc("puedo_editar_cargolink");
+  if (puedeEditar !== true) {
+    return { ok: false, mensaje: "No tienes autorización para editar en Cargolink (piloto)." };
   }
   const etapa = ETAPAS_CARGOLINK[etapaKey];
   const accion = etapa?.acciones.find((a) => a.status === status);
   if (!etapa || !accion) return { ok: false, mensaje: "Etapa o acción no válida." };
 
-  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

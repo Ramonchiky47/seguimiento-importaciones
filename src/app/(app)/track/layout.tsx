@@ -2,13 +2,16 @@ import { redirect } from "next/navigation";
 import { getMyPermissions } from "@/lib/permissions";
 import { TrackTabs } from "@/components/TrackTabs";
 import { OperacionDetalleModal } from "@/components/OperacionDetalleModal";
-import { EDICION_SOLO_ADMIN } from "@/lib/etapasCargolink";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function TrackLayout({ children }: { children: React.ReactNode }) {
   const myPermissions = await getMyPermissions();
   if (!myPermissions.es_admin && !myPermissions.puede_operaciones) {
     redirect("/inicio");
   }
+  // Admins y usuarios autorizados en editores_cargolink (piloto).
+  const supabase = await createClient();
+  const { data: puedeEditarCargolink } = await supabase.rpc("puedo_editar_cargolink");
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -25,7 +28,7 @@ export default async function TrackLayout({ children }: { children: React.ReactN
       </header>
       {children}
       {/* Misma ventana de indicadores y edición que Operaciones Marítima. */}
-      <OperacionDetalleModal puedeEditar={EDICION_SOLO_ADMIN ? myPermissions.es_admin : true} />
+      <OperacionDetalleModal puedeEditar={puedeEditarCargolink === true} />
     </div>
   );
 }

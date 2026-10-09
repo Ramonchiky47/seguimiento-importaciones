@@ -4,10 +4,6 @@
 // acción notifica al cliente: los avisos se finalizan con "Finalizar"
 // (status NO) y no con "Notificar y finalizar".
 
-// PILOTO: solo administradores ven "Editar" (guardarEtapaCargolink lo valida
-// también en el servidor). Para abrirlo al equipo, false aquí y en la acción.
-export const EDICION_SOLO_ADMIN = true;
-
 export type CampoEtapa = {
   key: string; // campo del booking de Cargolink
   label: string;

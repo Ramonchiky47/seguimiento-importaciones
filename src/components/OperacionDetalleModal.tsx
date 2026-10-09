@@ -510,13 +510,17 @@ function EditorEtapa({
   const [pending, startTransition] = useTransition();
 
   const ejecutar = (accion: AccionEtapa) => {
-    if (accion.resultado !== "EDICION") {
-      const texto =
-        accion.resultado === "NO_APLICA"
-          ? `¿Marcar "${etapa.label}" como No aplica en Cargolink? Ya no se podrá editar.`
-          : `¿Finalizar "${etapa.label}" en Cargolink? Ya no se podrá editar. No se notificará al cliente.`;
-      if (!window.confirm(texto)) return;
-    }
+    // Toda acción escribe en Cargolink: siempre se confirma.
+    const detalle =
+      accion.resultado === "NO_APLICA"
+        ? "La etapa quedará como No aplica y ya no se podrá editar."
+        : accion.resultado === "FINALIZADO"
+          ? "La etapa quedará finalizada y ya no se podrá editar."
+          : "La etapa quedará en edición (se puede volver a cambiar).";
+    const texto =
+      `Este cambio se reflejará en Cargolink, en el booking ${String(op.no_booking ?? "")}.\n\n` +
+      `${etapa.label}: ${accion.label}.\n${detalle}\nNo se notificará al cliente.\n\n¿Continuar?`;
+    if (!window.confirm(texto)) return;
     setError(null);
     startTransition(async () => {
       const r = await guardarEtapaCargolink(idBooking, etapa.key, accion.status, valores);

@@ -5,7 +5,6 @@ import { FilaOperacion, OperacionDetalleModal } from "@/components/OperacionDeta
 import { YearFilter } from "@/components/YearFilter";
 import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
 import { ESTATUS_DEFAULT, claseFilaEstatus, estatusBooking } from "@/lib/track";
-import { EDICION_SOLO_ADMIN } from "@/lib/etapasCargolink";
 import { ActualizarMaritimaButton } from "@/components/ActualizarMaritimaButton";
 import { getMyPermissions } from "@/lib/permissions";
 import { actualizarOperacionesMaritima } from "./actions";
@@ -123,6 +122,8 @@ export default async function OperacionesMaritimaPage({
   const estatusSel = estatusBooking(estatus);
   const supabase = await createClient();
   const myPermissions = await getMyPermissions();
+  // Admins y usuarios autorizados en editores_cargolink (piloto).
+  const { data: puedeEditarCargolink } = await supabase.rpc("puedo_editar_cargolink");
 
   // Igual que el dashboard: sin parámetro se muestra el año en curso;
   // "todos" es una elección explícita.
@@ -292,7 +293,7 @@ export default async function OperacionesMaritimaPage({
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <OperacionDetalleModal puedeEditar={EDICION_SOLO_ADMIN ? myPermissions.es_admin : true} />
+      <OperacionDetalleModal puedeEditar={puedeEditarCargolink === true} />
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
