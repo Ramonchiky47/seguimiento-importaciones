@@ -297,7 +297,10 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   return (
     <dialog
       ref={dialogRef}
-      onClose={() => {
+      onClose={(e) => {
+        // React propaga el "close" de la ventana de una etapa (diálogo
+        // anidado): solo se cierra el booking si se cerró este diálogo.
+        if (e.target !== dialogRef.current) return;
         setIdBooking(null);
         if (huboCambios.current) {
           huboCambios.current = false;
@@ -950,7 +953,9 @@ function EtapaDetalle({
   return (
     <dialog
       ref={ref}
-      onClose={onCerrar}
+      onClose={(e) => {
+        if (e.target === ref.current) onCerrar();
+      }}
       onClick={(e) => {
         if (e.target === ref.current) ref.current?.close();
       }}
