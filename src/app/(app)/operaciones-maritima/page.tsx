@@ -52,11 +52,13 @@ const TONO = {
   curso: "bg-linear-to-b from-[#dbeafe] to-white to-70% border-[#93c5fd]",
   pendiente: "bg-linear-to-b from-[#fef3de] to-white to-70% border-[#f5c58a]",
   perdida: "bg-linear-to-b from-[#fee2e2] to-white to-70% border-[#fca5a5]",
+  neutro: "bg-linear-to-b from-[#f1f5f9] to-white to-70% border-[#cbd5e1]",
 };
 
 const TARJETAS = [
   { key: "sin_eta", label: "Sin ETA capturada", tono: TONO.faltante },
   { key: "sin_ejecutivo", label: "Sin ejecutivo asignado", tono: TONO.vigente },
+  { key: "sin_dias_libres", label: "Sin días libres de demora", tono: TONO.neutro },
   { key: "aviso_arribo", label: "Aviso de arribo (≤ 7 días)", tono: TONO.curso },
   { key: "por_vencer", label: "Por vencer demoras (1–4 días)", tono: TONO.pendiente },
   { key: "demora", label: "Con días de demora", tono: TONO.perdida },
@@ -169,6 +171,8 @@ export default async function OperacionesMaritimaPage({
     }
     if (filtroTarjeta === "sin_eta") qb = qb.is("eta", null);
     if (filtroTarjeta === "sin_ejecutivo") qb = qb.is("ejecutivo", null);
+    // FCL sin días libres capturados (la vista excluye LCL y "No aplica").
+    if (filtroTarjeta === "sin_dias_libres") qb = qb.eq("sin_dias_libres", true);
     // Hoy cae entre 7 días antes de la ETA y la ETA misma.
     if (filtroTarjeta === "aviso_arribo") qb = qb.gte("eta", hoy).lte("eta", sumarDias(hoy, 7));
     // Les quedan de 1 a 4 días libres y el vacío no ha regresado.
@@ -291,7 +295,7 @@ export default async function OperacionesMaritimaPage({
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-5 grid grid-cols-3 gap-2 lg:grid-cols-6">
+        <div className="mb-5 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7">
           <Link href={tarjetaHref(null)} className={tarjetaClass(tarjetaActiva === null)}>
             <span className={ETIQUETA_TARJETA}>Bookings totales</span>
             <span className={VALOR_TARJETA}>{conteoTotal}</span>
