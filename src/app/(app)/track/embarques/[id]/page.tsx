@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ESTADOS, fechaCorta, hoyMexico, type EstadoHito } from "@/lib/track";
+import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 
 export const dynamic = "force-dynamic";
 
@@ -61,9 +62,17 @@ export default async function EmbarqueTrackPage({ params }: { params: Promise<{ 
 
   return (
     <main className="mx-auto max-w-7xl space-y-4 px-6 py-6">
-      <Link href="/track/embarques" className="text-sm text-blue-700 hover:underline dark:text-blue-400">
-        ← Volver a Embarques
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link href="/track/embarques" className="text-sm text-blue-700 hover:underline dark:text-blue-400">
+          ← Volver a Embarques
+        </Link>
+        <AbrirOperacionBoton
+          idBooking={idBooking}
+          className="min-h-10 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900"
+        >
+          Ver indicadores y editar en Cargolink
+        </AbrirOperacionBoton>
+      </div>
 
       <section className="flex flex-wrap items-center gap-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="min-w-60 flex-1">

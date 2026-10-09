@@ -5,6 +5,7 @@ import { FilaOperacion, OperacionDetalleModal } from "@/components/OperacionDeta
 import { YearFilter } from "@/components/YearFilter";
 import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
 import { ESTATUS_DEFAULT, claseFilaEstatus, estatusBooking } from "@/lib/track";
+import { EDICION_SOLO_ADMIN } from "@/lib/etapasCargolink";
 import { ActualizarMaritimaButton } from "@/components/ActualizarMaritimaButton";
 import { getMyPermissions } from "@/lib/permissions";
 import { actualizarOperacionesMaritima } from "./actions";
@@ -44,9 +45,6 @@ const COLUMNS = [
 const SORTABLE_FIELDS = new Set<string>(COLUMNS.map((c) => c.field));
 const TYPE_OPTIONS = ["FCLI", "LCLI", "FCL", "LCL"];
 const PAGE_SIZE = 100;
-// PILOTO de edición en Cargolink: solo administradores (ver
-// guardarEtapaCargolink en actions.ts, que lo valida en el servidor).
-const EDICION_SOLO_ADMIN = true;
 
 // Tarjetas de la parte superior: cada una (salvo "Total") es un filtro que
 // se activa al presionarla y se quita al presionarla de nuevo.

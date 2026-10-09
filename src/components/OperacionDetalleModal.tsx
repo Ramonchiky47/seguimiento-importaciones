@@ -438,8 +438,25 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   );
 }
 
-function abrir(idBooking: number) {
+export function abrirOperacion(idBooking: number) {
   window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_OPERACION, { detail: idBooking }));
+}
+
+// Botón (p. ej. el número de booking en una lista) que abre la ventana.
+export function AbrirOperacionBoton({
+  idBooking,
+  className,
+  children,
+}: {
+  idBooking: number;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button type="button" onClick={() => abrirOperacion(idBooking)} className={className}>
+      {children}
+    </button>
+  );
 }
 
 export function FilaOperacion({
@@ -455,9 +472,9 @@ export function FilaOperacion({
     <tr
       tabIndex={0}
       aria-label="Ver indicadores de la operación"
-      onClick={() => abrir(idBooking)}
+      onClick={() => abrirOperacion(idBooking)}
       onKeyDown={(e) => {
-        if (e.key === "Enter") abrir(idBooking);
+        if (e.key === "Enter") abrirOperacion(idBooking);
       }}
       className={`cursor-pointer focus:outline-2 focus:outline-blue-700 ${className ?? ""}`}
     >

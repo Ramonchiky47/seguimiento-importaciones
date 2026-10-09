@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
-import { ClickableRow } from "@/components/ClickableRow";
+import { FilaOperacion } from "@/components/OperacionDetalleModal";
 import {
   EJECUTIVO_TODOS,
   ESTADOS,
@@ -176,7 +176,7 @@ export default async function EmbarquesPage({
             {filas.map((f) => {
               const s = ESTADOS[f.semaforo] ?? ESTADOS.en_tiempo;
               return (
-                <ClickableRow key={f.id_booking} href={`/track/embarques/${f.id_booking}`} className={`hover:bg-blue-50 dark:hover:bg-slate-800 ${claseFilaEstatus(f.status_booking)}`}>
+                <FilaOperacion key={f.id_booking} idBooking={f.id_booking} className={`hover:bg-blue-50 dark:hover:bg-slate-800 ${claseFilaEstatus(f.status_booking)}`}>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-[13px] font-semibold text-slate-900 dark:text-slate-100">{f.no_booking}</td>
                   <td className="max-w-56 truncate px-3 py-2">{f.cliente ?? "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2">{f.ejecutivo ?? "—"}</td>
@@ -200,7 +200,7 @@ export default async function EmbarquesPage({
                       "—"
                     )}
                   </td>
-                </ClickableRow>
+                </FilaOperacion>
               );
             })}
             {filas.length === 0 && !error && (

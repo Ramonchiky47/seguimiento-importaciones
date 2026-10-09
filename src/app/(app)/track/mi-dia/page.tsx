@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
+import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
 import {
   DIAS_REZAGO,
@@ -181,12 +182,12 @@ export default async function MiDiaPage({
               >
                 <span className={`self-stretch ${e.barra}`} aria-hidden="true" />
                 <div className="min-w-0">
-                  <Link
-                    href={`/track/embarques/${f.id_booking}`}
-                    className="font-mono text-[13px] font-semibold text-blue-700 hover:underline dark:text-blue-400"
+                  <AbrirOperacionBoton
+                    idBooking={f.id_booking}
+                    className="text-left font-mono text-[13px] font-semibold text-blue-700 hover:underline dark:text-blue-400"
                   >
                     {f.no_booking}
-                  </Link>
+                  </AbrirOperacionBoton>
                   <p className="truncate text-xs text-slate-500 dark:text-slate-400">{f.cliente ?? "—"}</p>
                 </div>
                 <div className="min-w-0">

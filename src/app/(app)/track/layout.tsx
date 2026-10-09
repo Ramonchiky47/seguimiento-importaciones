@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getMyPermissions } from "@/lib/permissions";
 import { TrackTabs } from "@/components/TrackTabs";
+import { OperacionDetalleModal } from "@/components/OperacionDetalleModal";
+import { EDICION_SOLO_ADMIN } from "@/lib/etapasCargolink";
 
 export default async function TrackLayout({ children }: { children: React.ReactNode }) {
   const myPermissions = await getMyPermissions();
@@ -22,6 +24,8 @@ export default async function TrackLayout({ children }: { children: React.ReactN
         </div>
       </header>
       {children}
+      {/* Misma ventana de indicadores y edición que Operaciones Marítima. */}
+      <OperacionDetalleModal puedeEditar={EDICION_SOLO_ADMIN ? myPermissions.es_admin : true} />
     </div>
   );
 }
