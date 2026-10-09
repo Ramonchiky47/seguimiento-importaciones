@@ -14,6 +14,8 @@ type Hito = {
   hecho: boolean;
   estado: EstadoHito;
   dias_atraso: number | null;
+  // Dato no-fecha que se muestra en "Real" (p. ej. "21 días" de días libres).
+  valor_real: string | null;
 };
 
 export default async function EmbarqueTrackPage({ params }: { params: Promise<{ id: string }> }) {
@@ -26,7 +28,7 @@ export default async function EmbarqueTrackPage({ params }: { params: Promise<{ 
     supabase.from("operaciones_maritima_vista").select("*").eq("id_booking", idBooking).maybeSingle(),
     supabase
       .from("track_hitos")
-      .select("orden, hito, regla, fecha_plan, fecha_hecho, hecho, estado, dias_atraso")
+      .select("orden, hito, regla, fecha_plan, fecha_hecho, hecho, estado, dias_atraso, valor_real")
       .eq("id_booking", idBooking)
       .order("orden"),
     supabase.from("track_embarques").select("etapa, semaforo").eq("id_booking", idBooking).maybeSingle(),
@@ -115,7 +117,7 @@ export default async function EmbarqueTrackPage({ params }: { params: Promise<{ 
                         <p className="text-xs text-slate-500 dark:text-slate-400">{h.regla}</p>
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{fechaCorta(h.fecha_plan)}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{h.hecho ? fechaCorta(h.fecha_hecho) : "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{h.valor_real ?? (h.hecho ? fechaCorta(h.fecha_hecho) : "—")}</td>
                       <td className="whitespace-nowrap px-4 py-2.5">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.pill}`}>
                           {e.label}
