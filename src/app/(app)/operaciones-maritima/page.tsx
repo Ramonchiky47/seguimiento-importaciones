@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { FilaOperacion, OperacionDetalleModal } from "@/components/OperacionDetalleModal";
 import { YearFilter } from "@/components/YearFilter";
 import { ActualizarMaritimaButton } from "@/components/ActualizarMaritimaButton";
 import { getMyPermissions } from "@/lib/permissions";
@@ -283,6 +284,7 @@ export default async function OperacionesMaritimaPage({
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <OperacionDetalleModal />
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
@@ -396,8 +398,9 @@ export default async function OperacionesMaritimaPage({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {rows.map((row) => (
-                <tr
+                <FilaOperacion
                   key={row.id_booking}
+                  idBooking={row.id_booking as number}
                   className="group odd:bg-white even:bg-slate-50/70 hover:bg-blue-50 dark:odd:bg-slate-900 dark:even:bg-slate-900/60 dark:hover:bg-slate-800"
                 >
                   {COLUMNS.map(({ field }) => (
@@ -416,7 +419,7 @@ export default async function OperacionesMaritimaPage({
                       )}
                     </td>
                   ))}
-                </tr>
+                </FilaOperacion>
               ))}
 
               {rows.length === 0 && !error && (
