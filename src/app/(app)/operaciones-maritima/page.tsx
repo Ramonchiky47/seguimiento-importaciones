@@ -14,8 +14,8 @@ export const maxDuration = 300;
 // lectura — la tabla operaciones_maritima se llena con una carga desde
 // Cargolink, no se captura desde aquí.
 const COLUMNS = [
-  { field: "fecha", label: "Fecha" },
   { field: "no_booking", label: "Booking" },
+  { field: "fecha", label: "Fecha" },
   { field: "type", label: "Type" },
   { field: "mbl", label: "MBL" },
   { field: "cliente", label: "Cliente" },
@@ -44,15 +44,45 @@ const PAGE_SIZE = 100;
 
 // Tarjetas de la parte superior: cada una (salvo "Total") es un filtro que
 // se activa al presionarla y se quita al presionarla de nuevo.
+// Colores igual que las tarjetas de las bandejas de Pricing
+// (webapp/templates/_tablero_pricing.html).
+const TONO = {
+  faltante: "bg-linear-to-b from-[#ede9fe] to-white to-70% border-[#c4b5fd]",
+  vigente: "bg-linear-to-b from-[#e3f2fd] to-white to-70% border-[#90caf9]",
+  curso: "bg-linear-to-b from-[#dbeafe] to-white to-70% border-[#93c5fd]",
+  pendiente: "bg-linear-to-b from-[#fef3de] to-white to-70% border-[#f5c58a]",
+  perdida: "bg-linear-to-b from-[#fee2e2] to-white to-70% border-[#fca5a5]",
+};
+
 const TARJETAS = [
-  { key: "sin_eta", label: "Sin ETA capturada" },
-  { key: "sin_ejecutivo", label: "Sin ejecutivo asignado" },
-  { key: "aviso_arribo", label: "Aviso de arribo (ETA en ≤ 7 días)" },
-  { key: "por_vencer", label: "Por vencer demoras (1 a 4 días)" },
-  { key: "demora", label: "Con días de demora" },
+  { key: "sin_eta", label: "Sin ETA capturada", tono: TONO.faltante },
+  { key: "sin_ejecutivo", label: "Sin ejecutivo asignado", tono: TONO.vigente },
+  { key: "aviso_arribo", label: "Aviso de arribo (≤ 7 días)", tono: TONO.curso },
+  { key: "por_vencer", label: "Por vencer demoras (1–4 días)", tono: TONO.pendiente },
+  { key: "demora", label: "Con días de demora", tono: TONO.perdida },
 ] as const;
 type TarjetaKey = (typeof TARJETAS)[number]["key"];
 const TARJETA_KEYS = new Set<string>(TARJETAS.map((t) => t.key));
+
+const ETIQUETA_TARJETA =
+  "text-[10px] font-bold uppercase leading-tight tracking-wide text-slate-500 dark:text-slate-400";
+const VALOR_TARJETA = "text-[22px] font-extrabold tabular-nums text-slate-900 dark:text-slate-50";
+
+// Línea a la derecha de la columna fija (Booking); con border-collapse un
+// border normal no se queda pegado a la celda sticky, una sombra sí.
+const COLUMNA_FIJA_BORDE = "shadow-[inset_-1px_0_0_rgb(203_213_225)] dark:shadow-[inset_-1px_0_0_rgb(51_65_85)]";
+
+// Rojo = en demora, ámbar = vence en 0 a 4 días.
+function DiasDemora({ valor }: { valor: number | null }) {
+  if (valor === null || valor === undefined) return <>—</>;
+  const clase =
+    valor > 0
+      ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+      : valor >= -4
+        ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+        : "text-slate-600 dark:text-slate-400";
+  return <span className={`inline-block min-w-8 rounded px-1.5 py-0.5 font-semibold ${clase}`}>{valor}</span>;
+}
 
 function sumarDias(fechaIso: string, dias: number): string {
   const d = new Date(`${fechaIso}T00:00:00Z`);
@@ -214,11 +244,9 @@ export default async function OperacionesMaritimaPage({
     return query ? `?${query}` : "?";
   };
 
-  const tarjetaClass = (activa: boolean) =>
-    `block rounded-lg border p-4 transition-colors ${
-      activa
-        ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
-        : "border-slate-200 bg-white hover:border-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-600"
+  const tarjetaClass = (activa: boolean, tono = "bg-white border-slate-200") =>
+    `flex min-w-0 flex-col justify-between gap-1 rounded-[10px] border px-3 py-2.5 transition-shadow hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] dark:border-slate-700 dark:bg-none dark:bg-slate-900 ${tono} ${
+      activa ? "border-blue-700! ring-2 ring-blue-700/20" : ""
     }`;
 
   const sortHref = (field: string) => {
@@ -255,24 +283,17 @@ export default async function OperacionesMaritimaPage({
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="mb-5 grid grid-cols-3 gap-2 lg:grid-cols-6">
           <Link href={tarjetaHref(null)} className={tarjetaClass(tarjetaActiva === null)}>
-            <p className={`text-xs ${tarjetaActiva === null ? "opacity-80" : "text-slate-500 dark:text-slate-400"}`}>
-              Bookings totales
-            </p>
-            <p className="mt-1 text-3xl font-semibold">{conteoTotal}</p>
+            <span className={ETIQUETA_TARJETA}>Bookings totales</span>
+            <span className={VALOR_TARJETA}>{conteoTotal}</span>
           </Link>
-          {TARJETAS.map((t, i) => {
-            const activa = tarjetaActiva === t.key;
-            return (
-              <Link key={t.key} href={tarjetaHref(t.key)} className={tarjetaClass(activa)}>
-                <p className={`text-xs ${activa ? "opacity-80" : "text-slate-500 dark:text-slate-400"}`}>
-                  {t.label}
-                </p>
-                <p className="mt-1 text-3xl font-semibold">{conteoTarjetas[i]}</p>
-              </Link>
-            );
-          })}
+          {TARJETAS.map((t, i) => (
+            <Link key={t.key} href={tarjetaHref(t.key)} className={tarjetaClass(tarjetaActiva === t.key, t.tono)}>
+              <span className={ETIQUETA_TARJETA}>{t.label}</span>
+              <span className={VALOR_TARJETA}>{conteoTarjetas[i]}</span>
+            </Link>
+          ))}
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -319,7 +340,7 @@ export default async function OperacionesMaritimaPage({
           </p>
         )}
 
-        <p className="mb-2 text-[10px] text-slate-500 dark:text-slate-400">
+        <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
           Última carga desde Cargolink:{" "}
           {ultimaCarga ? (
             <span className="font-medium text-slate-700 dark:text-slate-300">{ultimaCarga}</span>
@@ -328,17 +349,19 @@ export default async function OperacionesMaritimaPage({
           )}
         </p>
 
-        <div className="max-h-[75vh] overflow-auto rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-          <table className="min-w-full divide-y divide-slate-200 text-[10px] dark:divide-slate-800">
-            <thead className="sticky top-0 z-20 bg-slate-50 dark:bg-slate-800">
+        <div className="max-h-[70vh] overflow-auto rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <table className="min-w-full divide-y divide-slate-200 text-xs dark:divide-slate-800">
+            <thead className="sticky top-0 z-20 bg-slate-100 dark:bg-slate-800">
               <tr>
                 {COLUMNS.map(({ field, label }) => {
                   const isActive = sortField === field;
                   return (
                     <th
                       key={field}
-                      className={`whitespace-nowrap px-3 py-2 text-left font-medium text-slate-500 dark:text-slate-400 ${
-                        field === "no_booking" ? "sticky left-0 z-30 bg-slate-50 dark:bg-slate-800" : ""
+                      className={`whitespace-nowrap px-3 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 ${
+                        field === "no_booking"
+                          ? `sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 ${COLUMNA_FIJA_BORDE}`
+                          : ""
                       }`}
                     >
                       <Link
@@ -359,17 +382,24 @@ export default async function OperacionesMaritimaPage({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {rows.map((row) => (
-                <tr key={row.id_booking} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                <tr
+                  key={row.id_booking}
+                  className="group odd:bg-white even:bg-slate-50/70 hover:bg-blue-50 dark:odd:bg-slate-900 dark:even:bg-slate-900/60 dark:hover:bg-slate-800"
+                >
                   {COLUMNS.map(({ field }) => (
                     <td
                       key={field}
-                      className={`whitespace-nowrap px-3 py-1.5 text-slate-700 dark:text-slate-300 ${
+                      className={`whitespace-nowrap px-3 py-2 text-slate-700 dark:text-slate-300 ${
                         field === "no_booking"
-                          ? "sticky left-0 z-10 bg-white font-medium dark:bg-slate-900"
+                          ? `sticky left-0 z-10 bg-inherit font-semibold text-slate-900 dark:text-slate-100 ${COLUMNA_FIJA_BORDE}`
                           : ""
-                      }`}
+                      } ${field === "dias_libres_demora" || field === "dias_demora" ? "text-center" : ""}`}
                     >
-                      {row[field] ?? "—"}
+                      {field === "dias_demora" ? (
+                        <DiasDemora valor={row[field] as number | null} />
+                      ) : (
+                        (row[field] ?? "—")
+                      )}
                     </td>
                   ))}
                 </tr>
@@ -384,10 +414,12 @@ export default async function OperacionesMaritimaPage({
               )}
             </tbody>
           </table>
+          {/* Espacio para que la barra de desplazamiento horizontal no tape la última fila. */}
+          <div className="h-3" aria-hidden="true" />
         </div>
 
         {totalCount > 0 && (
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
             <p>
               Mostrando {from + 1}–{Math.min(to + 1, totalCount)} de {totalCount} operaciones
             </p>
