@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
@@ -21,12 +22,12 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 50;
 
 // "pendientes" = lo que requiere acción hoy (sin el rezago de más de
 // DIAS_REZAGO días, que va en su propia tarjeta).
 const NIVELES = [
-  { key: "pendientes", label: "Pendientes", ayuda: "Requieren acción", tono: TONO_TARJETA.neutro },
+  { key: "pendientes", label: "Pendientes", ayuda: "Referencias que requieren acción", tono: TONO_TARJETA.neutro },
   { key: "atrasado", label: "Atrasados", ayuda: `Hasta ${DIAS_REZAGO} días`, tono: TONO_TARJETA.rojo },
   { key: "hoy", label: "Vencen hoy", ayuda: "Compromiso de hoy", tono: TONO_TARJETA.ambar },
   { key: "pronto", label: "Próximos 3 días", ayuda: "Para adelantar", tono: TONO_TARJETA.azul },
@@ -36,19 +37,37 @@ const NIVELES = [
 type Nivel = (typeof NIVELES)[number]["key"];
 const NIVEL_KEYS = new Set<string>(NIVELES.map((n) => n.key));
 
-type Hito = {
-  id_booking: number;
-  no_booking: string;
-  cliente: string | null;
-  ejecutivo: string | null;
-  eta: string | null;
+// Un renglón por booking con sus hitos pendientes del nivel elegido
+// (función track_mi_dia; los conteos son referencias distintas).
+type HitoPendiente = {
   orden: number;
   hito: string;
   regla: string;
   fecha_plan: string | null;
   estado: EstadoHito;
   dias_atraso: number | null;
+};
+type Grupo = {
+  // atrasado | hoy | pronto | falta_dato | rezago
+  seccion: string;
+  id_booking: number;
+  no_booking: string;
+  cliente: string | null;
+  ejecutivo: string | null;
+  eta: string | null;
   status_booking: string | null;
+  max_dias_atraso: number | null;
+  hitos: HitoPendiente[];
+};
+type MiDia = { conteos: Record<string, number>; total: number; filas: Grupo[] };
+
+// Encabezado de cada sección de la lista, en orden de urgencia.
+const SECCIONES: Record<string, string> = {
+  atrasado: "Atrasados",
+  hoy: "Vencen hoy",
+  pronto: "Próximos 3 días",
+  falta_dato: "Falta dato",
+  rezago: `Rezago (más de ${DIAS_REZAGO} días)`,
 };
 
 export default async function MiDiaPage({
@@ -65,42 +84,17 @@ export default async function MiDiaPage({
 
   const supabase = await createClient();
 
-  const consulta = (columnas: string, opciones: { count: "exact"; head?: boolean }, n: Nivel) => {
-    let qb = supabase.from("track_hitos").select(columnas, opciones);
-    if (ejecutivoRaw.length > 0) qb = qb.in("ejecutivo", ejecutivoRaw);
-    if (estatusSel.codigos) qb = qb.in("status_booking", estatusSel.codigos);
-    if (n === "pendientes") {
-      qb = qb.or(`estado.in.(hoy,pronto,falta_dato),and(estado.eq.atrasado,dias_atraso.lte.${DIAS_REZAGO})`);
-    } else if (n === "atrasado") {
-      qb = qb.eq("estado", "atrasado").lte("dias_atraso", DIAS_REZAGO);
-    } else if (n === "rezago") {
-      qb = qb.eq("estado", "atrasado").gt("dias_atraso", DIAS_REZAGO);
-    } else {
-      qb = qb.eq("estado", n);
-    }
-    return qb;
-  };
-
-  let lista = consulta(
-    "id_booking, no_booking, cliente, ejecutivo, eta, orden, hito, regla, fecha_plan, estado, dias_atraso, status_booking",
-    { count: "exact" },
-    nivelActivo,
-  );
-  // Lo más urgente primero: atrasos más viejos (o el rezago más largo), luego
-  // hoy, próximos y al final lo que no tiene fecha (falta dato).
-  lista =
-    nivelActivo === "rezago"
-      ? lista.order("dias_atraso", { ascending: false })
-      : lista.order("fecha_plan", { ascending: true, nullsFirst: false });
-  lista = lista.order("no_booking").order("orden").range(from, from + PAGE_SIZE - 1);
-
-  const [{ data, error, count }, ...conteos] = await Promise.all([
-    lista,
-    ...NIVELES.map((n) => consulta("id_booking", { count: "exact", head: true }, n.key)),
-  ]);
-  const filas = (data ?? []) as unknown as Hito[];
-  const totales = conteos.map((c) => c.count ?? 0);
-  const totalCount = count ?? 0;
+  const { data, error } = await supabase.rpc("track_mi_dia", {
+    p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
+    p_estatus: estatusSel.codigos,
+    p_nivel: nivelActivo,
+    p_limit: PAGE_SIZE,
+    p_offset: from,
+  });
+  const resultado = (data ?? { conteos: {}, total: 0, filas: [] }) as MiDia;
+  const filas = resultado.filas;
+  const totales = NIVELES.map((n) => resultado.conteos[n.key] ?? 0);
+  const totalCount = resultado.total;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const { data: ejecutivosData } = await supabase.rpc("operaciones_maritima_ejecutivos", {
@@ -169,18 +163,29 @@ export default async function MiDiaPage({
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-50">{tituloLista}</h2>
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            {totalCount} {totalCount === 1 ? "hito" : "hitos"}
+            {resultado.conteos[nivelActivo] ?? 0} {(resultado.conteos[nivelActivo] ?? 0) === 1 ? "referencia" : "referencias"}
           </span>
         </div>
         <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-          {filas.map((f) => {
-            const e = ESTADOS[f.estado] ?? ESTADOS.en_tiempo;
+          {filas.map((f, i) => {
+            const peor = ESTADOS[(f.seccion === "rezago" ? "atrasado" : f.seccion) as EstadoHito] ?? ESTADOS.en_tiempo;
+            const nuevaSeccion = i === 0 || filas[i - 1].seccion !== f.seccion;
             return (
+              <Fragment key={`${f.seccion}-${f.id_booking}`}>
+              {nuevaSeccion && (
+                <li className="flex items-center justify-between gap-2 bg-slate-50 px-4 py-2 dark:bg-slate-800/60">
+                  <h3 className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                    {SECCIONES[f.seccion] ?? f.seccion}
+                  </h3>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {resultado.conteos[f.seccion] ?? 0} {(resultado.conteos[f.seccion] ?? 0) === 1 ? "referencia" : "referencias"}
+                  </span>
+                </li>
+              )}
               <li
-                key={`${f.id_booking}-${f.orden}`}
-                className={`${claseFilaEstatus(f.status_booking)} grid grid-cols-[6px_minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,1fr)] items-center gap-4 py-3 pr-4 text-sm sm:grid-cols-[6px_minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.8fr)]`}
+                className={`${claseFilaEstatus(f.status_booking)} grid grid-cols-[6px_minmax(0,1fr)_minmax(0,2.2fr)] gap-4 py-3 pr-4 text-sm sm:grid-cols-[6px_minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,0.6fr)]`}
               >
-                <span className={`self-stretch ${e.barra}`} aria-hidden="true" />
+                <span className={`self-stretch ${peor.barra}`} aria-hidden="true" />
                 <div className="min-w-0">
                   <AbrirOperacionBoton
                     idBooking={f.id_booking}
@@ -189,22 +194,33 @@ export default async function MiDiaPage({
                     {f.no_booking}
                   </AbrirOperacionBoton>
                   <p className="truncate text-xs text-slate-500 dark:text-slate-400">{f.cliente ?? "—"}</p>
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-slate-900 dark:text-slate-100">{f.hito}</p>
-                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                    {f.regla} · ETA {fechaCorta(f.eta)}
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    ETA {fechaCorta(f.eta)} · {f.hitos.length} {f.hitos.length === 1 ? "pendiente" : "pendientes"}
                   </p>
                 </div>
-                <div className="flex flex-col items-start gap-1">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.pill}`}>{e.label}</span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                    {f.fecha_plan ? `Compromiso ${fechaCorta(f.fecha_plan)}` : "Sin fecha compromiso"}
-                    {f.dias_atraso ? ` · ${f.dias_atraso} d de atraso` : ""}
-                  </span>
-                </div>
+                <ul className="min-w-0 space-y-1.5">
+                  {f.hitos.map((h) => {
+                    const e = ESTADOS[h.estado] ?? ESTADOS.en_tiempo;
+                    return (
+                      <li
+                        key={h.orden}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-slate-200 bg-white/70 px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-900/60"
+                      >
+                        <span className="min-w-36 font-semibold text-slate-900 dark:text-slate-100">{h.hito}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.pill}`}>
+                          {e.label}
+                          {h.dias_atraso ? ` · ${h.dias_atraso} d` : ""}
+                        </span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                          {h.fecha_plan ? `Compromiso ${fechaCorta(h.fecha_plan)}` : "Sin fecha compromiso"} · {h.regla}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
                 <p className="hidden truncate text-xs text-slate-500 sm:block dark:text-slate-400">{f.ejecutivo ?? "Sin ejecutivo"}</p>
               </li>
+              </Fragment>
             );
           })}
           {filas.length === 0 && !error && (
