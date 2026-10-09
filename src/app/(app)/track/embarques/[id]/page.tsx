@@ -31,7 +31,7 @@ export default async function EmbarqueTrackPage({ params }: { params: Promise<{ 
       .from("track_hitos")
       .select("orden, hito, regla, fecha_plan, fecha_hecho, hecho, estado, dias_atraso, valor_real")
       .eq("id_booking", idBooking)
-      .order("orden"),
+      .order("posicion"),
     supabase.from("track_embarques").select("etapa, semaforo").eq("id_booking", idBooking).maybeSingle(),
   ]);
   if (!op) notFound();

@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ESTADOS, fechaCorta, type EstadoHito } from "@/lib/track";
 import { ETAPAS_CARGOLINK, ETAPA_POR_HITO, type AccionEtapa, type EtapaCargolink } from "@/lib/etapasCargolink";
-import { guardarEtapaCargolink, refrescarOperacionDesdeCargolink } from "@/app/(app)/operaciones-maritima/actions";
+import {
+  eliminarFilaTransbordoCargolink,
+  guardarEtapaCargolink,
+  guardarTransbordosCargolink,
+  leerTransbordosCargolink,
+  refrescarOperacionDesdeCargolink,
+  type FilaTransbordoForm,
+} from "@/app/(app)/operaciones-maritima/actions";
 
 // Ventana emergente con todos los indicadores de una operación marítima.
 // Se abre desde FilaOperacion (evento "abrir-operacion" con el id_booking)
@@ -120,7 +127,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
           .from("track_hitos")
           .select("orden, hito, regla, fecha_plan, fecha_hecho, hecho, estado, dias_atraso, valor_real")
           .eq("id_booking", id)
-          .order("orden"),
+          .order("posicion"),
       ]).then(([opRes, hitosRes]) => {
         if (idActual.current !== id) return;
         if (opRes.error) setError(opRes.error.message);
@@ -362,17 +369,31 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                               {editando === h.orden && etapa && op && (
                                 <tr>
                                   <td colSpan={5} className="bg-slate-50 px-4 py-3 dark:bg-slate-800/50">
-                                    <EditorEtapa
-                                      etapa={etapa}
-                                      op={op}
-                                      idBooking={idBooking}
-                                      onGuardado={(mensaje) => {
-                                        huboCambios.current = true;
-                                        setEditando(null);
-                                        setAviso(mensaje);
-                                        cargar(idBooking);
-                                      }}
-                                    />
+                                    {etapa.filas ? (
+                                      <EditorTransbordo
+                                        etapa={etapa}
+                                        noBooking={String(op.no_booking ?? "")}
+                                        idBooking={idBooking}
+                                        onGuardado={(mensaje) => {
+                                          huboCambios.current = true;
+                                          setEditando(null);
+                                          setAviso(mensaje);
+                                          cargar(idBooking);
+                                        }}
+                                      />
+                                    ) : (
+                                      <EditorEtapa
+                                        etapa={etapa}
+                                        op={op}
+                                        idBooking={idBooking}
+                                        onGuardado={(mensaje) => {
+                                          huboCambios.current = true;
+                                          setEditando(null);
+                                          setAviso(mensaje);
+                                          cargar(idBooking);
+                                        }}
+                                      />
+                                    )}
                                   </td>
                                 </tr>
                               )}
@@ -560,6 +581,190 @@ function EditorEtapa({
             key={a.status}
             type="button"
             disabled={pending}
+            onClick={() => ejecutar(a)}
+            className={`min-h-10 rounded-md px-4 text-sm font-semibold disabled:opacity-50 ${
+              a.resultado === "FINALIZADO"
+                ? "bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900"
+                : a.resultado === "NO_APLICA"
+                  ? "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
+                  : "border border-slate-900 bg-white text-slate-900 hover:bg-slate-50 dark:border-slate-300 dark:bg-slate-900 dark:text-slate-100"
+            }`}
+          >
+            {a.label}
+          </button>
+        ))}
+        {pending && <span className="self-center text-sm text-slate-500">Guardando en Cargolink…</span>}
+      </div>
+      {error && (
+        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Transbordo: tabla de filas como en Cargolink (arribo estimado obligatorio,
+// punto, arribo efectivo, zarpe estimado y zarpe efectivo). Las filas ya
+// guardadas se borran en Cargolink al momento; el resto se manda junto al
+// presionar Guardar / Guardar y finalizar / No aplica.
+const FILA_VACIA: FilaTransbordoForm = {
+  fecha_arribo: "",
+  punto: "",
+  fecha_arribo_real: "",
+  fecha_zarpe: "",
+  fecha_zarpe_real: "",
+};
+
+function EditorTransbordo({
+  etapa,
+  noBooking,
+  idBooking,
+  onGuardado,
+}: {
+  etapa: EtapaCargolink;
+  noBooking: string;
+  idBooking: number;
+  onGuardado: (mensaje: string) => void;
+}) {
+  const [filas, setFilas] = useState<FilaTransbordoForm[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const aplicarLectura = useCallback((r: Awaited<ReturnType<typeof leerTransbordosCargolink>>) => {
+    if (!r.ok) setError(r.mensaje);
+    setFilas(r.filas.length > 0 ? r.filas : [{ ...FILA_VACIA }]);
+  }, []);
+
+  // Recarga después de borrar una fila (desde un evento, no un efecto).
+  const leer = useCallback(() => {
+    setFilas(null);
+    leerTransbordosCargolink(idBooking).then(aplicarLectura);
+  }, [idBooking, aplicarLectura]);
+
+  useEffect(() => {
+    let vigente = true;
+    leerTransbordosCargolink(idBooking).then((r) => {
+      if (vigente) aplicarLectura(r);
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [idBooking, aplicarLectura]);
+
+  const cambiar = (i: number, key: keyof FilaTransbordoForm, valor: string) =>
+    setFilas((fs) => (fs ?? []).map((f, j) => (j === i ? { ...f, [key]: valor } : f)));
+
+  const quitar = (i: number) => {
+    const fila = filas?.[i];
+    if (!fila) return;
+    if (!fila.id_booking_transbordo) {
+      setFilas((fs) => (fs ?? []).filter((_, j) => j !== i));
+      return;
+    }
+    if (!window.confirm(`Esta fila ya está guardada: se borrará en Cargolink, en el booking ${noBooking}. ¿Continuar?`)) return;
+    setError(null);
+    startTransition(async () => {
+      const r = await eliminarFilaTransbordoCargolink(idBooking, fila.id_booking_transbordo as string);
+      if (!r.ok) setError(r.mensaje);
+      leer();
+    });
+  };
+
+  const ejecutar = (accion: AccionEtapa) => {
+    const detalle =
+      accion.resultado === "NO_APLICA"
+        ? "La etapa quedará como No aplica y ya no se podrá editar."
+        : accion.resultado === "FINALIZADO"
+          ? "La etapa quedará finalizada y ya no se podrá editar."
+          : "La etapa quedará en edición (se puede volver a cambiar).";
+    const texto =
+      `Este cambio se reflejará en Cargolink, en el booking ${noBooking}.\n\n` +
+      `Transbordo: ${accion.label} (${(filas ?? []).length} fila(s)).\n${detalle}\nNo se notificará al cliente.\n\n¿Continuar?`;
+    if (!window.confirm(texto)) return;
+    setError(null);
+    startTransition(async () => {
+      const r = await guardarTransbordosCargolink(idBooking, accion.status, filas ?? []);
+      if (r.ok) onGuardado(r.mensaje);
+      else setError(r.mensaje);
+    });
+  };
+
+  const columnas = etapa.filas ?? [];
+  const inputClass =
+    "min-h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+        Transbordo <span className="font-normal text-slate-500 dark:text-slate-400">· se guarda en Cargolink sin notificar al cliente</span>
+      </p>
+      {filas === null ? (
+        <p className="text-sm text-slate-500">Leyendo transbordos de Cargolink…</p>
+      ) : (
+        <div className="overflow-x-auto rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-100 text-left text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <tr>
+                <th scope="col" className="w-10 px-2 py-2">
+                  <span className="sr-only">Quitar</span>
+                </th>
+                {columnas.map((c) => (
+                  <th key={c.key} scope="col" className="min-w-36 px-2 py-2 font-semibold">
+                    {c.label}
+                    {c.requerido && <span className="text-red-600"> *</span>}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {filas.map((f, i) => (
+                <tr key={f.id_booking_transbordo ?? `nueva-${i}`}>
+                  <td className="px-2 py-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => quitar(i)}
+                      disabled={pending}
+                      aria-label={f.id_booking_transbordo ? "Borrar fila en Cargolink" : "Quitar fila"}
+                      className="flex h-9 w-9 items-center justify-center rounded-md text-red-600 hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-950"
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
+                      </svg>
+                    </button>
+                  </td>
+                  {columnas.map((c) => (
+                    <td key={c.key} className="px-2 py-2">
+                      <input
+                        type={c.tipo}
+                        aria-label={`${c.label}, fila ${i + 1}`}
+                        value={f[c.key as keyof FilaTransbordoForm] ?? ""}
+                        onChange={(e) => cambiar(i, c.key as keyof FilaTransbordoForm, e.target.value)}
+                        className={inputClass}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="flex justify-end border-t border-slate-100 p-2 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setFilas((fs) => [...(fs ?? []), { ...FILA_VACIA }])}
+              className="min-h-9 rounded-md border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              + Agregar fila
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {etapa.acciones.map((a) => (
+          <button
+            key={a.status}
+            type="button"
+            disabled={pending || filas === null}
             onClick={() => ejecutar(a)}
             className={`min-h-10 rounded-md px-4 text-sm font-semibold disabled:opacity-50 ${
               a.resultado === "FINALIZADO"

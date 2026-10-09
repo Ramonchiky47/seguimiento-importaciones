@@ -7,9 +7,13 @@ import { loginCargolink } from "@/lib/cargolink";
 import { ETAPAS_CARGOLINK } from "@/lib/etapasCargolink";
 import {
   descargarOperacionesRecientes,
-  leerBookingMaritimo,
+  eliminarTransbordoEnCargolink,
   guardarEtapaEnCargolink,
+  guardarTransbordosEnCargolink,
+  leerBookingMaritimo,
+  leerTransbordos,
   mapOperacionMaritima,
+  type FilaTransbordo,
 } from "@/lib/operacionesMaritima";
 
 // Deja margen dentro del maxDuration (300 s) de la página para el upsert.
@@ -226,5 +230,219 @@ export async function refrescarOperacionDesdeCargolink(idBooking: number): Promi
     return { ok: true, mensaje: "Actualizado desde Cargolink." };
   } catch (e) {
     return { ok: false, mensaje: e instanceof Error ? e.message : "Error al consultar Cargolink." };
+  }
+}
+
+// ---- Transbordo: filas propias en Cargolink (consultaTransbordo /
+// registraTransitoTransbordo / eliminarTransbordo).
+
+export type FilaTransbordoForm = {
+  id_booking_transbordo?: string;
+  fecha_arribo: string;
+  punto: string;
+  fecha_arribo_real: string;
+  fecha_zarpe: string;
+  fecha_zarpe_real: string;
+};
+
+const CAMPOS_FECHA_TRANSBORDO = ["fecha_arribo", "fecha_arribo_real", "fecha_zarpe", "fecha_zarpe_real"] as const;
+
+function fechaCargolink(v: unknown): string {
+  const s = typeof v === "string" ? v.slice(0, 10) : "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && !s.startsWith("0000") ? s : "";
+}
+
+function filaParaForm(f: FilaTransbordo): FilaTransbordoForm {
+  return {
+    id_booking_transbordo: f.id_booking_transbordo ? String(f.id_booking_transbordo) : undefined,
+    fecha_arribo: fechaCargolink(f.fecha_arribo),
+    punto: typeof f.punto === "string" ? f.punto : "",
+    fecha_arribo_real: fechaCargolink(f.fecha_arribo_real),
+    fecha_zarpe: fechaCargolink(f.fecha_zarpe),
+    fecha_zarpe_real: fechaCargolink(f.fecha_zarpe_real),
+  };
+}
+
+// Contexto común: permiso de editor, booking y bitácora.
+async function contextoTransbordo(idBooking: number) {
+  const supabase = await createClient();
+  const { data: puedeEditar } = await supabase.rpc("puedo_editar_cargolink");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: op } = await supabase
+    .from("operaciones_maritima")
+    .select("no_booking")
+    .eq("id_booking", idBooking)
+    .maybeSingle();
+  const { data: operativo } = user
+    ? await supabase.from("catalogo_operativos").select("nombre_operativo").eq("user_id", user.id).maybeSingle()
+    : { data: null };
+  const bitacora = async (registro: {
+    accion: string;
+    ok: boolean;
+    mensaje: string;
+    valores?: unknown;
+    valores_antes?: unknown;
+    valores_despues?: unknown;
+    estatus_antes?: string | null;
+    estatus_despues?: string | null;
+  }) => {
+    await supabase.from("bitacora_cargolink").insert({
+      id_booking: idBooking,
+      no_booking: (op?.no_booking as string | undefined) ?? String(idBooking),
+      etapa: "transbordo",
+      usuario_email: user?.email ?? null,
+      usuario_nombre: (operativo?.nombre_operativo as string | undefined) ?? user?.email ?? null,
+      ...registro,
+    });
+  };
+  return { supabase, puedeEditar: puedeEditar === true, noBooking: op?.no_booking as string | undefined, bitacora };
+}
+
+export async function leerTransbordosCargolink(
+  idBooking: number,
+): Promise<{ ok: boolean; mensaje: string; filas: FilaTransbordoForm[]; estatus: string | null }> {
+  const myPermissions = await getMyPermissions();
+  if (!myPermissions.es_admin && !myPermissions.puede_operaciones) {
+    return { ok: false, mensaje: "Sin permiso de operaciones.", filas: [], estatus: null };
+  }
+  const { noBooking } = await contextoTransbordo(idBooking);
+  if (!noBooking) return { ok: false, mensaje: "Operación no encontrada.", filas: [], estatus: null };
+  try {
+    const session = await loginCargolink();
+    const [filas, booking] = await Promise.all([leerTransbordos(session, idBooking), leerBookingMaritimo(session, noBooking)]);
+    return {
+      ok: true,
+      mensaje: "",
+      filas: filas.map(filaParaForm),
+      estatus: (booking?.his_mov_transbordo as string | undefined) || null,
+    };
+  } catch (e) {
+    return { ok: false, mensaje: e instanceof Error ? e.message : "Error al leer transbordos.", filas: [], estatus: null };
+  }
+}
+
+export async function guardarTransbordosCargolink(
+  idBooking: number,
+  status: string,
+  filasForm: FilaTransbordoForm[],
+): Promise<ResultadoEtapa> {
+  const etapa = ETAPAS_CARGOLINK.transbordo;
+  const accion = etapa.acciones.find((a) => a.status === status);
+  if (!accion) return { ok: false, mensaje: "Acción no válida." };
+  const { supabase, puedeEditar, noBooking, bitacora } = await contextoTransbordo(idBooking);
+  if (!puedeEditar) return { ok: false, mensaje: "No tienes autorización para editar en Cargolink (piloto)." };
+  if (!noBooking) return { ok: false, mensaje: "Operación no encontrada." };
+
+  // Validar: fechas YYYY-MM-DD y arribo estimado obligatorio (salvo No aplica).
+  const filas = filasForm.filter((f) => CAMPOS_FECHA_TRANSBORDO.some((k) => f[k]) || f.punto.trim() || f.id_booking_transbordo);
+  for (const [i, f] of filas.entries()) {
+    for (const k of CAMPOS_FECHA_TRANSBORDO) {
+      if (f[k] && !/^\d{4}-\d{2}-\d{2}$/.test(f[k])) return { ok: false, mensaje: `Fila ${i + 1}: fecha no válida.` };
+    }
+    if (accion.resultado !== "NO_APLICA" && !f.fecha_arribo) {
+      return { ok: false, mensaje: `Fila ${i + 1}: falta el arribo estimado a puerto transbordo (obligatorio en Cargolink).` };
+    }
+  }
+  if (accion.resultado !== "NO_APLICA" && filas.length === 0) {
+    return { ok: false, mensaje: "Agrega al menos un transbordo, o usa No aplica." };
+  }
+
+  try {
+    const session = await loginCargolink();
+    const [booking, existentes] = await Promise.all([
+      leerBookingMaritimo(session, noBooking),
+      leerTransbordos(session, idBooking),
+    ]);
+    if (!booking) return { ok: false, mensaje: `No se encontró ${noBooking} en Servicios marítimos de Cargolink.` };
+    const estatusAntes = (booking.his_mov_transbordo as string | undefined) || "SIN_COMENZAR";
+    if (estatusAntes === "FINALIZADO") {
+      return { ok: false, mensaje: "Transbordo ya está finalizado en Cargolink; ahí tampoco se puede editar." };
+    }
+
+    // Mismo formato que la pantalla de Cargolink: cada fecha como Date de
+    // medianoche local (CDMX) serializado, y las filas existentes con todos
+    // sus datos originales más los cambios.
+    const iso = (fecha: string) => `${fecha}T06:00:00.000Z`;
+    const porId = new Map(existentes.map((e) => [String(e.id_booking_transbordo), e]));
+    const payload: FilaTransbordo[] = filas.map((f) => {
+      const base: FilaTransbordo = f.id_booking_transbordo ? { ...(porId.get(f.id_booking_transbordo) ?? {}) } : {};
+      for (const k of CAMPOS_FECHA_TRANSBORDO) {
+        if (f[k]) base[k] = iso(f[k]);
+        else delete base[k];
+      }
+      base.punto = f.punto.trim();
+      return base;
+    });
+
+    const valoresAntes = { transbordos: existentes.map(filaParaForm) };
+    const respuesta = await guardarTransbordosEnCargolink(session, idBooking, accion.status, payload);
+    if (respuesta.status_conexion && respuesta.status_conexion !== "OK") {
+      const msg = `Cargolink no confirmó el guardado: ${JSON.stringify(respuesta).slice(0, 200)}`;
+      await bitacora({ accion: accion.status, ok: false, mensaje: msg, valores: { transbordos: filas }, valores_antes: valoresAntes, estatus_antes: estatusAntes });
+      return { ok: false, mensaje: msg };
+    }
+
+    // Confirmar releyendo: estatus de la etapa y que cada arribo estimado quedó.
+    const [despues, filasDespues] = await Promise.all([
+      leerBookingMaritimo(session, noBooking),
+      leerTransbordos(session, idBooking),
+    ]);
+    const estatusDespues = (despues?.his_mov_transbordo as string | undefined) || "SIN_COMENZAR";
+    const valoresDespues = { transbordos: filasDespues.map(filaParaForm) };
+    const arribosDespues = new Set(filasDespues.map((r) => fechaCargolink(r.fecha_arribo)));
+    const faltan = filas.filter((f) => f.fecha_arribo && !arribosDespues.has(f.fecha_arribo));
+    if (estatusDespues !== accion.resultado || faltan.length > 0) {
+      const msg = `Cargolink respondió pero quedó: etapa ${estatusDespues}${faltan.length ? `, ${faltan.length} fila(s) sin guardar` : ""}.`;
+      await bitacora({ accion: accion.status, ok: false, mensaje: msg, valores: { transbordos: filas }, valores_antes: valoresAntes, valores_despues: valoresDespues, estatus_antes: estatusAntes, estatus_despues: estatusDespues });
+      return { ok: false, mensaje: msg };
+    }
+
+    if (despues) {
+      await supabase.rpc("refrescar_operacion_maritima", {
+        p_row: { ...mapOperacionMaritima(despues), sincronizado_at: new Date().toISOString() },
+      });
+    }
+    const mensaje = `Transbordo: ${accion.label.toLowerCase()} en Cargolink (${filasDespues.length} fila(s)).`;
+    await bitacora({ accion: accion.status, ok: true, mensaje, valores: { transbordos: filas }, valores_antes: valoresAntes, valores_despues: valoresDespues, estatus_antes: estatusAntes, estatus_despues: estatusDespues });
+    revalidatePath("/operaciones-maritima");
+    revalidatePath("/track", "layout");
+    return { ok: true, mensaje };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error al comunicarse con Cargolink.";
+    await bitacora({ accion: accion.status, ok: false, mensaje: msg, valores: { transbordos: filas } });
+    return { ok: false, mensaje: msg };
+  }
+}
+
+// Borra una fila ya guardada en Cargolink (como el bote de basura de su pantalla).
+export async function eliminarFilaTransbordoCargolink(idBooking: number, idTransbordo: string): Promise<ResultadoEtapa> {
+  const { puedeEditar, noBooking, bitacora } = await contextoTransbordo(idBooking);
+  if (!puedeEditar) return { ok: false, mensaje: "No tienes autorización para editar en Cargolink (piloto)." };
+  if (!noBooking) return { ok: false, mensaje: "Operación no encontrada." };
+  try {
+    const session = await loginCargolink();
+    const [booking, existentes] = await Promise.all([leerBookingMaritimo(session, noBooking), leerTransbordos(session, idBooking)]);
+    if (booking?.his_mov_transbordo === "FINALIZADO") {
+      return { ok: false, mensaje: "Transbordo ya está finalizado en Cargolink; no se pueden borrar filas." };
+    }
+    const fila = existentes.find((e) => String(e.id_booking_transbordo) === idTransbordo);
+    if (!fila) return { ok: false, mensaje: "Esa fila ya no existe en Cargolink." };
+    await eliminarTransbordoEnCargolink(session, idTransbordo);
+    const despues = await leerTransbordos(session, idBooking);
+    const sigue = despues.some((e) => String(e.id_booking_transbordo) === idTransbordo);
+    const mensaje = sigue ? "Cargolink no borró la fila." : "Fila de transbordo borrada en Cargolink.";
+    await bitacora({
+      accion: "ELIMINAR_FILA",
+      ok: !sigue,
+      mensaje,
+      valores_antes: { transbordos: [filaParaForm(fila)] },
+      valores_despues: { transbordos: despues.map(filaParaForm) },
+    });
+    revalidatePath("/track", "layout");
+    return { ok: !sigue, mensaje };
+  } catch (e) {
+    return { ok: false, mensaje: e instanceof Error ? e.message : "Error al comunicarse con Cargolink." };
   }
 }

@@ -179,3 +179,51 @@ export async function guardarEtapaEnCargolink(
     return { raw: text.slice(0, 300) };
   }
 }
+
+// ---- Transbordos (etapa TRANSBORDO): filas propias, no campos del booking.
+export type FilaTransbordo = {
+  id_booking_transbordo?: string | number;
+  fecha_arribo?: string; // arribo estimado a puerto de transbordo (obligatorio)
+  punto?: string;
+  fecha_arribo_real?: string;
+  fecha_zarpe?: string;
+  fecha_zarpe_real?: string;
+  [k: string]: unknown;
+};
+
+export async function leerTransbordos(session: CargolinkSession, idBooking: number): Promise<FilaTransbordo[]> {
+  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api&fn=consultaTransbordo&booking=${idBooking}`;
+  const res = await fetch(url, { headers: { Cookie: session.cookie } });
+  if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status} al leer transbordos.`);
+  const data = await res.json();
+  return (data?.valores ?? []) as FilaTransbordo[];
+}
+
+// Igual que la pantalla de Cargolink: manda TODAS las filas (las existentes con
+// su id_booking_transbordo se actualizan, las nuevas se crean).
+export async function guardarTransbordosEnCargolink(
+  session: CargolinkSession,
+  idBooking: number,
+  status: string,
+  filas: FilaTransbordo[],
+): Promise<Record<string, unknown>> {
+  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api&fn=registraTransitoTransbordo&status=${encodeURIComponent(status)}&id_booking=${idBooking}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: session.cookie },
+    body: JSON.stringify(filas),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status}.`);
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { raw: text.slice(0, 300) };
+  }
+}
+
+export async function eliminarTransbordoEnCargolink(session: CargolinkSession, idTransbordo: string | number) {
+  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api2&fn=eliminarTransbordo&id=${encodeURIComponent(String(idTransbordo))}`;
+  const res = await fetch(url, { method: "POST", headers: { Cookie: session.cookie } });
+  if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status} al eliminar el transbordo.`);
+}

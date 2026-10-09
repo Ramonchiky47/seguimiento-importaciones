@@ -28,6 +28,9 @@ export type EtapaCargolink = {
   mov: string; // his_mov_* de la etapa
   campos: CampoEtapa[];
   acciones: AccionEtapa[];
+  // Etapa de filas (Transbordo): columnas de cada fila; se guarda con su
+  // propio web service, no con los campos del booking.
+  filas?: { key: string; label: string; tipo: "date" | "text"; requerido: boolean }[];
 };
 
 const GUARDAR: AccionEtapa = { status: "EDICION", label: "Guardar", resultado: "EDICION" };
@@ -63,6 +66,21 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     mov: "his_mov_alertFech",
     campos: [],
     acciones: [GUARDAR, FINALIZAR_AVISO, NO_APLICA_AVISO],
+  },
+  transbordo: {
+    key: "transbordo",
+    label: "Transbordo",
+    fn: "registraTransitoTransbordo",
+    mov: "his_mov_transbordo",
+    campos: [],
+    filas: [
+      { key: "fecha_arribo", label: "Arribo estimado a puerto transbordo", tipo: "date", requerido: true },
+      { key: "punto", label: "Punto", tipo: "text", requerido: false },
+      { key: "fecha_arribo_real", label: "Arribo efectivo a puerto transbordo", tipo: "date", requerido: false },
+      { key: "fecha_zarpe", label: "Zarpe estimado de puerto transbordo", tipo: "date", requerido: false },
+      { key: "fecha_zarpe_real", label: "Zarpe efectivo de puerto transbordo", tipo: "date", requerido: false },
+    ],
+    acciones: [GUARDAR, FINALIZAR, NO_APLICA],
   },
   hbl: {
     key: "hbl",
@@ -142,4 +160,5 @@ export const ETAPA_POR_HITO: Record<number, string> = {
   8: "aviso_ata",
   9: "ata",
   10: "vacio",
+  11: "transbordo",
 };

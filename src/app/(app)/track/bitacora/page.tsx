@@ -48,6 +48,17 @@ function describir(etapaKey: string, estatus: string | null, valores: Record<str
   const lineas: string[] = [];
   if (estatus) lineas.push(`Estatus: ${ESTATUS_LABEL[estatus] ?? estatus}`);
   for (const [k, v] of Object.entries(valores ?? {})) {
+    // Transbordo: lista de filas.
+    if (k === "transbordos" && Array.isArray(v)) {
+      if (v.length === 0) lineas.push("Sin filas");
+      v.forEach((fila: Record<string, string>, i: number) => {
+        const partes = (etapa?.filas ?? [])
+          .filter((c) => fila[c.key])
+          .map((c) => `${c.label.replace(" a puerto transbordo", "").replace(" de puerto transbordo", "")}: ${c.tipo === "date" ? fechaCorta(fila[c.key]) : fila[c.key]}`);
+        lineas.push(`${i + 1}) ${partes.join(" · ") || "—"}`);
+      });
+      continue;
+    }
     const campo = etapa?.campos.find((c) => c.key === k);
     const s = v === null || v === undefined || v === "" || String(v).startsWith("0000") ? "—" : String(v);
     const valor = campo?.tipo === "date" && s !== "—" ? fechaCorta(s) : s;
@@ -198,7 +209,9 @@ export default async function BitacoraPage({
                   </td>
                   <td className="px-3 py-2.5">
                     <p className="font-semibold text-slate-900 dark:text-slate-100">{etapa?.label ?? r.etapa}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{accion?.label ?? r.accion}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {r.accion === "ELIMINAR_FILA" ? "Borrar fila" : (accion?.label ?? r.accion)}
+                    </p>
                   </td>
                   <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">
                     {r.valores_antes || r.estatus_antes
