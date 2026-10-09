@@ -300,7 +300,10 @@ export default async function OperacionesMaritimaPage({
             Operaciones Marítima
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Cargolink · Operaciones Importación › Servicios marítimos
+            Cargolink · Operaciones Importación › Servicios marítimos ·{" "}
+            <Link href="/track/bitacora" className="font-medium text-blue-700 hover:underline dark:text-blue-400">
+              Bitácora de cambios
+            </Link>
           </p>
         </div>
       </header>

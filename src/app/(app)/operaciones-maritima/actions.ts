@@ -85,6 +85,20 @@ export async function guardarEtapaCargolink(
   if (!op?.no_booking) return { ok: false, mensaje: "Operación no encontrada." };
   const noBooking = op.no_booking as string;
 
+  // Nombre del usuario para la bitácora (operativo ligado a su cuenta).
+  const { data: operativo } = user
+    ? await supabase.from("catalogo_operativos").select("nombre_operativo").eq("user_id", user.id).maybeSingle()
+    : { data: null };
+  const usuarioNombre = (operativo?.nombre_operativo as string | undefined) ?? user?.email ?? null;
+
+  // Lo que tenía y lo que quedó en Cargolink (campos de la etapa + estatus).
+  const camposEtapa = (b: Record<string, unknown> | null) =>
+    b ? Object.fromEntries(etapa.campos.map((c) => [c.key, b[c.key] ?? null])) : null;
+  let valoresAntes: Record<string, unknown> | null = null;
+  let valoresDespues: Record<string, unknown> | null = null;
+  let estatusAntes: string | null = null;
+  let estatusDespues: string | null = null;
+
   const bitacora = async (ok: boolean, mensaje: string, cambios: Record<string, string>) => {
     await supabase.from("bitacora_cargolink").insert({
       id_booking: idBooking,
@@ -92,7 +106,12 @@ export async function guardarEtapaCargolink(
       etapa: etapa.key,
       accion: accion.status,
       valores: cambios,
+      valores_antes: valoresAntes,
+      valores_despues: valoresDespues,
+      estatus_antes: estatusAntes,
+      estatus_despues: estatusDespues,
       usuario_email: user?.email ?? null,
+      usuario_nombre: usuarioNombre,
       ok,
       mensaje,
     });
@@ -113,6 +132,8 @@ export async function guardarEtapaCargolink(
     const session = await loginCargolink();
     const booking = await leerBookingMaritimo(session, noBooking);
     if (!booking) return { ok: false, mensaje: `No se encontró ${noBooking} en Servicios marítimos de Cargolink.` };
+    valoresAntes = camposEtapa(booking);
+    estatusAntes = (booking[etapa.mov] as string | undefined) || "SIN_COMENZAR";
     if (booking[etapa.mov] === "FINALIZADO") {
       return { ok: false, mensaje: `${etapa.label} ya está finalizada en Cargolink; ahí tampoco se puede editar.` };
     }
@@ -144,6 +165,8 @@ export async function guardarEtapaCargolink(
 
     // Confirmar releyendo de Cargolink: estatus de la etapa y valores.
     const despues = await leerBookingMaritimo(session, noBooking);
+    valoresDespues = camposEtapa(despues);
+    estatusDespues = despues ? ((despues[etapa.mov] as string | undefined) || "SIN_COMENZAR") : null;
     if (!despues) {
       await bitacora(false, "Guardado, pero no se pudo releer el booking.", cambios);
       return { ok: false, mensaje: "Cargolink aceptó el guardado, pero no se pudo releer el booking para confirmarlo." };
