@@ -3,8 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { FilaOperacion, OperacionDetalleModal } from "@/components/OperacionDetalleModal";
 import { YearFilter } from "@/components/YearFilter";
-import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
-import { ESTATUS_DEFAULT, claseFilaEstatus, estatusBooking, mismoNombre } from "@/lib/track";
+import { ESTATUS_OPCIONES, claseFilaEstatus, estatusBooking, mismoNombre } from "@/lib/track";
 import { ActualizarMaritimaButton } from "@/components/ActualizarMaritimaButton";
 import { getMyPermissions } from "@/lib/permissions";
 import { actualizarOperacionesMaritima } from "./actions";
@@ -113,7 +112,7 @@ export default async function OperacionesMaritimaPage({
     type?: string | string[];
     ejecutivo?: string | string[];
     anio?: string;
-    estatus?: string;
+    estatus?: string | string[];
     tarjeta?: string;
     page?: string;
   }>;
@@ -266,7 +265,7 @@ export default async function OperacionesMaritimaPage({
     for (const v of typeRaw) params.append("type", v);
     for (const v of ejecutivoRaw) params.append("ejecutivo", v);
     if (anio) params.set("anio", anio);
-    if (estatusSel.key !== ESTATUS_DEFAULT) params.set("estatus", estatusSel.key);
+    for (const v of estatusSel.enUrl) params.append("estatus", v);
     if (tarjetaActiva) params.set("tarjeta", tarjetaActiva);
     return params;
   };
@@ -351,7 +350,9 @@ export default async function OperacionesMaritimaPage({
               <input key={v} type="hidden" name="ejecutivo" value={v} />
             ))}
             {anio && <input type="hidden" name="anio" value={anio} />}
-            {estatusSel.key !== ESTATUS_DEFAULT && <input type="hidden" name="estatus" value={estatusSel.key} />}
+            {estatusSel.enUrl.map((v) => (
+              <input key={v} type="hidden" name="estatus" value={v} />
+            ))}
             {tarjetaActiva && <input type="hidden" name="tarjeta" value={tarjetaActiva} />}
             <input
               name="q"
@@ -374,7 +375,7 @@ export default async function OperacionesMaritimaPage({
             current={ejecutivoRaw}
           />
           <YearFilter years={availableYears} currentYear={anioActual} />
-          <EstatusBookingFilter current={estatusSel.key} />
+          <MultiSelectFilter paramName="estatus" label="Estatus" options={ESTATUS_OPCIONES} current={estatusSel.seleccion} />
           {myPermissions.es_admin && (
             <div className="ml-auto">
               <ActualizarMaritimaButton onActualizar={actualizarOperacionesMaritima} />

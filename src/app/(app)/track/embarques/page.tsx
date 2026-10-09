@@ -1,12 +1,12 @@
 import Link from "next/link";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
-import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
 import { FilaOperacion } from "@/components/OperacionDetalleModal";
 import {
   EJECUTIVO_TODOS,
   ESTADOS,
-  ESTATUS_DEFAULT,
+  ESTATUS_OPCIONES,
   claseFilaEstatus,
   ejecutivosTrack,
   estatusBooking,
@@ -40,7 +40,7 @@ type Embarque = {
 export default async function EmbarquesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; etapa?: string; ejecutivo?: string | string[]; estatus?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; etapa?: string; ejecutivo?: string | string[]; estatus?: string | string[]; page?: string }>;
 }) {
   const { q, etapa, ejecutivo, estatus, page } = await searchParams;
   const etapaActiva = etapa && ETAPAS.includes(etapa) ? etapa : null;
@@ -88,7 +88,7 @@ export default async function EmbarquesPage({
     const et = cambios.etapa === undefined ? etapaActiva : cambios.etapa;
     if (et) params.set("etapa", et);
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
-    if (estatusSel.key !== ESTATUS_DEFAULT) params.set("estatus", estatusSel.key);
+    for (const v of estatusSel.enUrl) params.append("estatus", v);
     if (cambios.page && cambios.page > 1) params.set("page", String(cambios.page));
     const s = params.toString();
     return s ? `?${s}` : "?";
@@ -103,7 +103,9 @@ export default async function EmbarquesPage({
       <div className="flex flex-wrap items-center gap-2">
         <form className="flex gap-2">
           {etapaActiva && <input type="hidden" name="etapa" value={etapaActiva} />}
-          {estatusSel.key !== ESTATUS_DEFAULT && <input type="hidden" name="estatus" value={estatusSel.key} />}
+          {estatusSel.enUrl.map((v) => (
+              <input key={v} type="hidden" name="estatus" value={v} />
+            ))}
           {ejecutivoEnUrl.map((v) => (
             <input key={v} type="hidden" name="ejecutivo" value={v} />
           ))}
@@ -124,14 +126,14 @@ export default async function EmbarquesPage({
             Buscar
           </button>
         </form>
-        <EstatusBookingFilter current={estatusSel.key} />
+        <MultiSelectFilter paramName="estatus" label="Estatus" options={ESTATUS_OPCIONES} current={estatusSel.seleccion} />
         <TrackEjecutivoFilter
           options={availableEjecutivos}
           filtro={ejecutivoRaw}
           hrefTodos={`?${new URLSearchParams([
             ...(q ? [["q", q]] : []),
             ...(etapaActiva ? [["etapa", etapaActiva]] : []),
-            ...(estatusSel.key !== ESTATUS_DEFAULT ? [["estatus", estatusSel.key]] : []),
+            ...estatusSel.enUrl.map((v) => ["estatus", v]),
             ["ejecutivo", EJECUTIVO_TODOS],
           ]).toString()}`}
         />

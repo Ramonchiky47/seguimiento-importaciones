@@ -1,14 +1,14 @@
 import { Fragment } from "react";
 import Link from "next/link";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
-import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
 import {
   DIAS_REZAGO,
   EJECUTIVO_TODOS,
   ESTADOS,
-  ESTATUS_DEFAULT,
+  ESTATUS_OPCIONES,
   ETIQUETA_TARJETA,
   TONO_TARJETA,
   VALOR_TARJETA,
@@ -73,7 +73,7 @@ const SECCIONES: Record<string, string> = {
 export default async function MiDiaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ nivel?: string; ejecutivo?: string | string[]; estatus?: string; page?: string }>;
+  searchParams: Promise<{ nivel?: string; ejecutivo?: string | string[]; estatus?: string | string[]; page?: string }>;
 }) {
   const { nivel, ejecutivo, estatus, page } = await searchParams;
   const nivelActivo: Nivel = nivel && NIVEL_KEYS.has(nivel) ? (nivel as Nivel) : "pendientes";
@@ -115,7 +115,7 @@ export default async function MiDiaPage({
     const n = cambios.nivel ?? nivelActivo;
     if (n !== "pendientes") params.set("nivel", n);
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
-    if (estatusSel.key !== ESTATUS_DEFAULT) params.set("estatus", estatusSel.key);
+    for (const v of estatusSel.enUrl) params.append("estatus", v);
     if (cambios.page && cambios.page > 1) params.set("page", String(cambios.page));
     const q = params.toString();
     return q ? `?${q}` : "?";
@@ -123,7 +123,7 @@ export default async function MiDiaPage({
 
   const hrefTodos = `?${new URLSearchParams([
     ...(nivelActivo !== "pendientes" ? [["nivel", nivelActivo]] : []),
-    ...(estatusSel.key !== ESTATUS_DEFAULT ? [["estatus", estatusSel.key]] : []),
+    ...estatusSel.enUrl.map((v) => ["estatus", v]),
             ["ejecutivo", EJECUTIVO_TODOS],
   ]).toString()}`;
 
@@ -140,7 +140,7 @@ export default async function MiDiaPage({
           Solo lo que requiere acción. Un hito sale de la lista cuando se marca en Cargolink.
         </p>
         <div className="flex flex-wrap items-center gap-3">
-          <EstatusBookingFilter current={estatusSel.key} />
+          <MultiSelectFilter paramName="estatus" label="Estatus" options={ESTATUS_OPCIONES} current={estatusSel.seleccion} />
           <TrackEjecutivoFilter options={availableEjecutivos} filtro={ejecutivoRaw} hrefTodos={hrefTodos} />
         </div>
       </div>

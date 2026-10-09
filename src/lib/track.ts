@@ -83,19 +83,32 @@ export function ejecutivosTrack(
 }
 
 // Estatus del booking en Cargolink (status_booking): 1 = Vigente (abierto),
-// 2 = Finalizado, 0 = Cancelado. Sin parámetro en la URL se muestran los
-// vigentes.
+// 2 = Finalizado, 0 = Cancelado. Selección múltiple (casillas); sin parámetro
+// en la URL se muestran Vigente y Finalizado.
 export const ESTATUS_BOOKING = [
-  { key: "vigente", label: "Vigente", codigos: ["1"] },
-  { key: "finalizado", label: "Finalizado", codigos: ["2"] },
-  { key: "cancelado", label: "Cancelado", codigos: ["0"] },
-  { key: "todos", label: "Todos", codigos: null },
+  { label: "Vigente", codigo: "1" },
+  { label: "Finalizado", codigo: "2" },
+  { label: "Cancelado", codigo: "0" },
 ] as const;
-export const ESTATUS_DEFAULT = "vigente";
+export const ESTATUS_OPCIONES: string[] = ESTATUS_BOOKING.map((e) => e.label);
+const ESTATUS_POR_DEFECTO = ["Vigente", "Finalizado"];
 
-export function estatusBooking(param: string | undefined): { key: string; codigos: string[] | null } {
-  const e = ESTATUS_BOOKING.find((x) => x.key === param) ?? ESTATUS_BOOKING[0];
-  return { key: e.key, codigos: e.codigos ? [...e.codigos] : null };
+export function estatusBooking(param: string | string[] | undefined): {
+  // Estatus marcados (para las casillas).
+  seleccion: string[];
+  // status_booking a filtrar; null = todos.
+  codigos: string[] | null;
+  // Valores a conservar en los enlaces (vacío = el default).
+  enUrl: string[];
+} {
+  const raw = param ? (Array.isArray(param) ? param : [param]) : [];
+  const validos = ESTATUS_OPCIONES.filter((o) => raw.includes(o));
+  const seleccion = validos.length > 0 ? validos : ESTATUS_POR_DEFECTO;
+  const codigos =
+    seleccion.length === ESTATUS_BOOKING.length
+      ? null
+      : ESTATUS_BOOKING.filter((e) => seleccion.includes(e.label)).map((e) => e.codigo);
+  return { seleccion, codigos, enUrl: validos };
 }
 
 // Fila de un booking finalizado (verde) o cancelado (atenuada).

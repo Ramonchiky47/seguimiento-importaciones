@@ -1,11 +1,11 @@
 import Link from "next/link";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
-import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
 import {
   DIAS_REZAGO,
   EJECUTIVO_TODOS,
-  ESTATUS_DEFAULT,
+  ESTATUS_OPCIONES,
   ETIQUETA_TARJETA,
   TONO_TARJETA,
   VALOR_TARJETA,
@@ -53,7 +53,7 @@ type Resumen = {
 export default async function TableroPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; ejecutivo?: string | string[]; estatus?: string }>;
+  searchParams: Promise<{ periodo?: string; ejecutivo?: string | string[]; estatus?: string | string[] }>;
 }) {
   const { periodo, ejecutivo, estatus } = await searchParams;
   const periodoActivo = PERIODOS.some((p) => p.key === periodo) ? (periodo as string) : "30";
@@ -86,7 +86,7 @@ export default async function TableroPage({
     const params = new URLSearchParams();
     if (key !== "30") params.set("periodo", key);
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
-    if (estatusSel.key !== ESTATUS_DEFAULT) params.set("estatus", estatusSel.key);
+    for (const v of estatusSel.enUrl) params.append("estatus", v);
     const q = params.toString();
     return q ? `?${q}` : "?";
   };
@@ -96,7 +96,7 @@ export default async function TableroPage({
     const [path, query] = ruta.split("?");
     const params = new URLSearchParams(query ?? "");
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
-    if (estatusSel.key !== ESTATUS_DEFAULT) params.set("estatus", estatusSel.key);
+    for (const v of estatusSel.enUrl) params.append("estatus", v);
     const s = params.toString();
     return s ? `${path}?${s}` : path;
   };
@@ -108,7 +108,7 @@ export default async function TableroPage({
 
   const kpis = r
     ? [
-        { label: estatusSel.key === "vigente" ? "Embarques vigentes" : "Embarques", valor: r.activos, nota: "Últimos 180 días, sin regreso de vacío", tono: TONO_TARJETA.neutro, href: conEjecutivo("/track/embarques") },
+        { label: "Embarques", valor: r.activos, nota: "Últimos 180 días, sin regreso de vacío", tono: TONO_TARJETA.neutro, href: conEjecutivo("/track/embarques") },
         { label: "Hitos a tiempo", valor: pctGeneral === null ? "—" : `${pctGeneral} %`, nota: `Meta ${META_A_TIEMPO} % · compromisos del periodo`, tono: pctGeneral !== null && pctGeneral >= META_A_TIEMPO ? TONO_TARJETA.azul : TONO_TARJETA.ambar, href: null },
         { label: `Atrasados (≤ ${DIAS_REZAGO} d)`, valor: r.atrasados, nota: "Hitos sin marcar", tono: TONO_TARJETA.rojo, href: conEjecutivo("/track/mi-dia?nivel=atrasado") },
         { label: "En demora", valor: r.en_demora, nota: `${r.dias_demora.toLocaleString("es-MX")} días de demora acumulados`, tono: TONO_TARJETA.rojo, href: conEjecutivo("/track/embarques?etapa=En%20demora") },
@@ -137,13 +137,13 @@ export default async function TableroPage({
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-3">
-        <EstatusBookingFilter current={estatusSel.key} />
+        <MultiSelectFilter paramName="estatus" label="Estatus" options={ESTATUS_OPCIONES} current={estatusSel.seleccion} />
         <TrackEjecutivoFilter
           options={availableEjecutivos}
           filtro={ejecutivoRaw}
           hrefTodos={`?${new URLSearchParams([
             ...(periodoActivo !== "30" ? [["periodo", periodoActivo]] : []),
-            ...(estatusSel.key !== ESTATUS_DEFAULT ? [["estatus", estatusSel.key]] : []),
+            ...estatusSel.enUrl.map((v) => ["estatus", v]),
             ["ejecutivo", EJECUTIVO_TODOS],
           ]).toString()}`}
         />
@@ -256,7 +256,7 @@ export default async function TableroPage({
                           <span className="text-slate-500">Sin ejecutivo</span>
                         ) : (
                           <Link
-                            href={`/track/mi-dia?ejecutivo=${encodeURIComponent(e.ejecutivo)}${estatusSel.key !== ESTATUS_DEFAULT ? `&estatus=${estatusSel.key}` : ""}`}
+                            href={`/track/mi-dia?ejecutivo=${encodeURIComponent(e.ejecutivo)}${estatusSel.enUrl.map((v) => `&estatus=${encodeURIComponent(v)}`).join("")}`}
                             className="font-medium text-blue-700 hover:underline dark:text-blue-400"
                           >
                             {e.ejecutivo}
