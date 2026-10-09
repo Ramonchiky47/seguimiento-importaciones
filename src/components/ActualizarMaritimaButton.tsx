@@ -16,8 +16,8 @@ export function ActualizarMaritimaButton({
         const r = await onActualizar();
         alert(
           r.completo
-            ? `Listo: se actualizaron las ${r.actualizadas} operaciones.`
-            : `Listo: se actualizaron las ${r.actualizadas} operaciones más recientes de ${r.total}. ` +
+            ? `Listo: se actualizaron las ${r.actualizadas} operaciones de 2026 en adelante.`
+            : `Listo: se actualizaron ${r.actualizadas} operaciones; no alcanzó el tiempo para todo 2026. ` +
                 "El resto se actualiza en la carga programada (2:00 PM y 7:00 PM).",
         );
       } catch (err) {
@@ -31,7 +31,7 @@ export function ActualizarMaritimaButton({
       type="button"
       disabled={pending}
       onClick={handleClick}
-      title="Descarga de Cargolink las operaciones más recientes (tarda hasta 4 minutos)"
+      title="Descarga de Cargolink todas las operaciones de 2026 en adelante (tarda unos 2 minutos)"
       className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
     >
       <svg

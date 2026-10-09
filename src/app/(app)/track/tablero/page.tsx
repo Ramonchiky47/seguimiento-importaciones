@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
+import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
 import {
   DIAS_REZAGO,
   EJECUTIVO_TODOS,
+  ESTATUS_DEFAULT,
   ETIQUETA_TARJETA,
   TONO_TARJETA,
   VALOR_TARJETA,
   claseTarjeta,
   ejecutivosTrack,
+  estatusBooking,
 } from "@/lib/track";
 
 export const dynamic = "force-dynamic";
@@ -50,17 +53,19 @@ type Resumen = {
 export default async function TableroPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; ejecutivo?: string | string[] }>;
+  searchParams: Promise<{ periodo?: string; ejecutivo?: string | string[]; estatus?: string }>;
 }) {
-  const { periodo, ejecutivo } = await searchParams;
+  const { periodo, ejecutivo, estatus } = await searchParams;
   const periodoActivo = PERIODOS.some((p) => p.key === periodo) ? (periodo as string) : "30";
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
+  const estatusSel = estatusBooking(estatus);
 
   const supabase = await createClient();
   const [{ data, error }, { data: ejecutivosData }] = await Promise.all([
-    supabase.rpc("track_resumen", {
+    supabase.rpc("track_resumen_estatus", {
       p_dias: Number(periodoActivo),
       p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
+      p_estatus: estatusSel.codigos,
     }),
     supabase.rpc("operaciones_maritima_ejecutivos", {
       p_anio: null,
@@ -79,6 +84,7 @@ export default async function TableroPage({
     const params = new URLSearchParams();
     if (key !== "30") params.set("periodo", key);
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
+    if (estatusSel.key !== ESTATUS_DEFAULT) params.set("estatus", estatusSel.key);
     const q = params.toString();
     return q ? `?${q}` : "?";
   };
@@ -88,6 +94,7 @@ export default async function TableroPage({
     const [path, query] = ruta.split("?");
     const params = new URLSearchParams(query ?? "");
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
+    if (estatusSel.key !== ESTATUS_DEFAULT) params.set("estatus", estatusSel.key);
     const s = params.toString();
     return s ? `${path}?${s}` : path;
   };
@@ -99,7 +106,7 @@ export default async function TableroPage({
 
   const kpis = r
     ? [
-        { label: "Embarques activos", valor: r.activos, nota: "Últimos 180 días, sin regreso de vacío", tono: TONO_TARJETA.neutro, href: conEjecutivo("/track/embarques") },
+        { label: estatusSel.key === "vigente" ? "Embarques vigentes" : "Embarques", valor: r.activos, nota: "Últimos 180 días, sin regreso de vacío", tono: TONO_TARJETA.neutro, href: conEjecutivo("/track/embarques") },
         { label: "Hitos a tiempo", valor: pctGeneral === null ? "—" : `${pctGeneral} %`, nota: `Meta ${META_A_TIEMPO} % · compromisos del periodo`, tono: pctGeneral !== null && pctGeneral >= META_A_TIEMPO ? TONO_TARJETA.azul : TONO_TARJETA.ambar, href: null },
         { label: `Atrasados (≤ ${DIAS_REZAGO} d)`, valor: r.atrasados, nota: "Hitos sin marcar", tono: TONO_TARJETA.rojo, href: conEjecutivo("/track/mi-dia?nivel=atrasado") },
         { label: "En demora", valor: r.en_demora, nota: `${r.dias_demora.toLocaleString("es-MX")} días de demora acumulados`, tono: TONO_TARJETA.rojo, href: conEjecutivo("/track/embarques?etapa=En%20demora") },
@@ -127,14 +134,18 @@ export default async function TableroPage({
             </Link>
           ))}
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+        <EstatusBookingFilter current={estatusSel.key} />
         <TrackEjecutivoFilter
           options={availableEjecutivos}
           filtro={ejecutivoRaw}
           hrefTodos={`?${new URLSearchParams([
             ...(periodoActivo !== "30" ? [["periodo", periodoActivo]] : []),
+            ...(estatusSel.key !== ESTATUS_DEFAULT ? [["estatus", estatusSel.key]] : []),
             ["ejecutivo", EJECUTIVO_TODOS],
           ]).toString()}`}
         />
+        </div>
       </div>
 
       {error && (
@@ -243,7 +254,7 @@ export default async function TableroPage({
                           <span className="text-slate-500">Sin ejecutivo</span>
                         ) : (
                           <Link
-                            href={`/track/mi-dia?ejecutivo=${encodeURIComponent(e.ejecutivo)}`}
+                            href={`/track/mi-dia?ejecutivo=${encodeURIComponent(e.ejecutivo)}${estatusSel.key !== ESTATUS_DEFAULT ? `&estatus=${estatusSel.key}` : ""}`}
                             className="font-medium text-blue-700 hover:underline dark:text-blue-400"
                           >
                             {e.ejecutivo}

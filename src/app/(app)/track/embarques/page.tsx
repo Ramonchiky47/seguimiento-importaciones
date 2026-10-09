@@ -1,8 +1,18 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
+import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
 import { ClickableRow } from "@/components/ClickableRow";
-import { EJECUTIVO_TODOS, ESTADOS, ejecutivosTrack, fechaCorta, type EstadoHito } from "@/lib/track";
+import {
+  EJECUTIVO_TODOS,
+  ESTADOS,
+  ESTATUS_DEFAULT,
+  claseFilaEstatus,
+  ejecutivosTrack,
+  estatusBooking,
+  fechaCorta,
+  type EstadoHito,
+} from "@/lib/track";
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +34,18 @@ type Embarque = {
   max_dias_atraso: number | null;
   siguiente_hito: string | null;
   siguiente_fecha: string | null;
+  status_booking: string | null;
 };
 
 export default async function EmbarquesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; etapa?: string; ejecutivo?: string | string[]; page?: string }>;
+  searchParams: Promise<{ q?: string; etapa?: string; ejecutivo?: string | string[]; estatus?: string; page?: string }>;
 }) {
-  const { q, etapa, ejecutivo, page } = await searchParams;
+  const { q, etapa, ejecutivo, estatus, page } = await searchParams;
   const etapaActiva = etapa && ETAPAS.includes(etapa) ? etapa : null;
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
+  const estatusSel = estatusBooking(estatus);
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
   const term = (q ?? "").replace(/[,()]/g, " ").trim();
@@ -42,7 +54,7 @@ export default async function EmbarquesPage({
   let query = supabase
     .from("track_embarques")
     .select(
-      "id_booking, no_booking, type, cliente, ejecutivo, eta, ata, dias_demora, etapa, pendientes, semaforo, max_dias_atraso, siguiente_hito, siguiente_fecha",
+      "id_booking, no_booking, type, cliente, ejecutivo, eta, ata, dias_demora, etapa, pendientes, semaforo, max_dias_atraso, siguiente_hito, siguiente_fecha, status_booking",
       { count: "exact" },
     );
   if (term) {
@@ -50,6 +62,7 @@ export default async function EmbarquesPage({
   }
   if (etapaActiva) query = query.eq("etapa", etapaActiva);
   if (ejecutivoRaw.length > 0) query = query.in("ejecutivo", ejecutivoRaw);
+  if (estatusSel.codigos) query = query.in("status_booking", estatusSel.codigos);
   // Los que llevan más días de atraso primero; luego por siguiente compromiso.
   query = query
     .order("max_dias_atraso", { ascending: false, nullsFirst: false })
@@ -73,6 +86,7 @@ export default async function EmbarquesPage({
     const et = cambios.etapa === undefined ? etapaActiva : cambios.etapa;
     if (et) params.set("etapa", et);
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
+    if (estatusSel.key !== ESTATUS_DEFAULT) params.set("estatus", estatusSel.key);
     if (cambios.page && cambios.page > 1) params.set("page", String(cambios.page));
     const s = params.toString();
     return s ? `?${s}` : "?";
@@ -87,6 +101,7 @@ export default async function EmbarquesPage({
       <div className="flex flex-wrap items-center gap-2">
         <form className="flex gap-2">
           {etapaActiva && <input type="hidden" name="etapa" value={etapaActiva} />}
+          {estatusSel.key !== ESTATUS_DEFAULT && <input type="hidden" name="estatus" value={estatusSel.key} />}
           {ejecutivoEnUrl.map((v) => (
             <input key={v} type="hidden" name="ejecutivo" value={v} />
           ))}
@@ -107,12 +122,14 @@ export default async function EmbarquesPage({
             Buscar
           </button>
         </form>
+        <EstatusBookingFilter current={estatusSel.key} />
         <TrackEjecutivoFilter
           options={availableEjecutivos}
           filtro={ejecutivoRaw}
           hrefTodos={`?${new URLSearchParams([
             ...(q ? [["q", q]] : []),
             ...(etapaActiva ? [["etapa", etapaActiva]] : []),
+            ...(estatusSel.key !== ESTATUS_DEFAULT ? [["estatus", estatusSel.key]] : []),
             ["ejecutivo", EJECUTIVO_TODOS],
           ]).toString()}`}
         />
@@ -159,7 +176,7 @@ export default async function EmbarquesPage({
             {filas.map((f) => {
               const s = ESTADOS[f.semaforo] ?? ESTADOS.en_tiempo;
               return (
-                <ClickableRow key={f.id_booking} href={`/track/embarques/${f.id_booking}`} className="hover:bg-blue-50 dark:hover:bg-slate-800">
+                <ClickableRow key={f.id_booking} href={`/track/embarques/${f.id_booking}`} className={`hover:bg-blue-50 dark:hover:bg-slate-800 ${claseFilaEstatus(f.status_booking)}`}>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-[13px] font-semibold text-slate-900 dark:text-slate-100">{f.no_booking}</td>
                   <td className="max-w-56 truncate px-3 py-2">{f.cliente ?? "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2">{f.ejecutivo ?? "—"}</td>
@@ -201,7 +218,7 @@ export default async function EmbarquesPage({
       {totalCount > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
           <p>
-            Mostrando {from + 1}–{Math.min(from + PAGE_SIZE, totalCount)} de {totalCount} embarques activos
+            Mostrando {from + 1}–{Math.min(from + PAGE_SIZE, totalCount)} de {totalCount} embarques
           </p>
           <div className="flex items-center gap-1">
             <Link href={href({ page: currentPage - 1 })} aria-disabled={currentPage === 1} className={pagerClass(currentPage === 1)}>

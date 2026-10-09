@@ -1,15 +1,19 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
+import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
 import {
   DIAS_REZAGO,
   EJECUTIVO_TODOS,
   ESTADOS,
+  ESTATUS_DEFAULT,
   ETIQUETA_TARJETA,
   TONO_TARJETA,
   VALOR_TARJETA,
+  claseFilaEstatus,
   claseTarjeta,
   ejecutivosTrack,
+  estatusBooking,
   fechaCorta,
   type EstadoHito,
 } from "@/lib/track";
@@ -43,16 +47,18 @@ type Hito = {
   fecha_plan: string | null;
   estado: EstadoHito;
   dias_atraso: number | null;
+  status_booking: string | null;
 };
 
 export default async function MiDiaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ nivel?: string; ejecutivo?: string | string[]; page?: string }>;
+  searchParams: Promise<{ nivel?: string; ejecutivo?: string | string[]; estatus?: string; page?: string }>;
 }) {
-  const { nivel, ejecutivo, page } = await searchParams;
+  const { nivel, ejecutivo, estatus, page } = await searchParams;
   const nivelActivo: Nivel = nivel && NIVEL_KEYS.has(nivel) ? (nivel as Nivel) : "pendientes";
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
+  const estatusSel = estatusBooking(estatus);
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
 
@@ -61,6 +67,7 @@ export default async function MiDiaPage({
   const consulta = (columnas: string, opciones: { count: "exact"; head?: boolean }, n: Nivel) => {
     let qb = supabase.from("track_hitos").select(columnas, opciones);
     if (ejecutivoRaw.length > 0) qb = qb.in("ejecutivo", ejecutivoRaw);
+    if (estatusSel.codigos) qb = qb.in("status_booking", estatusSel.codigos);
     if (n === "pendientes") {
       qb = qb.or(`estado.in.(hoy,pronto,falta_dato),and(estado.eq.atrasado,dias_atraso.lte.${DIAS_REZAGO})`);
     } else if (n === "atrasado") {
@@ -74,7 +81,7 @@ export default async function MiDiaPage({
   };
 
   let lista = consulta(
-    "id_booking, no_booking, cliente, ejecutivo, eta, orden, hito, regla, fecha_plan, estado, dias_atraso",
+    "id_booking, no_booking, cliente, ejecutivo, eta, orden, hito, regla, fecha_plan, estado, dias_atraso, status_booking",
     { count: "exact" },
     nivelActivo,
   );
@@ -111,6 +118,7 @@ export default async function MiDiaPage({
     const n = cambios.nivel ?? nivelActivo;
     if (n !== "pendientes") params.set("nivel", n);
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
+    if (estatusSel.key !== ESTATUS_DEFAULT) params.set("estatus", estatusSel.key);
     if (cambios.page && cambios.page > 1) params.set("page", String(cambios.page));
     const q = params.toString();
     return q ? `?${q}` : "?";
@@ -118,7 +126,8 @@ export default async function MiDiaPage({
 
   const hrefTodos = `?${new URLSearchParams([
     ...(nivelActivo !== "pendientes" ? [["nivel", nivelActivo]] : []),
-    ["ejecutivo", EJECUTIVO_TODOS],
+    ...(estatusSel.key !== ESTATUS_DEFAULT ? [["estatus", estatusSel.key]] : []),
+            ["ejecutivo", EJECUTIVO_TODOS],
   ]).toString()}`;
 
   const tituloLista = NIVELES.find((n) => n.key === nivelActivo)?.label ?? "Pendientes";
@@ -133,7 +142,10 @@ export default async function MiDiaPage({
         <p className="text-sm text-slate-600 dark:text-slate-400">
           Solo lo que requiere acción. Un hito sale de la lista cuando se marca en Cargolink.
         </p>
-        <TrackEjecutivoFilter options={availableEjecutivos} filtro={ejecutivoRaw} hrefTodos={hrefTodos} />
+        <div className="flex flex-wrap items-center gap-3">
+          <EstatusBookingFilter current={estatusSel.key} />
+          <TrackEjecutivoFilter options={availableEjecutivos} filtro={ejecutivoRaw} hrefTodos={hrefTodos} />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
@@ -165,7 +177,7 @@ export default async function MiDiaPage({
             return (
               <li
                 key={`${f.id_booking}-${f.orden}`}
-                className="grid grid-cols-[6px_minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,1fr)] items-center gap-4 py-3 pr-4 text-sm sm:grid-cols-[6px_minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.8fr)]"
+                className={`${claseFilaEstatus(f.status_booking)} grid grid-cols-[6px_minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,1fr)] items-center gap-4 py-3 pr-4 text-sm sm:grid-cols-[6px_minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.8fr)]`}
               >
                 <span className={`self-stretch ${e.barra}`} aria-hidden="true" />
                 <div className="min-w-0">

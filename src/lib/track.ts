@@ -76,3 +76,26 @@ export function ejecutivosTrack(param: string | string[] | undefined): {
   if (raw.includes(EJECUTIVO_TODOS)) return { filtro: [], enUrl: [EJECUTIVO_TODOS] };
   return { filtro: raw, enUrl: raw };
 }
+
+// Estatus del booking en Cargolink (status_booking): 1 = Vigente (abierto),
+// 2 = Finalizado, 0 = Cancelado. Sin parámetro en la URL se muestran los
+// vigentes.
+export const ESTATUS_BOOKING = [
+  { key: "vigente", label: "Vigente", codigos: ["1"] },
+  { key: "finalizado", label: "Finalizado", codigos: ["2"] },
+  { key: "cancelado", label: "Cancelado", codigos: ["0"] },
+  { key: "todos", label: "Todos", codigos: null },
+] as const;
+export const ESTATUS_DEFAULT = "vigente";
+
+export function estatusBooking(param: string | undefined): { key: string; codigos: string[] | null } {
+  const e = ESTATUS_BOOKING.find((x) => x.key === param) ?? ESTATUS_BOOKING[0];
+  return { key: e.key, codigos: e.codigos ? [...e.codigos] : null };
+}
+
+// Fila de un booking finalizado (verde) o cancelado (atenuada).
+export function claseFilaEstatus(statusBooking: unknown): string {
+  if (String(statusBooking) === "2") return "bg-green-100 dark:bg-green-950/50";
+  if (String(statusBooking) === "0") return "bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-500";
+  return "";
+}

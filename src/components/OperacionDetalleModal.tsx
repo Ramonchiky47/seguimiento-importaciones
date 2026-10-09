@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ESTADOS, fechaCorta, type EstadoHito } from "@/lib/track";
+import { ETAPAS_CARGOLINK, ETAPA_POR_HITO, type AccionEtapa, type EtapaCargolink } from "@/lib/etapasCargolink";
+import { guardarEtapaCargolink } from "@/app/(app)/operaciones-maritima/actions";
 
 // Ventana emergente con todos los indicadores de una operación marítima.
 // Se abre desde FilaOperacion (evento "abrir-operacion" con el id_booking)
@@ -86,12 +88,14 @@ function texto(v: unknown): string {
   return v === null || v === undefined || v === "" ? "—" : String(v);
 }
 
-export function OperacionDetalleModal() {
+export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean }) {
   const [idBooking, setIdBooking] = useState<number | null>(null);
   const [op, setOp] = useState<Operacion | null>(null);
   const [hitos, setHitos] = useState<Hito[]>([]);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editando, setEditando] = useState<number | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const cerrar = useCallback(() => {
@@ -99,17 +103,9 @@ export function OperacionDetalleModal() {
     setIdBooking(null);
   }, []);
 
-  useEffect(() => {
-    const abrir = (e: Event) => {
-      const id = (e as CustomEvent<number>).detail;
-      setIdBooking(id);
-      setOp(null);
-      setHitos([]);
-      setError(null);
-      setCargando(true);
-      dialogRef.current?.showModal();
+  const cargar = useCallback((id: number) => {
       const supabase = createClient();
-      Promise.all([
+      return Promise.all([
         supabase.from("operaciones_maritima_vista").select("*").eq("id_booking", id).maybeSingle(),
         supabase
           .from("track_hitos")
@@ -122,10 +118,24 @@ export function OperacionDetalleModal() {
         setHitos((hitosRes.data ?? []) as Hito[]);
         setCargando(false);
       });
+  }, []);
+
+  useEffect(() => {
+    const abrir = (e: Event) => {
+      const id = (e as CustomEvent<number>).detail;
+      setIdBooking(id);
+      setOp(null);
+      setHitos([]);
+      setError(null);
+      setEditando(null);
+      setAviso(null);
+      setCargando(true);
+      dialogRef.current?.showModal();
+      cargar(id);
     };
     window.addEventListener(EVENTO_ABRIR_OPERACION, abrir);
     return () => window.removeEventListener(EVENTO_ABRIR_OPERACION, abrir);
-  }, []);
+  }, [cargar]);
 
   const datos = (op?.datos ?? {}) as Record<string, string>;
   const diasDemora = op?.dias_demora as number | null | undefined;
@@ -234,6 +244,11 @@ export function OperacionDetalleModal() {
                   <h3 className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 dark:border-slate-800 dark:text-slate-50">
                     Hitos de seguimiento (Track)
                   </h3>
+                  {aviso && (
+                    <p role="status" className="border-b border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-300">
+                      {aviso}
+                    </p>
+                  )}
                   {hitos.length === 0 ? (
                     <p className="px-4 py-4 text-sm text-slate-500 dark:text-slate-400">
                       Fuera de seguimiento activo: creada hace más de 180 días o con el vacío ya devuelto.
@@ -246,14 +261,20 @@ export function OperacionDetalleModal() {
                             <th scope="col" className="px-4 py-2 font-semibold">Hito</th>
                             <th scope="col" className="px-3 py-2 font-semibold">Compromiso</th>
                             <th scope="col" className="px-3 py-2 font-semibold">Real</th>
-                            <th scope="col" className="px-4 py-2 font-semibold">Estado</th>
+                            <th scope="col" className="px-3 py-2 font-semibold">Estado</th>
+                            <th scope="col" className="px-4 py-2 font-semibold">Etapa en Cargolink</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                           {hitos.map((h) => {
                             const e = ESTADOS[h.estado] ?? ESTADOS.en_tiempo;
+                            const etapa = ETAPAS_CARGOLINK[ETAPA_POR_HITO[h.orden]];
+                            const movEtapa = etapa ? datos[etapa.mov] : undefined;
+                            const editable = puedeEditar && Boolean(etapa) && movEtapa !== "FINALIZADO" && movEtapa !== "NO_APLICA";
+                            const estEtapa = movEtapa ? ESTATUS_ETAPA[movEtapa] : undefined;
                             return (
-                              <tr key={h.orden} className={h.estado === "no_aplica" ? "opacity-50" : ""}>
+                              <Fragment key={h.orden}>
+                              <tr className={h.estado === "no_aplica" ? "opacity-50" : ""}>
                                 <td className="px-4 py-2">
                                   <span className="font-semibold text-slate-900 dark:text-slate-100">{h.hito}</span>
                                   <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">{h.regla}</span>
@@ -262,13 +283,50 @@ export function OperacionDetalleModal() {
                                 <td className="whitespace-nowrap px-3 py-2 tabular-nums">
                                   {h.valor_real ?? (h.hecho ? fechaCorta(h.fecha_hecho) : "—")}
                                 </td>
-                                <td className="whitespace-nowrap px-4 py-2">
+                                <td className="whitespace-nowrap px-3 py-2">
                                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.pill}`}>
                                     {e.label}
                                     {h.dias_atraso ? ` · ${h.dias_atraso} d` : ""}
                                   </span>
                                 </td>
+                                <td className="whitespace-nowrap px-4 py-2">
+                                  <span className="flex items-center gap-2">
+                                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${estEtapa?.clase ?? "text-slate-500 ring-1 ring-slate-200 dark:ring-slate-700"}`}>
+                                      {estEtapa?.label ?? "Sin comenzar"}
+                                    </span>
+                                    {editable && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setAviso(null);
+                                          setEditando(editando === h.orden ? null : h.orden);
+                                        }}
+                                        aria-expanded={editando === h.orden}
+                                        className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                                      >
+                                        {editando === h.orden ? "Cerrar" : "Editar"}
+                                      </button>
+                                    )}
+                                  </span>
+                                </td>
                               </tr>
+                              {editando === h.orden && etapa && op && (
+                                <tr>
+                                  <td colSpan={5} className="bg-slate-50 px-4 py-3 dark:bg-slate-800/50">
+                                    <EditorEtapa
+                                      etapa={etapa}
+                                      op={op}
+                                      idBooking={idBooking}
+                                      onGuardado={(mensaje) => {
+                                        setEditando(null);
+                                        setAviso(mensaje);
+                                        cargar(idBooking);
+                                      }}
+                                    />
+                                  </td>
+                                </tr>
+                              )}
+                              </Fragment>
                             );
                           })}
                         </tbody>
@@ -355,5 +413,101 @@ export function FilaOperacion({
     >
       {children}
     </tr>
+  );
+}
+
+// Formulario de una etapa: mismos campos y botones que su pantalla en
+// Cargolink. Finalizar y "No aplica" piden confirmación porque en Cargolink
+// ya no se pueden deshacer.
+function EditorEtapa({
+  etapa,
+  op,
+  idBooking,
+  onGuardado,
+}: {
+  etapa: EtapaCargolink;
+  op: Operacion;
+  idBooking: number;
+  onGuardado: (mensaje: string) => void;
+}) {
+  const datos = (op.datos ?? {}) as Record<string, string>;
+  const inicial = Object.fromEntries(
+    etapa.campos.map((c) => {
+      const v = c.actual.startsWith("datos.") ? datos[c.actual.slice(6)] : op[c.actual];
+      const s = v === null || v === undefined ? "" : String(v);
+      return [c.key, c.tipo === "date" ? (s.startsWith("0000") ? "" : s.slice(0, 10)) : s];
+    }),
+  );
+  const [valores, setValores] = useState<Record<string, string>>(inicial);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const ejecutar = (accion: AccionEtapa) => {
+    if (accion.resultado !== "EDICION") {
+      const texto =
+        accion.resultado === "NO_APLICA"
+          ? `¿Marcar "${etapa.label}" como No aplica en Cargolink? Ya no se podrá editar.`
+          : `¿Finalizar "${etapa.label}" en Cargolink? Ya no se podrá editar. No se notificará al cliente.`;
+      if (!window.confirm(texto)) return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const r = await guardarEtapaCargolink(idBooking, etapa.key, accion.status, valores);
+      if (r.ok) onGuardado(r.mensaje);
+      else setError(r.mensaje);
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+        {etapa.label} <span className="font-normal text-slate-500 dark:text-slate-400">· se guarda en Cargolink sin notificar al cliente</span>
+      </p>
+      {etapa.campos.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {etapa.campos.map((c) => (
+            <label key={c.key} className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
+              <span>
+                {c.label}
+                {c.requerido && <span className="text-red-600"> *</span>}
+              </span>
+              <input
+                type={c.tipo}
+                min={c.tipo === "number" ? 0 : undefined}
+                max={c.tipo === "number" ? 365 : undefined}
+                value={valores[c.key] ?? ""}
+                onChange={(e) => setValores((v) => ({ ...v, [c.key]: e.target.value }))}
+                className="min-h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </label>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {etapa.acciones.map((a) => (
+          <button
+            key={a.status}
+            type="button"
+            disabled={pending}
+            onClick={() => ejecutar(a)}
+            className={`min-h-10 rounded-md px-4 text-sm font-semibold disabled:opacity-50 ${
+              a.resultado === "FINALIZADO"
+                ? "bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900"
+                : a.resultado === "NO_APLICA"
+                  ? "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
+                  : "border border-slate-900 bg-white text-slate-900 hover:bg-slate-50 dark:border-slate-300 dark:bg-slate-900 dark:text-slate-100"
+            }`}
+          >
+            {a.label}
+          </button>
+        ))}
+        {pending && <span className="self-center text-sm text-slate-500">Guardando en Cargolink…</span>}
+      </div>
+      {error && (
+        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

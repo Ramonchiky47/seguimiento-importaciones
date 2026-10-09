@@ -103,8 +103,12 @@ async function consultarPaginaMaritima(
 // tiempo: la lista completa (~9,000) tarda ~10 min, más que el límite de una
 // función en Vercel, así que el botón solo refresca la parte reciente y la
 // carga programada en la Mac se encarga del resto.
+// Con `desde` (YYYY-MM-DD) se detiene al llegar a operaciones anteriores a esa
+// fecha (la lista viene de la más reciente a la más antigua) y "completo"
+// significa que se cubrió todo el periodo.
 export async function descargarOperacionesRecientes(
   presupuestoMs: number,
+  desde?: string,
 ): Promise<{ registros: CargolinkBooking[]; total: number; completo: boolean }> {
   const inicio = Date.now();
   const session = await loginCargolink();
@@ -120,8 +124,58 @@ export async function descargarOperacionesRecientes(
     }
     total = respuesta.total || total;
     if (respuesta.valores.length === 0) break;
-    registros.push(...respuesta.valores);
+    if (desde) {
+      // El orden no es estrictamente por fecha: se para hasta una página
+      // completa anterior a `desde`, no en el primer registro viejo.
+      const delPeriodo = respuesta.valores.filter((b) => String(b.fecha ?? "") >= desde);
+      registros.push(...delPeriodo);
+      if (delPeriodo.length === 0) {
+        return { registros, total: registros.length, completo: true };
+      }
+    } else {
+      registros.push(...respuesta.valores);
+    }
   }
 
   return { registros, total, completo: total > 0 && registros.length >= total };
+}
+
+// Lee un booking de Servicios marítimos tal como lo carga la pantalla de
+// Cargolink (el objeto completo que esa pantalla manda al guardar una etapa).
+export async function leerBookingMaritimo(
+  session: CargolinkSession,
+  noBooking: string,
+): Promise<CargolinkBooking | null> {
+  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api&fn=consultaBookingConcentrado&limit=0`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: session.cookie },
+    body: JSON.stringify({ archivadoOperaciones: "0", no_booking: noBooking }),
+  });
+  if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status} al leer el booking.`);
+  const data = await res.json();
+  const valores = (data?.valores ?? []) as CargolinkBooking[];
+  return valores.find((b) => b.no_booking === noBooking) ?? null;
+}
+
+// Guarda una etapa en Cargolink con el mismo web service que su pantalla.
+export async function guardarEtapaEnCargolink(
+  session: CargolinkSession,
+  fn: string,
+  status: string,
+  booking: CargolinkBooking,
+): Promise<Record<string, unknown>> {
+  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api&fn=${fn}&status=${encodeURIComponent(status)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: session.cookie },
+    body: JSON.stringify(booking),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status}.`);
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { raw: text.slice(0, 300) };
+  }
 }

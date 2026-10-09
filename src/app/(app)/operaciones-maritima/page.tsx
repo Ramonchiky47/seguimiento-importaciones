@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { FilaOperacion, OperacionDetalleModal } from "@/components/OperacionDetalleModal";
 import { YearFilter } from "@/components/YearFilter";
+import { EstatusBookingFilter } from "@/components/EstatusBookingFilter";
+import { ESTATUS_DEFAULT, claseFilaEstatus, estatusBooking } from "@/lib/track";
 import { ActualizarMaritimaButton } from "@/components/ActualizarMaritimaButton";
 import { getMyPermissions } from "@/lib/permissions";
 import { actualizarOperacionesMaritima } from "./actions";
@@ -42,6 +44,9 @@ const COLUMNS = [
 const SORTABLE_FIELDS = new Set<string>(COLUMNS.map((c) => c.field));
 const TYPE_OPTIONS = ["FCLI", "LCLI", "FCL", "LCL"];
 const PAGE_SIZE = 100;
+// PILOTO de edición en Cargolink: solo administradores (ver
+// guardarEtapaCargolink en actions.ts, que lo valida en el servidor).
+const EDICION_SOLO_ADMIN = true;
 
 // Tarjetas de la parte superior: cada una (salvo "Total") es un filtro que
 // se activa al presionarla y se quita al presionarla de nuevo.
@@ -111,11 +116,13 @@ export default async function OperacionesMaritimaPage({
     type?: string | string[];
     ejecutivo?: string | string[];
     anio?: string;
+    estatus?: string;
     tarjeta?: string;
     page?: string;
   }>;
 }) {
-  const { q, sort, dir, type, ejecutivo, anio, tarjeta, page } = await searchParams;
+  const { q, sort, dir, type, ejecutivo, anio, estatus, tarjeta, page } = await searchParams;
+  const estatusSel = estatusBooking(estatus);
   const supabase = await createClient();
   const myPermissions = await getMyPermissions();
 
@@ -167,6 +174,7 @@ export default async function OperacionesMaritimaPage({
     }
     if (typeRaw.length > 0) qb = qb.in("type", typeRaw);
     if (ejecutivoRaw.length > 0) qb = qb.in("ejecutivo", ejecutivoRaw);
+    if (estatusSel.codigos) qb = qb.in("status_booking", estatusSel.codigos);
     if (anioFiltro) {
       qb = qb.gte("fecha", `${anioSeleccionado}-01-01`).lte("fecha", `${anioSeleccionado}-12-31`);
     }
@@ -185,7 +193,7 @@ export default async function OperacionesMaritimaPage({
   };
 
   const [{ data, error, count }, ...conteos] = await Promise.all([
-    consulta(`id_booking, sincronizado_at, ${COLUMNS.map((c) => c.field).join(", ")}`, { count: "exact" }, tarjetaActiva)
+    consulta(`id_booking, sincronizado_at, status_booking, ${COLUMNS.map((c) => c.field).join(", ")}`, { count: "exact" }, tarjetaActiva)
       .order(sortField, { ascending: sortAscending, nullsFirst: false })
       .order("id_booking", { ascending: false })
       .range(from, to),
@@ -196,12 +204,13 @@ export default async function OperacionesMaritimaPage({
 
   // Solo ejecutivos con bookings bajo los demás filtros activos; los ya
   // seleccionados se conservan para poder quitarlos.
-  const { data: ejecutivosData } = await supabase.rpc("operaciones_maritima_ejecutivos", {
+  const { data: ejecutivosData } = await supabase.rpc("operaciones_maritima_ejecutivos_estatus", {
     p_anio: anioFiltro,
     p_types: typeRaw.length > 0 ? typeRaw : null,
     p_q: term || null,
     p_tarjeta: tarjetaActiva,
     p_hoy: hoy,
+    p_estatus: estatusSel.codigos,
   });
   const availableEjecutivos = Array.from(
     new Set([
@@ -244,6 +253,7 @@ export default async function OperacionesMaritimaPage({
     for (const v of typeRaw) params.append("type", v);
     for (const v of ejecutivoRaw) params.append("ejecutivo", v);
     if (anio) params.set("anio", anio);
+    if (estatusSel.key !== ESTATUS_DEFAULT) params.set("estatus", estatusSel.key);
     if (tarjetaActiva) params.set("tarjeta", tarjetaActiva);
     return params;
   };
@@ -284,7 +294,7 @@ export default async function OperacionesMaritimaPage({
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <OperacionDetalleModal />
+      <OperacionDetalleModal puedeEditar={EDICION_SOLO_ADMIN ? myPermissions.es_admin : true} />
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
@@ -319,6 +329,7 @@ export default async function OperacionesMaritimaPage({
               <input key={v} type="hidden" name="ejecutivo" value={v} />
             ))}
             {anio && <input type="hidden" name="anio" value={anio} />}
+            {estatusSel.key !== ESTATUS_DEFAULT && <input type="hidden" name="estatus" value={estatusSel.key} />}
             {tarjetaActiva && <input type="hidden" name="tarjeta" value={tarjetaActiva} />}
             <input
               name="q"
@@ -341,6 +352,7 @@ export default async function OperacionesMaritimaPage({
             current={ejecutivoRaw}
           />
           <YearFilter years={availableYears} currentYear={anioActual} />
+          <EstatusBookingFilter current={estatusSel.key} />
           {myPermissions.es_admin && (
             <div className="ml-auto">
               <ActualizarMaritimaButton onActualizar={actualizarOperacionesMaritima} />
@@ -401,7 +413,10 @@ export default async function OperacionesMaritimaPage({
                 <FilaOperacion
                   key={row.id_booking}
                   idBooking={row.id_booking as number}
-                  className="group odd:bg-white even:bg-slate-50/70 hover:bg-blue-50 dark:odd:bg-slate-900 dark:even:bg-slate-900/60 dark:hover:bg-slate-800"
+                  className={`group hover:bg-blue-50 dark:hover:bg-slate-800 ${
+                    claseFilaEstatus(row.status_booking) ||
+                    "odd:bg-white even:bg-slate-50/70 dark:odd:bg-slate-900 dark:even:bg-slate-900/60"
+                  }`}
                 >
                   {COLUMNS.map(({ field }) => (
                     <td
