@@ -34,6 +34,9 @@ const GUARDAR: AccionEtapa = { status: "EDICION", label: "Guardar", resultado: "
 const FINALIZAR: AccionEtapa = { status: "FINALIZADO", label: "Guardar y finalizar", resultado: "FINALIZADO" };
 const NO_APLICA: AccionEtapa = { status: "NO_APLICA", label: "No aplica", resultado: "NO_APLICA" };
 const FINALIZAR_AVISO: AccionEtapa = { status: "NO", label: "Finalizar (sin notificar)", resultado: "FINALIZADO" };
+// En los avisos Cargolink no guarda NO_APLICA: "No aplica" deja la etapa
+// FINALIZADO (confirmado el 2026-10-09 con 2609-4329-FCLI).
+const NO_APLICA_AVISO: AccionEtapa = { status: "NO_APLICA", label: "No aplica", resultado: "FINALIZADO" };
 
 export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
   atd: {
@@ -59,7 +62,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     desdeEtapa: "TRANSITO_AVISO",
     mov: "his_mov_alertFech",
     campos: [],
-    acciones: [GUARDAR, FINALIZAR_AVISO, NO_APLICA],
+    acciones: [GUARDAR, FINALIZAR_AVISO, NO_APLICA_AVISO],
   },
   hbl: {
     key: "hbl",
@@ -109,7 +112,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     desdeEtapa: "AVISO_ATA",
     mov: "his_mov_alertAta",
     campos: [],
-    acciones: [GUARDAR, FINALIZAR_AVISO, NO_APLICA],
+    acciones: [GUARDAR, FINALIZAR_AVISO, NO_APLICA_AVISO],
   },
   vacio: {
     key: "vacio",
