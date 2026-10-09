@@ -130,7 +130,7 @@ const DETALLE_ETAPA: Record<string, { campos: [string, string][]; editar?: strin
       ["Fecha de pago", "fecha_pago"],
     ],
   },
-  rev: { campos: [["Fecha de revalidación", "fecha_revalidacion"], ["Pre-proforma", "fecha_pre_pro"]], editar: "rev" },
+  rev: { campos: [["Fecha de revalidación", "fecha_revalidacion"]], editar: "rev" },
   ata: { campos: [["Fecha de arribo efectivo (ATA)", "fecha_ata"], ["Días libres de demora", "dias_demora"]], editar: "ata" },
   alertAta: {
     campos: [["Arribo efectivo (ATA)", "fecha_ata"], ["Días libres de demora", "dias_demora"], ["Instrucciones de revalidación", "inst_revalidacion"]],

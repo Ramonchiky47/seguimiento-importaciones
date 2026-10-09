@@ -206,8 +206,8 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     desdeEtapa: "REVALIDACION",
     mov: "his_mov_rev",
     campos: [
+      // Sin pre-proforma (decisión del usuario): se manda la que ya tenga el booking.
       { key: "fecha_revalidacion", label: "Fecha de revalidación", tipo: "date", requerido: true, actual: "revalidacion" },
-      { key: "fecha_pre_pro", label: "Pre-proforma", tipo: "date", requerido: true, actual: "datos.fecha_pre_pro" },
     ],
     acciones: [GUARDAR, FINALIZAR, NO_APLICA],
   },
