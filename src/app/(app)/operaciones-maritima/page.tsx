@@ -48,6 +48,7 @@ const TARJETAS = [
   { key: "sin_eta", label: "Sin ETA capturada" },
   { key: "sin_ejecutivo", label: "Sin ejecutivo asignado" },
   { key: "aviso_arribo", label: "Aviso de arribo (ETA en ≤ 7 días)" },
+  { key: "por_vencer", label: "Por vencer demoras (1 a 4 días)" },
   { key: "demora", label: "Con días de demora" },
 ] as const;
 type TarjetaKey = (typeof TARJETAS)[number]["key"];
@@ -88,10 +89,15 @@ export default async function OperacionesMaritimaPage({
   const tarjetaActiva: TarjetaKey | null =
     tarjeta && TARJETA_KEYS.has(tarjeta) ? (tarjeta as TarjetaKey) : null;
 
-  // "Con días de demora" se ordena de mayor a menor demora, salvo que el
-  // usuario elija otra columna.
+  // "Con días de demora" y "Por vencer demoras" se ordenan por días de demora
+  // de mayor a menor (la más vencida / la más próxima a vencer primero),
+  // salvo que el usuario elija otra columna.
   const sortField =
-    sort && SORTABLE_FIELDS.has(sort) ? sort : tarjetaActiva === "demora" ? "dias_demora" : "fecha";
+    sort && SORTABLE_FIELDS.has(sort)
+      ? sort
+      : tarjetaActiva === "demora" || tarjetaActiva === "por_vencer"
+        ? "dias_demora"
+        : "fecha";
   const sortAscending = sort ? dir === "asc" : false;
   const typeRaw = type ? (Array.isArray(type) ? type : [type]) : [];
   const ejecutivoRaw = ejecutivo ? (Array.isArray(ejecutivo) ? ejecutivo : [ejecutivo]) : [];
@@ -127,6 +133,10 @@ export default async function OperacionesMaritimaPage({
     if (filtroTarjeta === "sin_ejecutivo") qb = qb.is("ejecutivo", null);
     // Hoy cae entre 7 días antes de la ETA y la ETA misma.
     if (filtroTarjeta === "aviso_arribo") qb = qb.gte("eta", hoy).lte("eta", sumarDias(hoy, 7));
+    // Les quedan de 1 a 4 días libres y el vacío no ha regresado.
+    if (filtroTarjeta === "por_vencer") {
+      qb = qb.gte("dias_demora", -4).lte("dias_demora", -1).is("regreso_vacio", null);
+    }
     if (filtroTarjeta === "demora") qb = qb.gt("dias_demora", 0);
     return qb;
   };
@@ -245,7 +255,7 @@ export default async function OperacionesMaritimaPage({
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Link href={tarjetaHref(null)} className={tarjetaClass(tarjetaActiva === null)}>
             <p className={`text-xs ${tarjetaActiva === null ? "opacity-80" : "text-slate-500 dark:text-slate-400"}`}>
               Bookings totales
