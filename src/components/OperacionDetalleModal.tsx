@@ -9,36 +9,65 @@ import { ESTADOS, fechaCorta, type EstadoHito } from "@/lib/track";
 // para no navegar ni perder el scroll de la tabla.
 export const EVENTO_ABRIR_OPERACION = "abrir-operacion";
 
-// Etapas de Cargolink (Servicios marítimos) y su par his_mov_* / his_fecha_*.
-const ETAPAS_CARGOLINK: { label: string; clave: string }[] = [
-  { label: "Origen", clave: "origen" },
-  { label: "Detalle de mercancía", clave: "mercancia" },
-  { label: "Seguro de mercancía", clave: "seguro" },
-  { label: "ATD", clave: "atd" },
-  { label: "Aviso ATD", clave: "aviso_atd" },
-  { label: "ETA", clave: "eta" },
-  { label: "Aviso ETA", clave: "alertFech" },
-  { label: "Transbordo", clave: "transbordo" },
-  { label: "Transmisión de manifiesto", clave: "manifiesto" },
-  { label: "KPIs aviso arribo", clave: "kpi" },
-  { label: "House BL telex", clave: "hbl_telex" },
-  { label: "Master BL telex", clave: "mbl_telex" },
-  { label: "Facturación", clave: "facturacion" },
-  { label: "Revalidación", clave: "rev" },
-  { label: "ATA", clave: "ata" },
-  { label: "Aviso ATA", clave: "alertAta" },
-  { label: "Facturas extras", clave: "factura_extra" },
-  { label: "KPI aviso demoras", clave: "demoras" },
-  { label: "Regreso de vacío", clave: "entrega_vacio" },
-  { label: "Corte demoras", clave: "entrega_demoras" },
-  { label: "Garantías", clave: "garantia" },
+// Etapas de Cargolink (Servicios marítimos) en su orden, por fase, y su par
+// his_mov_* / his_fecha_*.
+const FASES_CARGOLINK: { fase: string; etapas: { label: string; clave: string }[] }[] = [
+  {
+    fase: "Origen",
+    etapas: [
+      { label: "Origen", clave: "origen" },
+      { label: "Detalle de mercancía", clave: "mercancia" },
+      { label: "Seguro de mercancía", clave: "seguro" },
+    ],
+  },
+  {
+    fase: "Tránsito",
+    etapas: [
+      { label: "ATD", clave: "atd" },
+      { label: "Aviso ATD", clave: "aviso_atd" },
+      { label: "ETA", clave: "eta" },
+      { label: "Aviso ETA", clave: "alertFech" },
+      { label: "Transbordo", clave: "transbordo" },
+      { label: "Transmisión de manifiesto", clave: "manifiesto" },
+      { label: "KPIs aviso arribo", clave: "kpi" },
+      { label: "House BL telex", clave: "hbl_telex" },
+      { label: "Master BL telex", clave: "mbl_telex" },
+      { label: "Facturación", clave: "facturacion" },
+      { label: "Revalidación", clave: "rev" },
+      { label: "ATA", clave: "ata" },
+      { label: "Aviso ATA", clave: "alertAta" },
+      { label: "Facturas extras", clave: "factura_extra" },
+    ],
+  },
+  {
+    fase: "Entrega",
+    etapas: [
+      { label: "KPI aviso demoras", clave: "demoras" },
+      { label: "Regreso de vacío", clave: "entrega_vacio" },
+      { label: "Corte demoras", clave: "entrega_demoras" },
+      { label: "Garantías", clave: "garantia" },
+    ],
+  },
 ];
 
-const ESTATUS_ETAPA: Record<string, { label: string; clase: string }> = {
-  FINALIZADO: { label: "Finalizado", clase: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300" },
-  EDICION: { label: "En edición", clase: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300" },
-  NO_APLICA: { label: "No aplica", clase: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400" },
+const ESTATUS_ETAPA: Record<string, { label: string; clase: string; tarjeta: string }> = {
+  FINALIZADO: {
+    label: "Finalizado",
+    clase: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
+    tarjeta: "border-green-200 bg-green-50/40 dark:border-green-900 dark:bg-green-950/20",
+  },
+  EDICION: {
+    label: "En edición",
+    clase: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300",
+    tarjeta: "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20",
+  },
+  NO_APLICA: {
+    label: "No aplica",
+    clase: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
+    tarjeta: "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900",
+  },
 };
+const TARJETA_SIN_COMENZAR = "border-dashed border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900";
 
 type Operacion = Record<string, unknown> & { datos?: Record<string, string> };
 type Hito = {
@@ -249,29 +278,48 @@ export function OperacionDetalleModal() {
                 </section>
 
                 <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                  <h3 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-50">Etapas en Cargolink</h3>
-                  <ul className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
-                    {ETAPAS_CARGOLINK.map((et) => {
-                      const mov = datos[`his_mov_${et.clave}`];
-                      const fecha = datos[`his_fecha_${et.clave}`];
-                      const est = mov ? ESTATUS_ETAPA[mov] : undefined;
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50">Etapas en Cargolink</h3>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">En el orden de Cargolink · fecha = cuándo se marcó</span>
+                  </div>
+                  <div className="space-y-4">
+                    {FASES_CARGOLINK.map((fase, iFase) => {
+                      const inicio = FASES_CARGOLINK.slice(0, iFase).reduce((n, f) => n + f.etapas.length, 0);
                       return (
-                        <li key={et.clave} className="flex items-center justify-between gap-2 border-b border-slate-100 py-1.5 text-sm dark:border-slate-800">
-                          <span className="text-slate-700 dark:text-slate-300">{et.label}</span>
-                          <span className="flex items-center gap-2 whitespace-nowrap">
-                            {fecha && <span className="text-xs tabular-nums text-slate-500">{fechaCorta(fecha)}</span>}
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                est?.clase ?? "bg-white text-slate-400 ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700"
-                              }`}
-                            >
-                              {est?.label ?? (mov ? mov : "Sin comenzar")}
-                            </span>
-                          </span>
-                        </li>
+                        <div key={fase.fase}>
+                          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{fase.fase}</p>
+                          <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                            {fase.etapas.map((et, i) => {
+                              const mov = datos[`his_mov_${et.clave}`];
+                              const fecha = datos[`his_fecha_${et.clave}`];
+                              const est = mov ? ESTATUS_ETAPA[mov] : undefined;
+                              return (
+                                <li
+                                  key={et.clave}
+                                  className={`flex min-h-[64px] flex-col justify-between gap-1.5 rounded-lg border px-3 py-2 ${est?.tarjeta ?? TARJETA_SIN_COMENZAR}`}
+                                >
+                                  <span className="flex items-baseline gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+                                    <span className="text-xs tabular-nums text-slate-400">{inicio + i + 1}</span>
+                                    {et.label}
+                                  </span>
+                                  <span className="flex items-center justify-between gap-2">
+                                    <span
+                                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                        est?.clase ?? "text-slate-500 ring-1 ring-slate-200 dark:text-slate-400 dark:ring-slate-700"
+                                      }`}
+                                    >
+                                      {est?.label ?? (mov ? mov : "Sin comenzar")}
+                                    </span>
+                                    {fecha && <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{fechaCorta(fecha)}</span>}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        </div>
                       );
                     })}
-                  </ul>
+                  </div>
                 </section>
               </>
             )}
