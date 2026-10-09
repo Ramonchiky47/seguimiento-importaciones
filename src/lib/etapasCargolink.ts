@@ -119,7 +119,9 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     mov: "his_mov_entrega_vacio",
     campos: [
       { key: "fecha_maniobra_entrega", label: "Fecha de regreso de vacío", tipo: "date", requerido: true, actual: "regreso_vacio" },
-      { key: "fecha_solicitud_garantia", label: "Fecha en que se solicitó (garantía)", tipo: "date", requerido: true, actual: "datos.fecha_solicitud_garantia" },
+      // En la pantalla de Cargolink es obligatoria, pero el equipo no siempre
+      // la tiene; se manda vacía si no se captura.
+      { key: "fecha_solicitud_garantia", label: "Fecha en que se solicitó (garantía)", tipo: "date", requerido: false, actual: "datos.fecha_solicitud_garantia" },
     ],
     acciones: [GUARDAR, FINALIZAR, NO_APLICA],
   },
