@@ -11,11 +11,12 @@ import {
   SIN_EJECUTIVO,
   ESTADOS,
   ESTATUS_OPCIONES,
-  ETIQUETA_TARJETA,
+  ETIQUETA_COMPACTA,
   TONO_TARJETA,
-  VALOR_TARJETA,
+  VALOR_COMPACTO,
+  claseTarjetaCompacta,
+  type ConteosTrack,
   claseFilaEstatus,
-  claseTarjeta,
   ejecutivosTrack,
   estatusBooking,
   periodoAtd,
@@ -98,6 +99,12 @@ export default async function MiDiaPage({
     p_offset: from,
   });
   const resultado = (data ?? { conteos: {}, total: 0, filas: [] }) as MiDia;
+  const { data: conteosData } = await supabase.rpc("track_conteos", {
+    p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
+    p_estatus: estatusSel.codigos,
+    p_atd: atdSel.codigos,
+  });
+  const c = (conteosData ?? null) as ConteosTrack | null;
 
   // Por zarpar sin nada vencido: sin ATD ni ETA todavía no generan
   // compromisos, así que no salen arriba; se listan al final.
@@ -164,6 +171,49 @@ export default async function MiDiaPage({
             ["ejecutivo", EJECUTIVO_TODOS],
   ]).toString()}`;
 
+  // Tarjetas por embarque: abren Embarques con los mismos filtros.
+  const embarquesHref = (ruta: string, ejecutivos: string[] = ejecutivoEnUrl) => {
+    const [path, query] = ruta.split("?");
+    const params = new URLSearchParams(query ?? "");
+    for (const v of ejecutivos) params.append("ejecutivo", v);
+    for (const v of estatusSel.enUrl) params.append("estatus", v);
+    for (const v of atdSel.enUrl) params.append("atd", v);
+    return `${path}?${params.toString()}`;
+  };
+  const totalNivel = (key: Nivel) => totales[NIVELES.findIndex((n) => n.key === key)] ?? 0;
+  const nivelInfo = (key: Nivel) => NIVELES.find((n) => n.key === key)!;
+  // Dos filas en orden logístico: el recorrido del embarque y, abajo, los
+  // hitos por urgencia.
+  const filasTarjetas = [
+    {
+      titulo: "Flujo del embarque",
+      tarjetas: [
+        { key: "por_asignar", label: "Por asignar", valor: c?.por_asignar ?? 0, nota: "Sin ejecutivo en Cargolink", tono: TONO_TARJETA.azul, href: embarquesHref("/track/embarques", [SIN_EJECUTIVO]), activa: false },
+        { key: "por_zarpar", label: "Por zarpar", valor: porZarparCount ?? 0, nota: "Sin nada vencido aún · al final", tono: TONO_TARJETA.gris, href: "#por-zarpar", activa: false },
+        { key: "sin_eta", label: "Sin ETA", valor: c?.sin_eta ?? 0, nota: "ETA sin capturar", tono: TONO_TARJETA.violeta, href: embarquesHref("/track/embarques?ver=sin_eta"), activa: false },
+        { key: "aviso_arribo", label: "Aviso de arribo", valor: c?.aviso_arribo ?? 0, nota: "ETA en los próximos 7 días", tono: TONO_TARJETA.azul, href: embarquesHref("/track/embarques?ver=aviso_arribo"), activa: false },
+        { key: "sin_dias_libres", label: "Sin días libres", valor: c?.sin_dias_libres ?? 0, nota: "FCL sin días libres de demora", tono: TONO_TARJETA.violeta, href: embarquesHref("/track/embarques?ver=sin_dias_libres"), activa: false },
+        { key: "por_vencer", label: "Por vencer demoras", valor: c?.por_vencer ?? 0, nota: "Le quedan 1 a 4 días libres", tono: TONO_TARJETA.ambar, href: embarquesHref("/track/embarques?ver=por_vencer"), activa: false },
+        { key: "en_demora", label: "En demora", valor: c?.en_demora ?? 0, nota: "Días libres agotados", tono: TONO_TARJETA.rojo, href: embarquesHref("/track/embarques?etapa=En%20demora"), activa: false },
+      ],
+    },
+    {
+      titulo: "Hitos por urgencia",
+      tarjetas: [
+        ...(["pendientes", "hoy", "pronto", "atrasado", "rezago", "falta_dato"] as Nivel[]).map((k) => ({
+          key: k,
+          label: nivelInfo(k).label,
+          valor: totalNivel(k),
+          nota: nivelInfo(k).ayuda,
+          tono: nivelInfo(k).tono,
+          href: href({ nivel: k }),
+          activa: nivelActivo === k,
+        })),
+        { key: "por_corregir", label: "Datos por corregir", valor: c?.por_corregir ?? 0, nota: "Captura pendiente o inconsistente", tono: TONO_TARJETA.violeta, href: embarquesHref(`/track/embarques?etapa=${encodeURIComponent("Dato por corregir")}`), activa: false },
+      ],
+    },
+  ];
+
   const tituloLista = NIVELES.find((n) => n.key === nivelActivo)?.label ?? "Pendientes";
   const pagerClass = (disabled: boolean) =>
     `rounded-md border border-slate-300 px-2 py-1 dark:border-slate-700 ${
@@ -184,19 +234,18 @@ export default async function MiDiaPage({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
-        {NIVELES.map((n, i) => (
-          <Link key={n.key} href={href({ nivel: n.key })} className={claseTarjeta(nivelActivo === n.key, n.tono)}>
-            <span className={ETIQUETA_TARJETA}>{n.label}</span>
-            <span className={VALOR_TARJETA}>{totales[i]}</span>
-            <span className="text-[11px] text-slate-500 dark:text-slate-400">{n.ayuda}</span>
-          </Link>
+      <div className="space-y-2">
+        {filasTarjetas.map((fila) => (
+          <div key={fila.titulo} role="group" aria-label={fila.titulo} className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+            {fila.tarjetas.map((t) => (
+              <Link key={t.key} href={t.href} title={t.nota} className={claseTarjetaCompacta(t.activa, t.tono)}>
+                <span className={ETIQUETA_COMPACTA}>{t.label}</span>
+                <span className={VALOR_COMPACTO}>{t.valor}</span>
+                <span className="truncate text-[10px] text-slate-500 dark:text-slate-400">{t.nota}</span>
+              </Link>
+            ))}
+          </div>
         ))}
-        <a href="#por-zarpar" className={claseTarjeta(false, TONO_TARJETA.gris)}>
-          <span className={ETIQUETA_TARJETA}>Por zarpar</span>
-          <span className={VALOR_TARJETA}>{porZarparCount ?? 0}</span>
-          <span className="text-[11px] text-slate-500 dark:text-slate-400">Sin nada vencido aún · al final</span>
-        </a>
       </div>
 
       {error && (

@@ -11,6 +11,8 @@ import {
   ESTADOS,
   ESTATUS_OPCIONES,
   claseFilaEstatus,
+  hoyMexico,
+  VER_EMBARQUES,
   ejecutivosTrack,
   estatusBooking,
   periodoAtd,
@@ -49,9 +51,10 @@ type Embarque = {
 export default async function EmbarquesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; etapa?: string; ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[]; page?: string; volver?: string }>;
+  searchParams: Promise<{ q?: string; etapa?: string; ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[]; page?: string; volver?: string; ver?: string }>;
 }) {
-  const { q, etapa, ejecutivo, estatus, atd, page, volver } = await searchParams;
+  const { q, etapa, ejecutivo, estatus, atd, page, volver, ver } = await searchParams;
+  const verActivo = ver && VER_EMBARQUES[ver] ? ver : null;
   const etapaActiva = etapa && ETAPAS.includes(etapa) ? etapa : null;
   const supabase = await createClient();
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
@@ -81,6 +84,15 @@ export default async function EmbarquesPage({
     query = query.or(condiciones.join(","));
   }
   if (estatusSel.codigos) query = query.in("status_booking", estatusSel.codigos);
+  if (verActivo === "sin_eta") query = query.is("eta", null);
+  if (verActivo === "sin_dias_libres") query = query.eq("sin_dias_libres", true);
+  if (verActivo === "por_vencer") query = query.gte("dias_demora", -4).lte("dias_demora", -1);
+  if (verActivo === "aviso_arribo") {
+    const hoy = hoyMexico();
+    const d = new Date(`${hoy}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 7);
+    query = query.gte("eta", hoy).lte("eta", d.toISOString().slice(0, 10));
+  }
   if (atdSel.codigos) query = query.in("periodo_atd", atdSel.codigos);
   // Los que llevan más días de atraso primero; luego por siguiente compromiso.
   query = query
@@ -100,7 +112,7 @@ export default async function EmbarquesPage({
     new Set([SIN_EJECUTIVO, ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((x) => x.ejecutivo), ...ejecutivoRaw]),
   ).sort((a, b) => (a === SIN_EJECUTIVO ? -1 : b === SIN_EJECUTIVO ? 1 : a.localeCompare(b, "es")));
 
-  const href = (cambios: { etapa?: string | null; page?: number }) => {
+  const href = (cambios: { etapa?: string | null; page?: number; ver?: null }) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     const et = cambios.etapa === undefined ? etapaActiva : cambios.etapa;
@@ -109,6 +121,7 @@ export default async function EmbarquesPage({
     for (const v of estatusSel.enUrl) params.append("estatus", v);
     for (const v of atdSel.enUrl) params.append("atd", v);
     if (volver) params.set("volver", volver);
+    if (verActivo && cambios.ver !== null) params.set("ver", verActivo);
     if (cambios.page && cambios.page > 1) params.set("page", String(cambios.page));
     const s = params.toString();
     return s ? `?${s}` : "?";
@@ -121,6 +134,16 @@ export default async function EmbarquesPage({
   return (
     <main className="mx-auto max-w-7xl space-y-4 px-6 py-6">
       <RegresarTablero volver={volver} />
+      {verActivo && (
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded-full bg-blue-100 px-3 py-1 font-semibold text-blue-900 dark:bg-blue-950 dark:text-blue-200">
+            {VER_EMBARQUES[verActivo]}
+          </span>
+          <Link href={href({ ver: null, page: 1 })} className="text-xs font-medium text-blue-700 hover:underline dark:text-blue-400">
+            Quitar filtro
+          </Link>
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <form className="flex gap-2">
           {etapaActiva && <input type="hidden" name="etapa" value={etapaActiva} />}
@@ -131,6 +154,7 @@ export default async function EmbarquesPage({
             <input key={v} type="hidden" name="atd" value={v} />
           ))}
           {volver && <input type="hidden" name="volver" value={volver} />}
+          {verActivo && <input type="hidden" name="ver" value={verActivo} />}
           {ejecutivoEnUrl.map((v) => (
             <input key={v} type="hidden" name="ejecutivo" value={v} />
           ))}
@@ -162,6 +186,7 @@ export default async function EmbarquesPage({
             ...estatusSel.enUrl.map((v) => ["estatus", v]),
             ...atdSel.enUrl.map((v) => ["atd", v]),
             ...(volver ? [["volver", volver]] : []),
+            ...(verActivo ? [["ver", verActivo]] : []),
             ["ejecutivo", EJECUTIVO_TODOS],
           ]).toString()}`}
         />

@@ -7,10 +7,11 @@ import {
   EJECUTIVO_TODOS,
   SIN_EJECUTIVO,
   ESTATUS_OPCIONES,
-  ETIQUETA_TARJETA,
+  ETIQUETA_COMPACTA,
   TONO_TARJETA,
-  VALOR_TARJETA,
-  claseTarjeta,
+  VALOR_COMPACTO,
+  claseTarjetaCompacta,
+  type ConteosTrack,
   ejecutivosTrack,
   estatusBooking,
   periodoAtd,
@@ -112,7 +113,7 @@ export default async function TableroPage({
   const estatusSel = estatusBooking(estatus);
   const atdSel = periodoAtd(atd);
 
-  const [{ data, error }, { data: ejecutivosData }] = await Promise.all([
+  const [{ data, error }, { data: ejecutivosData }, { data: conteosData }] = await Promise.all([
     supabase.rpc("track_tablero", {
       p_dias: Number(periodoActivo),
       p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
@@ -126,8 +127,14 @@ export default async function TableroPage({
       p_tarjeta: null,
       p_hoy: null,
     }),
+    supabase.rpc("track_conteos", {
+      p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
+      p_estatus: estatusSel.codigos,
+      p_atd: atdSel.codigos,
+    }),
   ]);
   const r = (data ?? null) as Tablero | null;
+  const c = (conteosData ?? null) as ConteosTrack | null;
   const availableEjecutivos = Array.from(
     new Set([SIN_EJECUTIVO, ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((x) => x.ejecutivo), ...ejecutivoRaw]),
   ).sort((a, b) => (a === SIN_EJECUTIVO ? -1 : b === SIN_EJECUTIVO ? 1 : a.localeCompare(b, "es")));
@@ -164,22 +171,36 @@ export default async function TableroPage({
     return `?${params.toString()}`;
   };
 
-  const kpis = r
-    ? [
-        { label: "Atrasados", valor: r.atrasados, nota: "Embarques con algún hito vencido sin marcar", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques") },
-        { label: "Vencen en 3 días", valor: r.vencen, nota: "Embarques con hitos para hoy o los próximos 3 días", tono: TONO_TARJETA.ambar, href: conFiltros("/track/mi-dia") },
-        { label: "Datos por corregir", valor: r.por_corregir, nota: "Captura pendiente o inconsistente en Cargolink", tono: TONO_TARJETA.violeta, href: conFiltros(`/track/embarques?etapa=${encodeURIComponent("Dato por corregir")}`) },
-        { label: "En demora", valor: r.en_demora, nota: "Arribados con días libres agotados", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques?etapa=En%20demora") },
-        { label: "Por zarpar", valor: r.etapas["Por zarpar"] ?? 0, nota: "Sin ATD real todavía", tono: TONO_TARJETA.gris, href: conFiltros("/track/embarques?etapa=Por%20zarpar") },
-        {
-          label: "Por asignar",
-          valor: r.por_operativo.find((o) => o.operativo === SIN_EJECUTIVO)?.embarques ?? 0,
-          nota: "Sin ejecutivo en Cargolink",
-          tono: TONO_TARJETA.azul,
-          href: conFiltros("/track/embarques", [SIN_EJECUTIVO]),
-        },
-      ]
-    : [];
+  // Dos filas en orden logístico: el recorrido del embarque y, abajo, las
+  // alertas de puerto y de seguimiento.
+  const filasTarjetas =
+    r && c
+      ? [
+          {
+            titulo: "Flujo del embarque",
+            tarjetas: [
+              { label: "Embarques", valor: c.embarques, nota: "Activos con estos filtros", tono: TONO_TARJETA.neutro, href: conFiltros("/track/embarques") },
+              { label: "Por asignar", valor: c.por_asignar, nota: "Sin ejecutivo en Cargolink", tono: TONO_TARJETA.azul, href: conFiltros("/track/embarques", [SIN_EJECUTIVO]) },
+              { label: "Por zarpar", valor: c.por_zarpar, nota: "Sin ATD real todavía", tono: TONO_TARJETA.gris, href: conFiltros("/track/embarques?etapa=Por%20zarpar") },
+              { label: "Sin ETA", valor: c.sin_eta, nota: "ETA sin capturar", tono: TONO_TARJETA.violeta, href: conFiltros("/track/embarques?ver=sin_eta") },
+              { label: "En tránsito", valor: c.en_transito, nota: "Zarpó y no ha arribado", tono: TONO_TARJETA.azul, href: conFiltros(`/track/embarques?etapa=${encodeURIComponent("En tránsito")}`) },
+              { label: "Aviso de arribo", valor: c.aviso_arribo, nota: "ETA en los próximos 7 días", tono: TONO_TARJETA.azul, href: conFiltros("/track/embarques?ver=aviso_arribo") },
+              { label: "En puerto", valor: c.en_puerto, nota: "Arribó, con días libres", tono: TONO_TARJETA.gris, href: conFiltros("/track/embarques?etapa=En%20puerto") },
+            ],
+          },
+          {
+            titulo: "Alertas",
+            tarjetas: [
+              { label: "Sin días libres", valor: c.sin_dias_libres, nota: "FCL sin días libres de demora", tono: TONO_TARJETA.violeta, href: conFiltros("/track/embarques?ver=sin_dias_libres") },
+              { label: "Por vencer demoras", valor: c.por_vencer, nota: "Le quedan 1 a 4 días libres", tono: TONO_TARJETA.ambar, href: conFiltros("/track/embarques?ver=por_vencer") },
+              { label: "En demora", valor: c.en_demora, nota: "Días libres agotados", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques?etapa=En%20demora") },
+              { label: "Vencen en 3 días", valor: r.vencen, nota: "Hitos para hoy o los próximos 3 días", tono: TONO_TARJETA.ambar, href: conFiltros("/track/mi-dia") },
+              { label: "Atrasados", valor: r.atrasados, nota: "Algún hito vencido sin marcar", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques") },
+              { label: "Datos por corregir", valor: c.por_corregir, nota: "Captura pendiente o inconsistente", tono: TONO_TARJETA.violeta, href: conFiltros(`/track/embarques?etapa=${encodeURIComponent("Dato por corregir")}`) },
+            ],
+          },
+        ]
+      : [];
   const totalEtapas = r ? Math.max(1, ETAPAS.reduce((t, e) => t + (r.etapas[e.key] ?? 0), 0)) : 1;
 
   return (
@@ -227,18 +248,18 @@ export default async function TableroPage({
         <>
           {/* 1. ¿Cómo vamos? */}
           <section aria-labelledby="como-vamos" className="space-y-2">
-            <h2 id="como-vamos" className="text-sm font-semibold text-slate-900 dark:text-slate-50">
-              ¿Cómo vamos? <span className="font-normal text-slate-500 dark:text-slate-400">· {r.embarques} embarques activos</span>
-            </h2>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
-              {kpis.map((k) => (
-                <Link key={k.label} href={k.href} className={claseTarjeta(false, k.tono)}>
-                  <span className={ETIQUETA_TARJETA}>{k.label}</span>
-                  <span className={VALOR_TARJETA}>{k.valor}</span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">{k.nota}</span>
-                </Link>
-              ))}
-            </div>
+            <h2 id="como-vamos" className="text-sm font-semibold text-slate-900 dark:text-slate-50">¿Cómo vamos?</h2>
+            {filasTarjetas.map((fila) => (
+              <div key={fila.titulo} role="group" aria-label={fila.titulo} className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                {fila.tarjetas.map((k) => (
+                  <Link key={k.label} href={k.href} title={k.nota} className={claseTarjetaCompacta(false, k.tono)}>
+                    <span className={ETIQUETA_COMPACTA}>{k.label}</span>
+                    <span className={VALOR_COMPACTO}>{k.valor}</span>
+                    <span className="truncate text-[10px] text-slate-500 dark:text-slate-400">{k.nota}</span>
+                  </Link>
+                ))}
+              </div>
+            ))}
           </section>
 
           {/* 2. ¿Quién necesita apoyo? */}

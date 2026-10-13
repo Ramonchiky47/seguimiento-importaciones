@@ -158,3 +158,36 @@ export function periodoAtd(param: string | string[] | undefined): {
       : PERIODO_ATD.filter((p) => seleccion.includes(p.label)).map((p) => p.codigo);
   return { seleccion, codigos, enUrl: validos };
 }
+
+// Tarjeta compacta (dos filas de 7 en Mi día y Tablero).
+export function claseTarjetaCompacta(activa: boolean, tono: string = TONO_TARJETA.neutro): string {
+  return `flex min-w-0 flex-col gap-0.5 rounded-lg border px-2.5 py-2 transition-shadow hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] dark:border-slate-700 dark:bg-none dark:bg-slate-900 ${tono} ${
+    activa ? "border-blue-700! ring-2 ring-blue-700/20" : ""
+  }`;
+}
+export const ETIQUETA_COMPACTA =
+  "text-[10px] font-bold uppercase leading-tight tracking-wide text-slate-500 dark:text-slate-400";
+export const VALOR_COMPACTO = "text-lg font-extrabold leading-tight tabular-nums text-slate-900 dark:text-slate-50";
+
+// Filtros de Embarques por embarque (tarjetas de Mi día y Tablero, igual que
+// las de Operaciones Marítima).
+export const VER_EMBARQUES: Record<string, string> = {
+  sin_eta: "Sin ETA capturada",
+  aviso_arribo: "Aviso de arribo (ETA ≤ 7 días)",
+  sin_dias_libres: "Sin días libres de demora",
+  por_vencer: "Por vencer demoras (1–4 días)",
+};
+
+export type ConteosTrack = {
+  embarques: number;
+  por_asignar: number;
+  por_zarpar: number;
+  en_transito: number;
+  en_puerto: number;
+  en_demora: number;
+  sin_eta: number;
+  aviso_arribo: number;
+  sin_dias_libres: number;
+  por_vencer: number;
+  por_corregir: number;
+};
