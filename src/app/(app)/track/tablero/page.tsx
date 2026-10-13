@@ -39,6 +39,7 @@ const MIN_HITOS_PCT = 10;
 type Operativo = {
   operativo: string;
   embarques: number;
+  por_zarpar: number;
   con_atraso: number;
   vencen: number;
   por_corregir: number;
@@ -241,6 +242,7 @@ export default async function TableroPage({
                   <tr>
                     <th scope="col" className="px-4 py-2.5 font-semibold">Operativo</th>
                     <th scope="col" className="px-3 py-2.5 text-right font-semibold">Embarques</th>
+                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Por zarpar</th>
                     <th scope="col" className="px-3 py-2.5 text-right font-semibold">Con atraso</th>
                     <th scope="col" className="px-3 py-2.5 text-right font-semibold">Datos por corregir</th>
                     <th scope="col" className="px-3 py-2.5 text-right font-semibold">Vencen ≤ 3 días</th>
@@ -261,6 +263,14 @@ export default async function TableroPage({
                           </Link>
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums">{o.embarques}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">
+                          <Link
+                            href={conFiltros("/track/embarques?etapa=Por%20zarpar", [o.operativo])}
+                            className="hover:underline"
+                          >
+                            {o.por_zarpar}
+                          </Link>
+                        </td>
                         <td className={`px-3 py-2.5 text-right tabular-nums ${o.con_atraso > 0 ? "font-semibold text-red-700 dark:text-red-400" : ""}`}>
                           {o.con_atraso}
                         </td>
@@ -282,7 +292,7 @@ export default async function TableroPage({
                   })}
                   {r.por_operativo.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-6 text-center text-slate-500">Sin embarques con estos filtros.</td>
+                      <td colSpan={8} className="px-4 py-6 text-center text-slate-500">Sin embarques con estos filtros.</td>
                     </tr>
                   )}
                 </tbody>
