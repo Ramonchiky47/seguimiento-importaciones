@@ -16,6 +16,8 @@ import {
   claseTarjeta,
   ejecutivosTrack,
   estatusBooking,
+  periodoAtd,
+  PERIODO_ATD_OPCIONES,
   fechaCorta,
   type EstadoHito,
 } from "@/lib/track";
@@ -73,22 +75,24 @@ const SECCIONES: Record<string, string> = {
 export default async function MiDiaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ nivel?: string; ejecutivo?: string | string[]; estatus?: string | string[]; page?: string }>;
+  searchParams: Promise<{ nivel?: string; ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[]; page?: string }>;
 }) {
-  const { nivel, ejecutivo, estatus, page } = await searchParams;
+  const { nivel, ejecutivo, estatus, atd, page } = await searchParams;
   const nivelActivo: Nivel = nivel && NIVEL_KEYS.has(nivel) ? (nivel as Nivel) : "pendientes";
   const supabase = await createClient();
   // Operativo con clientes asignados: Track ya viene acotado a sus clientes.
   const { data: restringido } = await supabase.rpc("track_usuario_restringido");
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo, restringido === true);
   const estatusSel = estatusBooking(estatus);
+  const atdSel = periodoAtd(atd);
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
 
 
-  const { data, error } = await supabase.rpc("track_mi_dia", {
+  const { data, error } = await supabase.rpc("track_mi_dia_atd", {
     p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
     p_estatus: estatusSel.codigos,
+    p_atd: atdSel.codigos,
     p_nivel: nivelActivo,
     p_limit: PAGE_SIZE,
     p_offset: from,
@@ -116,6 +120,7 @@ export default async function MiDiaPage({
     if (n !== "pendientes") params.set("nivel", n);
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
     for (const v of estatusSel.enUrl) params.append("estatus", v);
+    for (const v of atdSel.enUrl) params.append("atd", v);
     if (cambios.page && cambios.page > 1) params.set("page", String(cambios.page));
     const q = params.toString();
     return q ? `?${q}` : "?";
@@ -124,6 +129,7 @@ export default async function MiDiaPage({
   const hrefTodos = `?${new URLSearchParams([
     ...(nivelActivo !== "pendientes" ? [["nivel", nivelActivo]] : []),
     ...estatusSel.enUrl.map((v) => ["estatus", v]),
+    ...atdSel.enUrl.map((v) => ["atd", v]),
             ["ejecutivo", EJECUTIVO_TODOS],
   ]).toString()}`;
 
@@ -140,6 +146,7 @@ export default async function MiDiaPage({
           Solo lo que requiere acción. Un hito sale de la lista cuando se marca en Cargolink.
         </p>
         <div className="flex flex-wrap items-center gap-3">
+          <MultiSelectFilter paramName="atd" label="ATD real" options={PERIODO_ATD_OPCIONES} current={atdSel.seleccion} />
           <MultiSelectFilter paramName="estatus" label="Estatus" options={ESTATUS_OPCIONES} current={estatusSel.seleccion} />
           <TrackEjecutivoFilter options={availableEjecutivos} filtro={ejecutivoRaw} hrefTodos={hrefTodos} />
         </div>

@@ -12,6 +12,8 @@ import {
   claseTarjeta,
   ejecutivosTrack,
   estatusBooking,
+  periodoAtd,
+  PERIODO_ATD_OPCIONES,
 } from "@/lib/track";
 
 export const dynamic = "force-dynamic";
@@ -53,21 +55,23 @@ type Resumen = {
 export default async function TableroPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; ejecutivo?: string | string[]; estatus?: string | string[] }>;
+  searchParams: Promise<{ periodo?: string; ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[] }>;
 }) {
-  const { periodo, ejecutivo, estatus } = await searchParams;
+  const { periodo, ejecutivo, estatus, atd } = await searchParams;
   const periodoActivo = PERIODOS.some((p) => p.key === periodo) ? (periodo as string) : "30";
   const supabase = await createClient();
   // Operativo con clientes asignados: Track ya viene acotado a sus clientes.
   const { data: restringido } = await supabase.rpc("track_usuario_restringido");
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo, restringido === true);
   const estatusSel = estatusBooking(estatus);
+  const atdSel = periodoAtd(atd);
 
   const [{ data, error }, { data: ejecutivosData }] = await Promise.all([
-    supabase.rpc("track_resumen_estatus", {
+    supabase.rpc("track_resumen_atd", {
       p_dias: Number(periodoActivo),
       p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
       p_estatus: estatusSel.codigos,
+      p_atd: atdSel.codigos,
     }),
     supabase.rpc("operaciones_maritima_ejecutivos", {
       p_anio: null,
@@ -87,6 +91,7 @@ export default async function TableroPage({
     if (key !== "30") params.set("periodo", key);
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
     for (const v of estatusSel.enUrl) params.append("estatus", v);
+    for (const v of atdSel.enUrl) params.append("atd", v);
     const q = params.toString();
     return q ? `?${q}` : "?";
   };
@@ -97,6 +102,7 @@ export default async function TableroPage({
     const params = new URLSearchParams(query ?? "");
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
     for (const v of estatusSel.enUrl) params.append("estatus", v);
+    for (const v of atdSel.enUrl) params.append("atd", v);
     const s = params.toString();
     return s ? `${path}?${s}` : path;
   };
@@ -137,6 +143,7 @@ export default async function TableroPage({
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-3">
+        <MultiSelectFilter paramName="atd" label="ATD real" options={PERIODO_ATD_OPCIONES} current={atdSel.seleccion} />
         <MultiSelectFilter paramName="estatus" label="Estatus" options={ESTATUS_OPCIONES} current={estatusSel.seleccion} />
         <TrackEjecutivoFilter
           options={availableEjecutivos}
@@ -144,6 +151,7 @@ export default async function TableroPage({
           hrefTodos={`?${new URLSearchParams([
             ...(periodoActivo !== "30" ? [["periodo", periodoActivo]] : []),
             ...estatusSel.enUrl.map((v) => ["estatus", v]),
+            ...atdSel.enUrl.map((v) => ["atd", v]),
             ["ejecutivo", EJECUTIVO_TODOS],
           ]).toString()}`}
         />

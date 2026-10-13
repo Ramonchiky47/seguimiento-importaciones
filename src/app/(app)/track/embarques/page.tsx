@@ -10,6 +10,8 @@ import {
   claseFilaEstatus,
   ejecutivosTrack,
   estatusBooking,
+  periodoAtd,
+  PERIODO_ATD_OPCIONES,
   fechaCorta,
   type EstadoHito,
 } from "@/lib/track";
@@ -40,15 +42,16 @@ type Embarque = {
 export default async function EmbarquesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; etapa?: string; ejecutivo?: string | string[]; estatus?: string | string[]; page?: string }>;
+  searchParams: Promise<{ q?: string; etapa?: string; ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[]; page?: string }>;
 }) {
-  const { q, etapa, ejecutivo, estatus, page } = await searchParams;
+  const { q, etapa, ejecutivo, estatus, atd, page } = await searchParams;
   const etapaActiva = etapa && ETAPAS.includes(etapa) ? etapa : null;
   const supabase = await createClient();
   // Operativo con clientes asignados: Track ya viene acotado a sus clientes.
   const { data: restringido } = await supabase.rpc("track_usuario_restringido");
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo, restringido === true);
   const estatusSel = estatusBooking(estatus);
+  const atdSel = periodoAtd(atd);
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
   const term = (q ?? "").replace(/[,()]/g, " ").trim();
@@ -65,6 +68,7 @@ export default async function EmbarquesPage({
   if (etapaActiva) query = query.eq("etapa", etapaActiva);
   if (ejecutivoRaw.length > 0) query = query.in("ejecutivo", ejecutivoRaw);
   if (estatusSel.codigos) query = query.in("status_booking", estatusSel.codigos);
+  if (atdSel.codigos) query = query.in("periodo_atd", atdSel.codigos);
   // Los que llevan más días de atraso primero; luego por siguiente compromiso.
   query = query
     .order("max_dias_atraso", { ascending: false, nullsFirst: false })
@@ -89,6 +93,7 @@ export default async function EmbarquesPage({
     if (et) params.set("etapa", et);
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
     for (const v of estatusSel.enUrl) params.append("estatus", v);
+    for (const v of atdSel.enUrl) params.append("atd", v);
     if (cambios.page && cambios.page > 1) params.set("page", String(cambios.page));
     const s = params.toString();
     return s ? `?${s}` : "?";
@@ -106,6 +111,9 @@ export default async function EmbarquesPage({
           {estatusSel.enUrl.map((v) => (
               <input key={v} type="hidden" name="estatus" value={v} />
             ))}
+          {atdSel.enUrl.map((v) => (
+            <input key={v} type="hidden" name="atd" value={v} />
+          ))}
           {ejecutivoEnUrl.map((v) => (
             <input key={v} type="hidden" name="ejecutivo" value={v} />
           ))}
@@ -126,6 +134,7 @@ export default async function EmbarquesPage({
             Buscar
           </button>
         </form>
+        <MultiSelectFilter paramName="atd" label="ATD real" options={PERIODO_ATD_OPCIONES} current={atdSel.seleccion} />
         <MultiSelectFilter paramName="estatus" label="Estatus" options={ESTATUS_OPCIONES} current={estatusSel.seleccion} />
         <TrackEjecutivoFilter
           options={availableEjecutivos}
@@ -134,6 +143,7 @@ export default async function EmbarquesPage({
             ...(q ? [["q", q]] : []),
             ...(etapaActiva ? [["etapa", etapaActiva]] : []),
             ...estatusSel.enUrl.map((v) => ["estatus", v]),
+            ...atdSel.enUrl.map((v) => ["atd", v]),
             ["ejecutivo", EJECUTIVO_TODOS],
           ]).toString()}`}
         />

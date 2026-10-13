@@ -135,3 +135,28 @@ export function mismoNombre(a: string | null | undefined, b: string | null | und
   if (pa.length === 0 || pb.length === 0) return false;
   return pa.every((w) => pb.includes(w)) || pb.every((w) => pa.includes(w));
 }
+
+// Corte de Track por ATD real (vista track_embarques.periodo_atd): "desde" =
+// ATD real desde el 25 sep 2026, o sin ATD (aún no zarpa) con booking desde
+// esa fecha; "antes" = lo anterior. Sin parámetro en la URL solo "desde".
+export const PERIODO_ATD = [
+  { label: "ATD desde 25 sep 2026", codigo: "desde" },
+  { label: "ATD antes del 25 sep 2026", codigo: "antes" },
+] as const;
+export const PERIODO_ATD_OPCIONES: string[] = PERIODO_ATD.map((p) => p.label);
+
+export function periodoAtd(param: string | string[] | undefined): {
+  seleccion: string[];
+  // periodo_atd a filtrar; null = todos.
+  codigos: string[] | null;
+  enUrl: string[];
+} {
+  const raw = param ? (Array.isArray(param) ? param : [param]) : [];
+  const validos = PERIODO_ATD_OPCIONES.filter((o) => raw.includes(o));
+  const seleccion = validos.length > 0 ? validos : [PERIODO_ATD[0].label];
+  const codigos =
+    seleccion.length === PERIODO_ATD.length
+      ? null
+      : PERIODO_ATD.filter((p) => seleccion.includes(p.label)).map((p) => p.codigo);
+  return { seleccion, codigos, enUrl: validos };
+}
