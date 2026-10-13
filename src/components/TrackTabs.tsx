@@ -11,11 +11,13 @@ const TABS = [
   { href: "/track/clientes", label: "Clientes asignados" },
 ];
 
-export function TrackTabs() {
+export function TrackTabs({ esAdmin = false }: { esAdmin?: boolean }) {
   const pathname = usePathname();
+  // "Cambios en Cargolink" solo para administradores.
+  const tabs = esAdmin ? [...TABS, { href: "/track/cambios-cargolink", label: "Cambios en Cargolink" }] : TABS;
   return (
     <nav aria-label="Secciones de Track" className="flex gap-1 overflow-x-auto">
-      {TABS.map((t) => {
+      {tabs.map((t) => {
         const activa = pathname === t.href || pathname.startsWith(`${t.href}/`);
         return (
           <Link
