@@ -213,7 +213,11 @@ export default async function EmbarquesPage({
                   <td className="max-w-56 truncate px-3 py-2">{f.cliente ?? "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2">
                     {f.ejecutivo ??
-                      (puedeEditar === true ? <AsignarEjecutivoBoton idBooking={f.id_booking} noBooking={f.no_booking} /> : "—")}
+                      (puedeEditar === true ? (
+                        <AsignarEjecutivoBoton idBooking={f.id_booking} noBooking={f.no_booking} />
+                      ) : (
+                        <span className="font-bold text-red-700 dark:text-red-400">Sin ejecutivo</span>
+                      ))}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2">
                     {f.etapa}

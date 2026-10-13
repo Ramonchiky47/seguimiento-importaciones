@@ -264,7 +264,11 @@ export default async function MiDiaPage({
                     );
                   })}
                 </ul>
-                <p className="hidden truncate text-xs text-slate-500 sm:block dark:text-slate-400">{f.ejecutivo ?? "Sin ejecutivo"}</p>
+                <p
+                  className={`hidden truncate text-xs sm:block ${f.ejecutivo ? "text-slate-500 dark:text-slate-400" : "font-bold text-red-700 dark:text-red-400"}`}
+                >
+                  {f.ejecutivo ?? "Sin ejecutivo"}
+                </p>
               </li>
               </Fragment>
             );
@@ -329,7 +333,11 @@ export default async function MiDiaPage({
                 {z.no_booking}
               </AbrirOperacionBoton>
               <span className="truncate text-slate-600 dark:text-slate-400">{z.cliente ?? "—"}</span>
-              <span className="truncate text-xs text-slate-500 dark:text-slate-400">{z.ejecutivo ?? "Sin ejecutivo"}</span>
+              {z.ejecutivo ? (
+                <span className="truncate text-xs text-slate-500 dark:text-slate-400">{z.ejecutivo}</span>
+              ) : (
+                <span className="truncate text-xs font-bold text-red-700 dark:text-red-400">Sin ejecutivo</span>
+              )}
               <span className="text-xs text-slate-500 dark:text-slate-400">Booking {fechaCorta(z.fecha)}</span>
             </li>
           ))}
