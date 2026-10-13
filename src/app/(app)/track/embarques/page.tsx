@@ -47,9 +47,7 @@ export default async function EmbarquesPage({
   const { q, etapa, ejecutivo, estatus, atd, page } = await searchParams;
   const etapaActiva = etapa && ETAPAS.includes(etapa) ? etapa : null;
   const supabase = await createClient();
-  // Operativo con clientes asignados: Track ya viene acotado a sus clientes.
-  const { data: restringido } = await supabase.rpc("track_usuario_restringido");
-  const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo, restringido === true);
+  const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
   const estatusSel = estatusBooking(estatus);
   const atdSel = periodoAtd(atd);
   const currentPage = Math.max(1, Number(page) || 1);

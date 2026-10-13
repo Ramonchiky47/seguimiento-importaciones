@@ -59,17 +59,13 @@ export const ETIQUETA_TARJETA =
   "text-[10px] font-bold uppercase leading-tight tracking-wide text-slate-500 dark:text-slate-400";
 export const VALOR_TARJETA = "text-[22px] font-extrabold tabular-nums text-slate-900 dark:text-slate-50";
 
-// Track está en prueba con un solo ejecutivo: sin parámetro en la URL se
-// filtra por EJECUTIVO_DEFAULT; "Todos" es la elección explícita de ver a
-// todo el equipo (desmarcar todo en el filtro regresa al default).
-export const EJECUTIVO_DEFAULT = "Jorge Mora";
+// Track está en prueba acotado a los clientes asignados (función
+// track_clientes_prueba en Supabase), así que sin parámetro en la URL no se
+// filtra por ejecutivo. "Todos" se conserva como elección explícita.
 export const EJECUTIVO_TODOS = "Todos";
 
-// Con sinDefault (usuario que solo ve sus clientes asignados) no se aplica
-// EJECUTIVO_DEFAULT: sus clientes ya acotan la vista.
 export function ejecutivosTrack(
   param: string | string[] | undefined,
-  sinDefault = false,
 ): {
   // Ejecutivos por los que se filtra (vacío = todos).
   filtro: string[];
@@ -77,7 +73,7 @@ export function ejecutivosTrack(
   enUrl: string[];
 } {
   const raw = param ? (Array.isArray(param) ? param : [param]) : [];
-  if (raw.length === 0) return sinDefault ? { filtro: [], enUrl: [] } : { filtro: [EJECUTIVO_DEFAULT], enUrl: [] };
+  if (raw.length === 0) return { filtro: [], enUrl: [] };
   if (raw.includes(EJECUTIVO_TODOS)) return { filtro: [], enUrl: [EJECUTIVO_TODOS] };
   return { filtro: raw, enUrl: raw };
 }

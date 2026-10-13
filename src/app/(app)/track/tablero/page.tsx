@@ -60,9 +60,7 @@ export default async function TableroPage({
   const { periodo, ejecutivo, estatus, atd } = await searchParams;
   const periodoActivo = PERIODOS.some((p) => p.key === periodo) ? (periodo as string) : "30";
   const supabase = await createClient();
-  // Operativo con clientes asignados: Track ya viene acotado a sus clientes.
-  const { data: restringido } = await supabase.rpc("track_usuario_restringido");
-  const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo, restringido === true);
+  const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
   const estatusSel = estatusBooking(estatus);
   const atdSel = periodoAtd(atd);
 
