@@ -26,7 +26,7 @@ const PERIODOS = [
 ];
 
 const ETAPAS = [
-  { key: "En origen", color: "bg-slate-400" },
+  { key: "Por zarpar", color: "bg-slate-400" },
   { key: "En tránsito", color: "bg-blue-700" },
   { key: "En puerto", color: "bg-cyan-700" },
   { key: "En demora", color: "bg-red-700" },
@@ -37,6 +37,7 @@ const META_A_TIEMPO = 90;
 type Resumen = {
   activos: number;
   en_demora: number;
+  dato_por_corregir: number;
   dias_demora: number;
   falta_dato: number;
   atrasados: number;
@@ -135,6 +136,13 @@ export default async function TableroPage({
             return `/track/embarques?${params.toString()}`;
           })(),
         },
+        {
+          label: "Dato por corregir",
+          valor: r.dato_por_corregir,
+          nota: "Fecha real a futuro, ATA sin ATD o ETA vencida sin ATA",
+          tono: TONO_TARJETA.ambar,
+          href: conEjecutivo(`/track/embarques?etapa=${encodeURIComponent("Dato por corregir")}`),
+        },
         { label: "Rezago", valor: r.rezago, nota: `Hitos con más de ${DIAS_REZAGO} días sin marcar`, tono: TONO_TARJETA.gris, href: conEjecutivo("/track/mi-dia?nivel=rezago") },
       ]
     : [];
@@ -182,7 +190,7 @@ export default async function TableroPage({
 
       {r && (
         <>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
             {kpis.map((k) =>
               k.href ? (
                 <Link key={k.label} href={k.href} className={claseTarjeta(false, k.tono)}>

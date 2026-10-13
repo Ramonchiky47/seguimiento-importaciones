@@ -21,7 +21,10 @@ import {
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 50;
-const ETAPAS = ["En origen", "En tránsito", "En puerto", "En demora"];
+// Etapa por fechas reales (vista track_embarques). "Dato por corregir" no es
+// etapa: filtra los bookings con alerta_dato (captura inconsistente).
+const DATO_POR_CORREGIR = "Dato por corregir";
+const ETAPAS = ["Por zarpar", "En tránsito", "En puerto", "En demora", DATO_POR_CORREGIR];
 
 type Embarque = {
   id_booking: number;
@@ -33,6 +36,7 @@ type Embarque = {
   ata: string | null;
   dias_demora: number | null;
   etapa: string;
+  alerta_dato: string | null;
   pendientes: number;
   semaforo: EstadoHito;
   max_dias_atraso: number | null;
@@ -59,13 +63,14 @@ export default async function EmbarquesPage({
   let query = supabase
     .from("track_embarques")
     .select(
-      "id_booking, no_booking, type, cliente, ejecutivo, eta, ata, dias_demora, etapa, pendientes, semaforo, max_dias_atraso, siguiente_hito, siguiente_fecha, status_booking",
+      "id_booking, no_booking, type, cliente, ejecutivo, eta, ata, dias_demora, etapa, pendientes, semaforo, max_dias_atraso, siguiente_hito, siguiente_fecha, status_booking, alerta_dato",
       { count: "exact" },
     );
   if (term) {
     query = query.or(`no_booking.ilike.%${term}%,cliente.ilike.%${term}%,ejecutivo.ilike.%${term}%`);
   }
-  if (etapaActiva) query = query.eq("etapa", etapaActiva);
+  if (etapaActiva === DATO_POR_CORREGIR) query = query.not("alerta_dato", "is", null);
+  else if (etapaActiva) query = query.eq("etapa", etapaActiva);
   if (ejecutivoRaw.length > 0) {
     const nombres = ejecutivoRaw.filter((e) => e !== SIN_EJECUTIVO);
     const condiciones = [
@@ -205,7 +210,12 @@ export default async function EmbarquesPage({
                     {f.ejecutivo ??
                       (puedeEditar === true ? <AsignarEjecutivoBoton idBooking={f.id_booking} noBooking={f.no_booking} /> : "—")}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2">{f.etapa}</td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    {f.etapa}
+                    {f.alerta_dato && (
+                      <span className="mt-0.5 block text-xs font-semibold text-amber-700 dark:text-amber-400">⚠ {f.alerta_dato}</span>
+                    )}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fechaCorta(f.eta)}</td>
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fechaCorta(f.ata)}</td>
                   <td className="whitespace-nowrap px-3 py-2">
