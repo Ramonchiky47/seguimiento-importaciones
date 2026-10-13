@@ -167,6 +167,14 @@ export default async function TableroPage({
         { label: "Vencen en 3 días", valor: r.vencen, nota: "Embarques con hitos para hoy o los próximos 3 días", tono: TONO_TARJETA.ambar, href: conFiltros("/track/mi-dia") },
         { label: "Datos por corregir", valor: r.por_corregir, nota: "Captura pendiente o inconsistente en Cargolink", tono: TONO_TARJETA.violeta, href: conFiltros(`/track/embarques?etapa=${encodeURIComponent("Dato por corregir")}`) },
         { label: "En demora", valor: r.en_demora, nota: "Arribados con días libres agotados", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques?etapa=En%20demora") },
+        { label: "Por zarpar", valor: r.etapas["Por zarpar"] ?? 0, nota: "Sin ATD real todavía", tono: TONO_TARJETA.gris, href: conFiltros("/track/embarques?etapa=Por%20zarpar") },
+        {
+          label: "Por asignar",
+          valor: r.por_operativo.find((o) => o.operativo === SIN_EJECUTIVO)?.embarques ?? 0,
+          nota: "Sin ejecutivo en Cargolink",
+          tono: TONO_TARJETA.azul,
+          href: conFiltros("/track/embarques", [SIN_EJECUTIVO]),
+        },
       ]
     : [];
   const totalEtapas = r ? Math.max(1, ETAPAS.reduce((t, e) => t + (r.etapas[e.key] ?? 0), 0)) : 1;
@@ -219,7 +227,7 @@ export default async function TableroPage({
             <h2 id="como-vamos" className="text-sm font-semibold text-slate-900 dark:text-slate-50">
               ¿Cómo vamos? <span className="font-normal text-slate-500 dark:text-slate-400">· {r.embarques} embarques activos</span>
             </h2>
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
               {kpis.map((k) => (
                 <Link key={k.label} href={k.href} className={claseTarjeta(false, k.tono)}>
                   <span className={ETIQUETA_TARJETA}>{k.label}</span>
