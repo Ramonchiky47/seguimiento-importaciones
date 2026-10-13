@@ -7,6 +7,7 @@ import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import {
   DIAS_REZAGO,
   EJECUTIVO_TODOS,
+  SIN_EJECUTIVO,
   ESTADOS,
   ESTATUS_OPCIONES,
   ETIQUETA_TARJETA,
@@ -109,8 +110,8 @@ export default async function MiDiaPage({
     p_hoy: null,
   });
   const availableEjecutivos = Array.from(
-    new Set([...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((r) => r.ejecutivo), ...ejecutivoRaw]),
-  ).sort((a, b) => a.localeCompare(b, "es"));
+    new Set([SIN_EJECUTIVO, ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((r) => r.ejecutivo), ...ejecutivoRaw]),
+  ).sort((a, b) => (a === SIN_EJECUTIVO ? -1 : b === SIN_EJECUTIVO ? 1 : a.localeCompare(b, "es")));
 
   const href = (cambios: { nivel?: Nivel; page?: number }) => {
     const params = new URLSearchParams();

@@ -5,6 +5,7 @@ import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import {
   DIAS_REZAGO,
   EJECUTIVO_TODOS,
+  SIN_EJECUTIVO,
   ESTATUS_OPCIONES,
   ETIQUETA_TARJETA,
   TONO_TARJETA,
@@ -81,8 +82,8 @@ export default async function TableroPage({
   ]);
   const r = (data ?? null) as Resumen | null;
   const availableEjecutivos = Array.from(
-    new Set([...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((x) => x.ejecutivo), ...ejecutivoRaw]),
-  ).sort((a, b) => a.localeCompare(b, "es"));
+    new Set([SIN_EJECUTIVO, ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((x) => x.ejecutivo), ...ejecutivoRaw]),
+  ).sort((a, b) => (a === SIN_EJECUTIVO ? -1 : b === SIN_EJECUTIVO ? 1 : a.localeCompare(b, "es")));
 
   const periodoHref = (key: string) => {
     const params = new URLSearchParams();

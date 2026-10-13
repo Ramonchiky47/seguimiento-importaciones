@@ -63,6 +63,8 @@ export const VALOR_TARJETA = "text-[22px] font-extrabold tabular-nums text-slate
 // track_clientes_prueba en Supabase), así que sin parámetro en la URL no se
 // filtra por ejecutivo. "Todos" se conserva como elección explícita.
 export const EJECUTIVO_TODOS = "Todos";
+// Opción del filtro para los bookings sin ejecutivo en Cargolink.
+export const SIN_EJECUTIVO = "Sin ejecutivo";
 
 export function ejecutivosTrack(
   param: string | string[] | undefined,

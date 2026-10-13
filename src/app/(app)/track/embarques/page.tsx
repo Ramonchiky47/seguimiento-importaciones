@@ -5,6 +5,7 @@ import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { FilaOperacion } from "@/components/OperacionDetalleModal";
 import {
   EJECUTIVO_TODOS,
+  SIN_EJECUTIVO,
   ESTADOS,
   ESTATUS_OPCIONES,
   claseFilaEstatus,
@@ -64,7 +65,14 @@ export default async function EmbarquesPage({
     query = query.or(`no_booking.ilike.%${term}%,cliente.ilike.%${term}%,ejecutivo.ilike.%${term}%`);
   }
   if (etapaActiva) query = query.eq("etapa", etapaActiva);
-  if (ejecutivoRaw.length > 0) query = query.in("ejecutivo", ejecutivoRaw);
+  if (ejecutivoRaw.length > 0) {
+    const nombres = ejecutivoRaw.filter((e) => e !== SIN_EJECUTIVO);
+    const condiciones = [
+      ...(nombres.length > 0 ? [`ejecutivo.in.(${nombres.map((e) => `"${e.replace(/"/g, "")}"`).join(",")})`] : []),
+      ...(ejecutivoRaw.includes(SIN_EJECUTIVO) ? ["ejecutivo.is.null"] : []),
+    ];
+    query = query.or(condiciones.join(","));
+  }
   if (estatusSel.codigos) query = query.in("status_booking", estatusSel.codigos);
   if (atdSel.codigos) query = query.in("periodo_atd", atdSel.codigos);
   // Los que llevan más días de atraso primero; luego por siguiente compromiso.
@@ -81,8 +89,8 @@ export default async function EmbarquesPage({
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const availableEjecutivos = Array.from(
-    new Set([...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((x) => x.ejecutivo), ...ejecutivoRaw]),
-  ).sort((a, b) => a.localeCompare(b, "es"));
+    new Set([SIN_EJECUTIVO, ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((x) => x.ejecutivo), ...ejecutivoRaw]),
+  ).sort((a, b) => (a === SIN_EJECUTIVO ? -1 : b === SIN_EJECUTIVO ? 1 : a.localeCompare(b, "es")));
 
   const href = (cambios: { etapa?: string | null; page?: number }) => {
     const params = new URLSearchParams();
