@@ -7,6 +7,7 @@ import {
   EJECUTIVO_TODOS,
   SIN_EJECUTIVO,
   ESTATUS_OPCIONES,
+  ESTATUS_TRACK,
   ETIQUETA_COMPACTA,
   TONO_TARJETA,
   VALOR_COMPACTO,
@@ -110,7 +111,7 @@ export default async function TableroPage({
   const periodoActivo = PERIODOS.some((p) => p.key === periodo) ? (periodo as string) : "30";
   const supabase = await createClient();
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
-  const estatusSel = estatusBooking(estatus);
+  const estatusSel = estatusBooking(estatus, ESTATUS_TRACK);
   const atdSel = periodoAtd(atd);
 
   const [{ data, error }, { data: ejecutivosData }, { data: conteosData }] = await Promise.all([

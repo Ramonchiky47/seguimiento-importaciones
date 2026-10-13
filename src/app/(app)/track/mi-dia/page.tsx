@@ -11,6 +11,7 @@ import {
   SIN_EJECUTIVO,
   ESTADOS,
   ESTATUS_OPCIONES,
+  ESTATUS_TRACK,
   ETIQUETA_COMPACTA,
   TONO_TARJETA,
   VALOR_COMPACTO,
@@ -84,7 +85,7 @@ export default async function MiDiaPage({
   const nivelActivo: Nivel = nivel && NIVEL_KEYS.has(nivel) ? (nivel as Nivel) : "pendientes";
   const supabase = await createClient();
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
-  const estatusSel = estatusBooking(estatus);
+  const estatusSel = estatusBooking(estatus, ESTATUS_TRACK);
   const atdSel = periodoAtd(atd);
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;

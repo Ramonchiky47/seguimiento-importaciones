@@ -10,6 +10,7 @@ import {
   SIN_EJECUTIVO,
   ESTADOS,
   ESTATUS_OPCIONES,
+  ESTATUS_TRACK,
   claseFilaEstatus,
   hoyMexico,
   VER_EMBARQUES,
@@ -58,7 +59,7 @@ export default async function EmbarquesPage({
   const etapaActiva = etapa && ETAPAS.includes(etapa) ? etapa : null;
   const supabase = await createClient();
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
-  const estatusSel = estatusBooking(estatus);
+  const estatusSel = estatusBooking(estatus, ESTATUS_TRACK);
   const atdSel = periodoAtd(atd);
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
