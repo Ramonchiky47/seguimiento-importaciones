@@ -97,6 +97,35 @@ export default async function MiDiaPage({
     p_offset: from,
   });
   const resultado = (data ?? { conteos: {}, total: 0, filas: [] }) as MiDia;
+
+  // Por zarpar sin nada vencido: sin ATD ni ETA todavía no generan
+  // compromisos, así que no salen arriba; se listan al final.
+  let porZarparQuery = supabase
+    .from("track_embarques")
+    .select("id_booking, no_booking, cliente, ejecutivo, fecha, status_booking", { count: "exact" })
+    .eq("etapa", "Por zarpar")
+    .eq("semaforo", "en_tiempo");
+  if (ejecutivoRaw.length > 0) {
+    const nombres = ejecutivoRaw.filter((e) => e !== SIN_EJECUTIVO);
+    const condiciones = [
+      ...(nombres.length > 0 ? [`ejecutivo.in.(${nombres.map((e) => `"${e.replace(/"/g, "")}"`).join(",")})`] : []),
+      ...(ejecutivoRaw.includes(SIN_EJECUTIVO) ? ["ejecutivo.is.null"] : []),
+    ];
+    porZarparQuery = porZarparQuery.or(condiciones.join(","));
+  }
+  if (estatusSel.codigos) porZarparQuery = porZarparQuery.in("status_booking", estatusSel.codigos);
+  if (atdSel.codigos) porZarparQuery = porZarparQuery.in("periodo_atd", atdSel.codigos);
+  const { data: porZarparData, count: porZarparCount } = await porZarparQuery
+    .order("fecha", { ascending: true, nullsFirst: false })
+    .limit(200);
+  const porZarpar = (porZarparData ?? []) as {
+    id_booking: number;
+    no_booking: string;
+    cliente: string | null;
+    ejecutivo: string | null;
+    fecha: string | null;
+    status_booking: string | null;
+  }[];
   const filas = resultado.filas;
   const totales = NIVELES.map((n) => resultado.conteos[n.key] ?? 0);
   const totalCount = resultado.total;
@@ -151,7 +180,7 @@ export default async function MiDiaPage({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
         {NIVELES.map((n, i) => (
           <Link key={n.key} href={href({ nivel: n.key })} className={claseTarjeta(nivelActivo === n.key, n.tono)}>
             <span className={ETIQUETA_TARJETA}>{n.label}</span>
@@ -159,6 +188,11 @@ export default async function MiDiaPage({
             <span className="text-[11px] text-slate-500 dark:text-slate-400">{n.ayuda}</span>
           </Link>
         ))}
+        <a href="#por-zarpar" className={claseTarjeta(false, TONO_TARJETA.gris)}>
+          <span className={ETIQUETA_TARJETA}>Por zarpar</span>
+          <span className={VALOR_TARJETA}>{porZarparCount ?? 0}</span>
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">Sin nada vencido aún · al final</span>
+        </a>
       </div>
 
       {error && (
@@ -259,6 +293,47 @@ export default async function MiDiaPage({
           </div>
         </div>
       )}
+
+      <section
+        id="por-zarpar"
+        aria-labelledby="por-zarpar-titulo"
+        className="scroll-mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+          <div>
+            <h2 id="por-zarpar-titulo" className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+              Por zarpar · sin nada vencido aún
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Sin ATD ni ETA todavía no tienen fechas compromiso. Captura la ETA al confirmar el buque.
+            </p>
+          </div>
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            {porZarparCount ?? 0} {(porZarparCount ?? 0) === 1 ? "referencia" : "referencias"}
+          </span>
+        </div>
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+          {porZarpar.map((z) => (
+            <li
+              key={z.id_booking}
+              className={`${claseFilaEstatus(z.status_booking)} grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-x-4 gap-y-1 px-4 py-2.5 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)_auto]`}
+            >
+              <AbrirOperacionBoton
+                idBooking={z.id_booking}
+                className="text-left font-mono text-[13px] font-semibold text-blue-700 hover:underline dark:text-blue-400"
+              >
+                {z.no_booking}
+              </AbrirOperacionBoton>
+              <span className="truncate text-slate-600 dark:text-slate-400">{z.cliente ?? "—"}</span>
+              <span className="truncate text-xs text-slate-500 dark:text-slate-400">{z.ejecutivo ?? "Sin ejecutivo"}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Booking {fechaCorta(z.fecha)}</span>
+            </li>
+          ))}
+          {porZarpar.length === 0 && (
+            <li className="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">Sin referencias por zarpar.</li>
+          )}
+        </ul>
+      </section>
     </main>
   );
 }
