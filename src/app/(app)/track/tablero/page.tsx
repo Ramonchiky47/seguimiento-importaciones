@@ -2,8 +2,8 @@ import Link from "next/link";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
+import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import {
-  DIAS_REZAGO,
   EJECUTIVO_TODOS,
   SIN_EJECUTIVO,
   ESTATUS_OPCIONES,
@@ -33,25 +33,70 @@ const ETAPAS = [
 ];
 
 const META_A_TIEMPO = 90;
+// Con menos hitos en el periodo el % a tiempo no es representativo.
+const MIN_HITOS_PCT = 10;
 
-type Resumen = {
-  activos: number;
+type Operativo = {
+  operativo: string;
+  embarques: number;
+  con_atraso: number;
+  vencen: number;
+  por_corregir: number;
   en_demora: number;
-  dato_por_corregir: number;
-  dias_demora: number;
-  falta_dato: number;
+  hitos_periodo: number;
+  a_tiempo: number;
+};
+
+type Accion = {
+  id_booking: number;
+  no_booking: string;
+  cliente: string | null;
+  operativo: string;
+  accion: string;
+  detalle: string;
+  prioridad: number;
+  otras: number;
+};
+
+type Tablero = {
+  embarques: number;
   atrasados: number;
-  rezago: number;
+  vencen: number;
+  por_corregir: number;
+  en_demora: number;
   etapas: Record<string, number>;
-  cumplimiento: { hito: string; total: number; a_tiempo: number }[];
-  por_ejecutivo: {
-    ejecutivo: string;
-    activos: number;
-    con_atraso: number;
-    dias_demora: number;
-    falta_dato: number;
-    pct_a_tiempo: number | null;
-  }[];
+  por_operativo: Operativo[];
+  acciones_total: number;
+  acciones: Accion[];
+};
+
+// Qué atender con cada operativo, en palabras.
+function estadoOperativo(o: Operativo): { label: string; clase: string } {
+  if (o.operativo === SIN_EJECUTIVO) {
+    return { label: "Asignar ejecutivo", clase: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" };
+  }
+  if (o.con_atraso >= 3 || o.en_demora > 0) {
+    return { label: "Atrasos", clase: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" };
+  }
+  if (o.por_corregir >= 5 || (o.embarques > 0 && o.por_corregir / o.embarques >= 0.25)) {
+    return { label: "Calidad de captura", clase: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300" };
+  }
+  if (o.embarques >= 25) {
+    return { label: "Carga alta", clase: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300" };
+  }
+  if (o.con_atraso > 0 || o.por_corregir > 0 || o.vencen > 0) {
+    return { label: "Vigilar", clase: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300" };
+  }
+  return { label: "En orden", clase: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300" };
+}
+
+const CLASE_PRIORIDAD: Record<number, string> = {
+  1: "text-amber-800 dark:text-amber-300",
+  2: "text-red-700 dark:text-red-400",
+  3: "text-orange-700 dark:text-orange-400",
+  4: "text-blue-800 dark:text-blue-300",
+  5: "text-violet-800 dark:text-violet-300",
+  6: "text-slate-500 dark:text-slate-400",
 };
 
 export default async function TableroPage({
@@ -66,12 +111,8 @@ export default async function TableroPage({
   const estatusSel = estatusBooking(estatus);
   const atdSel = periodoAtd(atd);
 
-  let sinEjecutivoQuery = supabase.from("track_embarques").select("id_booking", { count: "exact", head: true }).is("ejecutivo", null);
-  if (estatusSel.codigos) sinEjecutivoQuery = sinEjecutivoQuery.in("status_booking", estatusSel.codigos);
-  if (atdSel.codigos) sinEjecutivoQuery = sinEjecutivoQuery.in("periodo_atd", atdSel.codigos);
-
-  const [{ data, error }, { data: ejecutivosData }, { count: sinEjecutivo }] = await Promise.all([
-    supabase.rpc("track_resumen_atd", {
+  const [{ data, error }, { data: ejecutivosData }] = await Promise.all([
+    supabase.rpc("track_tablero", {
       p_dias: Number(periodoActivo),
       p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
       p_estatus: estatusSel.codigos,
@@ -84,9 +125,8 @@ export default async function TableroPage({
       p_tarjeta: null,
       p_hoy: null,
     }),
-    sinEjecutivoQuery,
   ]);
-  const r = (data ?? null) as Resumen | null;
+  const r = (data ?? null) as Tablero | null;
   const availableEjecutivos = Array.from(
     new Set([SIN_EJECUTIVO, ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((x) => x.ejecutivo), ...ejecutivoRaw]),
   ).sort((a, b) => (a === SIN_EJECUTIVO ? -1 : b === SIN_EJECUTIVO ? 1 : a.localeCompare(b, "es")));
@@ -101,51 +141,34 @@ export default async function TableroPage({
     return q ? `?${q}` : "?";
   };
 
-  // Los enlaces a Mi día / Embarques conservan el ejecutivo elegido.
-  const conEjecutivo = (ruta: string) => {
+  // Los enlaces a Mi día / Embarques conservan los filtros elegidos.
+  const conFiltros = (ruta: string, ejecutivos: string[] = ejecutivoEnUrl) => {
     const [path, query] = ruta.split("?");
     const params = new URLSearchParams(query ?? "");
-    for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
+    for (const v of ejecutivos) params.append("ejecutivo", v);
     for (const v of estatusSel.enUrl) params.append("estatus", v);
     for (const v of atdSel.enUrl) params.append("atd", v);
     const s = params.toString();
     return s ? `${path}?${s}` : path;
   };
-
-  const totalHitos = r?.cumplimiento.reduce((s, c) => s + c.total, 0) ?? 0;
-  const aTiempoHitos = r?.cumplimiento.reduce((s, c) => s + c.a_tiempo, 0) ?? 0;
-  const pctGeneral = totalHitos > 0 ? Math.round((100 * aTiempoHitos) / totalHitos) : null;
-  const maxEtapa = Math.max(1, ...ETAPAS.map((e) => r?.etapas[e.key] ?? 0));
+  // Clic en un operativo: el tablero completo se filtra a él.
+  const operativoHref = (nombre: string) => {
+    const params = new URLSearchParams([["ejecutivo", nombre]]);
+    if (periodoActivo !== "30") params.set("periodo", periodoActivo);
+    for (const v of estatusSel.enUrl) params.append("estatus", v);
+    for (const v of atdSel.enUrl) params.append("atd", v);
+    return `?${params.toString()}`;
+  };
 
   const kpis = r
     ? [
-        { label: "Embarques", valor: r.activos, nota: "Últimos 180 días, sin regreso de vacío", tono: TONO_TARJETA.neutro, href: conEjecutivo("/track/embarques") },
-        { label: "Hitos a tiempo", valor: pctGeneral === null ? "—" : `${pctGeneral} %`, nota: `Meta ${META_A_TIEMPO} % · compromisos del periodo`, tono: pctGeneral !== null && pctGeneral >= META_A_TIEMPO ? TONO_TARJETA.azul : TONO_TARJETA.ambar, href: null },
-        { label: `Atrasados (≤ ${DIAS_REZAGO} d)`, valor: r.atrasados, nota: "Hitos sin marcar", tono: TONO_TARJETA.rojo, href: conEjecutivo("/track/mi-dia?nivel=atrasado") },
-        { label: "En demora", valor: r.en_demora, nota: `${r.dias_demora.toLocaleString("es-MX")} días de demora acumulados`, tono: TONO_TARJETA.rojo, href: conEjecutivo("/track/embarques?etapa=En%20demora") },
-        { label: "Falta dato", valor: r.falta_dato, nota: "Embarques sin ETA o días libres", tono: TONO_TARJETA.violeta, href: conEjecutivo("/track/mi-dia?nivel=falta_dato") },
-        {
-          label: "Sin ejecutivo",
-          valor: sinEjecutivo ?? 0,
-          nota: "Asigna el ejecutivo en Cargolink",
-          tono: TONO_TARJETA.ambar,
-          href: (() => {
-            const params = new URLSearchParams([["ejecutivo", SIN_EJECUTIVO]]);
-            for (const v of estatusSel.enUrl) params.append("estatus", v);
-            for (const v of atdSel.enUrl) params.append("atd", v);
-            return `/track/embarques?${params.toString()}`;
-          })(),
-        },
-        {
-          label: "Dato por corregir",
-          valor: r.dato_por_corregir,
-          nota: "Fecha real a futuro, ATA sin ATD o ETA vencida sin ATA",
-          tono: TONO_TARJETA.ambar,
-          href: conEjecutivo(`/track/embarques?etapa=${encodeURIComponent("Dato por corregir")}`),
-        },
-        { label: "Rezago", valor: r.rezago, nota: `Hitos con más de ${DIAS_REZAGO} días sin marcar`, tono: TONO_TARJETA.gris, href: conEjecutivo("/track/mi-dia?nivel=rezago") },
+        { label: "Atrasados", valor: r.atrasados, nota: "Embarques con algún hito vencido sin marcar", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques") },
+        { label: "Vencen en 3 días", valor: r.vencen, nota: "Embarques con hitos para hoy o los próximos 3 días", tono: TONO_TARJETA.ambar, href: conFiltros("/track/mi-dia") },
+        { label: "Datos por corregir", valor: r.por_corregir, nota: "Captura pendiente o inconsistente en Cargolink", tono: TONO_TARJETA.violeta, href: conFiltros(`/track/embarques?etapa=${encodeURIComponent("Dato por corregir")}`) },
+        { label: "En demora", valor: r.en_demora, nota: "Arribados con días libres agotados", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques?etapa=En%20demora") },
       ]
     : [];
+  const totalEtapas = r ? Math.max(1, ETAPAS.reduce((t, e) => t + (r.etapas[e.key] ?? 0), 0)) : 1;
 
   return (
     <main className="mx-auto max-w-7xl space-y-5 px-6 py-6">
@@ -184,126 +207,140 @@ export default async function TableroPage({
 
       {error && (
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          Error al cargar las estadísticas: {error.message}
+          Error al cargar el tablero: {error.message}
         </p>
       )}
 
       {r && (
         <>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
-            {kpis.map((k) =>
-              k.href ? (
+          {/* 1. ¿Cómo vamos? */}
+          <section aria-labelledby="como-vamos" className="space-y-2">
+            <h2 id="como-vamos" className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+              ¿Cómo vamos? <span className="font-normal text-slate-500 dark:text-slate-400">· {r.embarques} embarques activos</span>
+            </h2>
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+              {kpis.map((k) => (
                 <Link key={k.label} href={k.href} className={claseTarjeta(false, k.tono)}>
                   <span className={ETIQUETA_TARJETA}>{k.label}</span>
                   <span className={VALOR_TARJETA}>{k.valor}</span>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">{k.nota}</span>
                 </Link>
-              ) : (
-                <div key={k.label} className={claseTarjeta(false, k.tono)}>
-                  <span className={ETIQUETA_TARJETA}>{k.label}</span>
-                  <span className={VALOR_TARJETA}>{k.valor}</span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">{k.nota}</span>
-                </div>
-              ),
-            )}
-          </div>
+              ))}
+            </div>
+          </section>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-50">Embarques activos por etapa</h2>
-              <div className="space-y-3">
-                {ETAPAS.map((e) => {
-                  const n = r.etapas[e.key] ?? 0;
-                  return (
-                    <Link
-                      key={e.key}
-                      href={conEjecutivo(`/track/embarques?etapa=${encodeURIComponent(e.key)}`)}
-                      className="grid grid-cols-[110px_minmax(0,1fr)_48px] items-center gap-3 rounded text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
-                    >
-                      <span className="text-slate-700 dark:text-slate-300">{e.key}</span>
-                      <span className="h-3.5 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
-                        <span className={`block h-full rounded ${e.color}`} style={{ width: `${(100 * n) / maxEtapa}%` }} />
-                      </span>
-                      <span className="text-right font-semibold tabular-nums text-slate-900 dark:text-slate-100">{n}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-50">Hitos marcados a tiempo en Cargolink</h2>
-              <div className="space-y-3">
-                {r.cumplimiento.map((c) => {
-                  const pct = c.total > 0 ? Math.round((100 * c.a_tiempo) / c.total) : 0;
-                  return (
-                    <div key={c.hito} className="grid grid-cols-[110px_minmax(0,1fr)_88px] items-center gap-3 text-sm">
-                      <span className="text-slate-700 dark:text-slate-300">{c.hito}</span>
-                      <span className="h-3.5 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
-                        <span
-                          className={`block h-full rounded ${pct >= META_A_TIEMPO ? "bg-blue-700" : "bg-orange-600"}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </span>
-                      <span className="text-right tabular-nums text-slate-900 dark:text-slate-100">
-                        <span className="font-semibold">{pct} %</span>{" "}
-                        <span className="text-xs text-slate-500">
-                          {c.a_tiempo}/{c.total}
-                        </span>
-                      </span>
-                    </div>
-                  );
-                })}
-                {r.cumplimiento.length === 0 && (
-                  <p className="text-sm text-slate-500">Sin compromisos en el periodo.</p>
-                )}
-              </div>
-              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                Meta {META_A_TIEMPO} %. Naranja: debajo de la meta. Un hito que se hizo pero no se marcó en Cargolink cuenta como no hecho.
-              </p>
-            </section>
-          </div>
-
-          <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 dark:border-slate-800 dark:text-slate-50">
-              Carga y cumplimiento por ejecutivo
-            </h2>
+          {/* 2. ¿Quién necesita apoyo? */}
+          <section aria-labelledby="por-operativo" className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+              <h2 id="por-operativo" className="text-sm font-semibold text-slate-900 dark:text-slate-50">¿Quién necesita apoyo?</h2>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Clic en un operativo para ver solo lo suyo</span>
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                   <tr>
-                    <th scope="col" className="px-4 py-2.5 font-semibold">Ejecutivo</th>
-                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Activos</th>
+                    <th scope="col" className="px-4 py-2.5 font-semibold">Operativo</th>
+                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Embarques</th>
                     <th scope="col" className="px-3 py-2.5 text-right font-semibold">Con atraso</th>
-                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Hitos a tiempo</th>
-                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Días de demora</th>
-                    <th scope="col" className="px-4 py-2.5 text-right font-semibold">Falta dato</th>
+                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Datos por corregir</th>
+                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Vencen ≤ 3 días</th>
+                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">% a tiempo</th>
+                    <th scope="col" className="px-4 py-2.5 font-semibold">Estado</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {r.por_ejecutivo.map((e) => (
-                    <tr key={e.ejecutivo} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                      <td className="px-4 py-2.5">
-                        {e.ejecutivo === "Sin ejecutivo" ? (
-                          <span className="text-slate-500">Sin ejecutivo</span>
-                        ) : (
-                          <Link
-                            href={`/track/mi-dia?ejecutivo=${encodeURIComponent(e.ejecutivo)}${estatusSel.enUrl.map((v) => `&estatus=${encodeURIComponent(v)}`).join("")}`}
-                            className="font-medium text-blue-700 hover:underline dark:text-blue-400"
-                          >
-                            {e.ejecutivo}
+                  {r.por_operativo.map((o) => {
+                    const estado = estadoOperativo(o);
+                    const pct =
+                      o.hitos_periodo >= MIN_HITOS_PCT ? Math.round((100 * o.a_tiempo) / o.hitos_periodo) : null;
+                    return (
+                      <tr key={o.operativo} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                        <td className="px-4 py-2.5">
+                          <Link href={operativoHref(o.operativo)} className="font-medium text-blue-700 hover:underline dark:text-blue-400">
+                            {o.operativo}
                           </Link>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{e.activos}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-red-700 dark:text-red-400">{e.con_atraso}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{e.pct_a_tiempo === null ? "—" : `${e.pct_a_tiempo} %`}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{e.dias_demora.toLocaleString("es-MX")}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">{e.falta_dato}</td>
+                        </td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{o.embarques}</td>
+                        <td className={`px-3 py-2.5 text-right tabular-nums ${o.con_atraso > 0 ? "font-semibold text-red-700 dark:text-red-400" : ""}`}>
+                          {o.con_atraso}
+                        </td>
+                        <td className={`px-3 py-2.5 text-right tabular-nums ${o.por_corregir > 0 ? "font-semibold text-violet-800 dark:text-violet-300" : ""}`}>
+                          {o.por_corregir}
+                        </td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{o.vencen}</td>
+                        <td
+                          className={`px-3 py-2.5 text-right tabular-nums ${pct !== null && pct < META_A_TIEMPO ? "font-semibold text-orange-700 dark:text-orange-400" : ""}`}
+                          title={pct === null ? `Menos de ${MIN_HITOS_PCT} hitos en el periodo (${o.hitos_periodo})` : `${o.a_tiempo} de ${o.hitos_periodo} hitos`}
+                        >
+                          {pct === null ? "—" : `${pct} %`}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${estado.clase}`}>{estado.label}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {r.por_operativo.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-6 text-center text-slate-500">Sin embarques con estos filtros.</td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
+            </div>
+            <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              % a tiempo: hitos marcados en Cargolink a más tardar en su fecha compromiso (meta {META_A_TIEMPO} %); se muestra con al menos {MIN_HITOS_PCT} hitos en el periodo.
+            </p>
+          </section>
+
+          {/* 3. ¿Qué hay que hacer hoy? */}
+          <section aria-labelledby="acciones" className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+              <h2 id="acciones" className="text-sm font-semibold text-slate-900 dark:text-slate-50">¿Qué hay que hacer hoy?</h2>
+              <Link href={conFiltros("/track/mi-dia")} className="text-xs font-medium text-blue-700 hover:underline dark:text-blue-400">
+                {r.acciones_total > r.acciones.length ? `Ver los ${r.acciones_total} en Mi día` : "Ir a Mi día"}
+              </Link>
+            </div>
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              {r.acciones.map((a) => (
+                <li key={a.id_booking} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                  <AbrirOperacionBoton
+                    idBooking={a.id_booking}
+                    className="font-mono text-[13px] font-semibold text-blue-700 hover:underline dark:text-blue-400"
+                  >
+                    {a.no_booking}
+                  </AbrirOperacionBoton>
+                  <span className="min-w-0 max-w-56 truncate text-slate-600 dark:text-slate-400">{a.cliente ?? "—"}</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                    {a.accion === "Corregir dato" || a.accion === "Asignar ejecutivo" ? a.accion : `Marcar ${a.accion}`}
+                  </span>
+                  <span className={`font-medium ${CLASE_PRIORIDAD[a.prioridad] ?? ""}`}>{a.detalle}</span>
+                  {a.otras > 0 && <span className="text-xs text-slate-500">+{a.otras} más</span>}
+                  <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">{a.operativo}</span>
+                </li>
+              ))}
+              {r.acciones.length === 0 && <li className="px-4 py-6 text-center text-sm text-slate-500">Nada pendiente. 🎉</li>}
+            </ul>
+          </section>
+
+          {/* Flujo de embarques */}
+          <section aria-labelledby="flujo" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <h2 id="flujo" className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-50">Flujo de embarques</h2>
+            <div className="flex h-3 overflow-hidden rounded bg-slate-100 dark:bg-slate-800" aria-hidden="true">
+              {ETAPAS.map((e) => {
+                const n = r.etapas[e.key] ?? 0;
+                return n > 0 ? <span key={e.key} className={e.color} style={{ width: `${(100 * n) / totalEtapas}%` }} /> : null;
+              })}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              {ETAPAS.map((e, i) => (
+                <Link key={e.key} href={conFiltros(`/track/embarques?etapa=${encodeURIComponent(e.key)}`)} className="flex items-center gap-2 hover:underline">
+                  <span className={`inline-block size-2.5 rounded-full ${e.color}`} aria-hidden="true" />
+                  <span className="text-slate-700 dark:text-slate-300">{e.key}</span>
+                  <span className="font-semibold tabular-nums text-slate-900 dark:text-slate-100">{r.etapas[e.key] ?? 0}</span>
+                  {i < ETAPAS.length - 1 && <span className="text-slate-400" aria-hidden="true">→</span>}
+                </Link>
+              ))}
             </div>
           </section>
         </>
