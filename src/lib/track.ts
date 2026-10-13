@@ -133,10 +133,10 @@ export function mismoNombre(a: string | null | undefined, b: string | null | und
 }
 
 // Corte de Track por ATD real (vista track_embarques.periodo_atd): "desde" =
-// ATD real desde el 25 sep 2026, o sin ATD (aún no zarpa) con booking desde
-// esa fecha; "antes" = lo anterior. Sin parámetro en la URL solo "desde".
+// ATD real desde el 25 sep 2026 o sin ATD capturado; "antes" = ATD real
+// anterior. Sin parámetro en la URL solo "desde".
 export const PERIODO_ATD = [
-  { label: "ATD desde 25 sep 2026", codigo: "desde" },
+  { label: "ATD desde 25 sep 2026 o sin ATD", codigo: "desde" },
   { label: "ATD antes del 25 sep 2026", codigo: "antes" },
 ] as const;
 export const PERIODO_ATD_OPCIONES: string[] = PERIODO_ATD.map((p) => p.label);
