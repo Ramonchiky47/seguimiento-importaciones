@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getMyPermissions } from "@/lib/permissions";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +7,8 @@ export const dynamic = "force-dynamic";
 const PAGE_SIZE = 50;
 
 // Cambios hechos en Cargolink que detecta la carga programada de 2 PM y 7 PM
-// (sincronizar.py compara contra lo que ya tenía la app). Solo administradores.
+// (sincronizar.py compara contra lo que ya tenía la app). La ve todo Operaciones;
+// con clientes asignados, solo los suyos (RLS).
 type Cambio = {
   id: number;
   id_booking: number;
@@ -56,9 +55,6 @@ export default async function CambiosCargolinkPage({
 }: {
   searchParams: Promise<{ q?: string; desde?: string; hasta?: string; page?: string }>;
 }) {
-  const myPermissions = await getMyPermissions();
-  if (!myPermissions.es_admin) redirect("/track/mi-dia");
-
   const { q, desde, hasta, page } = await searchParams;
   const currentPage = Math.max(1, Number(page) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
@@ -102,7 +98,7 @@ export default async function CambiosCargolinkPage({
     <main className="mx-auto max-w-7xl space-y-4 px-6 py-6">
       <p className="text-sm text-slate-600 dark:text-slate-400">
         Cambios hechos en Cargolink que detecta la carga de 2 PM y 7 PM. Cargolink no informa quién hizo el cambio;
-        &quot;Fecha en Cargolink&quot; es la hora del movimiento de la etapa. Solo administradores.
+        &quot;Fecha en Cargolink&quot; es la hora del movimiento de la etapa.
       </p>
 
       <form className="flex flex-wrap items-end gap-3">

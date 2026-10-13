@@ -32,7 +32,7 @@ export default async function TrackLayout({ children }: { children: React.ReactN
             </p>
           )}
           <div className="mt-2">
-            <TrackTabs esAdmin={myPermissions.es_admin} />
+            <TrackTabs />
           </div>
         </div>
       </header>
