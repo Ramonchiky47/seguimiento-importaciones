@@ -4,6 +4,7 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
+import { RegresarTablero } from "@/components/RegresarTablero";
 import {
   DIAS_REZAGO,
   EJECUTIVO_TODOS,
@@ -76,9 +77,9 @@ const SECCIONES: Record<string, string> = {
 export default async function MiDiaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ nivel?: string; ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[]; page?: string }>;
+  searchParams: Promise<{ nivel?: string; ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[]; page?: string; volver?: string }>;
 }) {
-  const { nivel, ejecutivo, estatus, atd, page } = await searchParams;
+  const { nivel, ejecutivo, estatus, atd, page, volver } = await searchParams;
   const nivelActivo: Nivel = nivel && NIVEL_KEYS.has(nivel) ? (nivel as Nivel) : "pendientes";
   const supabase = await createClient();
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
@@ -149,6 +150,7 @@ export default async function MiDiaPage({
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
     for (const v of estatusSel.enUrl) params.append("estatus", v);
     for (const v of atdSel.enUrl) params.append("atd", v);
+    if (volver) params.set("volver", volver);
     if (cambios.page && cambios.page > 1) params.set("page", String(cambios.page));
     const q = params.toString();
     return q ? `?${q}` : "?";
@@ -158,6 +160,7 @@ export default async function MiDiaPage({
     ...(nivelActivo !== "pendientes" ? [["nivel", nivelActivo]] : []),
     ...estatusSel.enUrl.map((v) => ["estatus", v]),
     ...atdSel.enUrl.map((v) => ["atd", v]),
+    ...(volver ? [["volver", volver]] : []),
             ["ejecutivo", EJECUTIVO_TODOS],
   ]).toString()}`;
 
@@ -169,6 +172,7 @@ export default async function MiDiaPage({
 
   return (
     <main className="mx-auto max-w-7xl space-y-5 px-6 py-6">
+      <RegresarTablero volver={volver} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="text-sm text-slate-600 dark:text-slate-400">
           Solo lo que requiere acción. Un hito sale de la lista cuando se marca en Cargolink.

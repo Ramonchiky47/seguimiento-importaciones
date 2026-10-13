@@ -142,6 +142,8 @@ export default async function TableroPage({
     return q ? `?${q}` : "?";
   };
 
+  // Filtros actuales del Tablero, para el botón "Regresar al Tablero".
+  const volver = periodoHref(periodoActivo).replace(/^\?/, "") || "1";
   // Los enlaces a Mi día / Embarques conservan los filtros elegidos.
   const conFiltros = (ruta: string, ejecutivos: string[] = ejecutivoEnUrl) => {
     const [path, query] = ruta.split("?");
@@ -149,6 +151,7 @@ export default async function TableroPage({
     for (const v of ejecutivos) params.append("ejecutivo", v);
     for (const v of estatusSel.enUrl) params.append("estatus", v);
     for (const v of atdSel.enUrl) params.append("atd", v);
+    params.set("volver", volver);
     const s = params.toString();
     return s ? `${path}?${s}` : path;
   };

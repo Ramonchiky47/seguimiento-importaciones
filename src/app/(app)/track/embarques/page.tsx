@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { FilaOperacion } from "@/components/OperacionDetalleModal";
 import { AsignarEjecutivoBoton } from "@/components/AsignarEjecutivoBoton";
+import { RegresarTablero } from "@/components/RegresarTablero";
 import {
   EJECUTIVO_TODOS,
   SIN_EJECUTIVO,
@@ -48,9 +49,9 @@ type Embarque = {
 export default async function EmbarquesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; etapa?: string; ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[]; page?: string }>;
+  searchParams: Promise<{ q?: string; etapa?: string; ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[]; page?: string; volver?: string }>;
 }) {
-  const { q, etapa, ejecutivo, estatus, atd, page } = await searchParams;
+  const { q, etapa, ejecutivo, estatus, atd, page, volver } = await searchParams;
   const etapaActiva = etapa && ETAPAS.includes(etapa) ? etapa : null;
   const supabase = await createClient();
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
@@ -107,6 +108,7 @@ export default async function EmbarquesPage({
     for (const v of ejecutivoEnUrl) params.append("ejecutivo", v);
     for (const v of estatusSel.enUrl) params.append("estatus", v);
     for (const v of atdSel.enUrl) params.append("atd", v);
+    if (volver) params.set("volver", volver);
     if (cambios.page && cambios.page > 1) params.set("page", String(cambios.page));
     const s = params.toString();
     return s ? `?${s}` : "?";
@@ -118,6 +120,7 @@ export default async function EmbarquesPage({
 
   return (
     <main className="mx-auto max-w-7xl space-y-4 px-6 py-6">
+      <RegresarTablero volver={volver} />
       <div className="flex flex-wrap items-center gap-2">
         <form className="flex gap-2">
           {etapaActiva && <input type="hidden" name="etapa" value={etapaActiva} />}
@@ -127,6 +130,7 @@ export default async function EmbarquesPage({
           {atdSel.enUrl.map((v) => (
             <input key={v} type="hidden" name="atd" value={v} />
           ))}
+          {volver && <input type="hidden" name="volver" value={volver} />}
           {ejecutivoEnUrl.map((v) => (
             <input key={v} type="hidden" name="ejecutivo" value={v} />
           ))}
@@ -157,6 +161,7 @@ export default async function EmbarquesPage({
             ...(etapaActiva ? [["etapa", etapaActiva]] : []),
             ...estatusSel.enUrl.map((v) => ["estatus", v]),
             ...atdSel.enUrl.map((v) => ["atd", v]),
+            ...(volver ? [["volver", volver]] : []),
             ["ejecutivo", EJECUTIVO_TODOS],
           ]).toString()}`}
         />
