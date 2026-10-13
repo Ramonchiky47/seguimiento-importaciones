@@ -65,7 +65,11 @@ export default async function TableroPage({
   const estatusSel = estatusBooking(estatus);
   const atdSel = periodoAtd(atd);
 
-  const [{ data, error }, { data: ejecutivosData }] = await Promise.all([
+  let sinEjecutivoQuery = supabase.from("track_embarques").select("id_booking", { count: "exact", head: true }).is("ejecutivo", null);
+  if (estatusSel.codigos) sinEjecutivoQuery = sinEjecutivoQuery.in("status_booking", estatusSel.codigos);
+  if (atdSel.codigos) sinEjecutivoQuery = sinEjecutivoQuery.in("periodo_atd", atdSel.codigos);
+
+  const [{ data, error }, { data: ejecutivosData }, { count: sinEjecutivo }] = await Promise.all([
     supabase.rpc("track_resumen_atd", {
       p_dias: Number(periodoActivo),
       p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
@@ -79,6 +83,7 @@ export default async function TableroPage({
       p_tarjeta: null,
       p_hoy: null,
     }),
+    sinEjecutivoQuery,
   ]);
   const r = (data ?? null) as Resumen | null;
   const availableEjecutivos = Array.from(
@@ -118,6 +123,18 @@ export default async function TableroPage({
         { label: `Atrasados (≤ ${DIAS_REZAGO} d)`, valor: r.atrasados, nota: "Hitos sin marcar", tono: TONO_TARJETA.rojo, href: conEjecutivo("/track/mi-dia?nivel=atrasado") },
         { label: "En demora", valor: r.en_demora, nota: `${r.dias_demora.toLocaleString("es-MX")} días de demora acumulados`, tono: TONO_TARJETA.rojo, href: conEjecutivo("/track/embarques?etapa=En%20demora") },
         { label: "Falta dato", valor: r.falta_dato, nota: "Embarques sin ETA o días libres", tono: TONO_TARJETA.violeta, href: conEjecutivo("/track/mi-dia?nivel=falta_dato") },
+        {
+          label: "Sin ejecutivo",
+          valor: sinEjecutivo ?? 0,
+          nota: "Asigna el ejecutivo en Cargolink",
+          tono: TONO_TARJETA.ambar,
+          href: (() => {
+            const params = new URLSearchParams([["ejecutivo", SIN_EJECUTIVO]]);
+            for (const v of estatusSel.enUrl) params.append("estatus", v);
+            for (const v of atdSel.enUrl) params.append("atd", v);
+            return `/track/embarques?${params.toString()}`;
+          })(),
+        },
         { label: "Rezago", valor: r.rezago, nota: `Hitos con más de ${DIAS_REZAGO} días sin marcar`, tono: TONO_TARJETA.gris, href: conEjecutivo("/track/mi-dia?nivel=rezago") },
       ]
     : [];
@@ -165,7 +182,7 @@ export default async function TableroPage({
 
       {r && (
         <>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
             {kpis.map((k) =>
               k.href ? (
                 <Link key={k.label} href={k.href} className={claseTarjeta(false, k.tono)}>

@@ -3,6 +3,7 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { FilaOperacion } from "@/components/OperacionDetalleModal";
+import { AsignarEjecutivoBoton } from "@/components/AsignarEjecutivoBoton";
 import {
   EJECUTIVO_TODOS,
   SIN_EJECUTIVO,
@@ -81,9 +82,10 @@ export default async function EmbarquesPage({
     .order("siguiente_fecha", { ascending: true, nullsFirst: false })
     .range(from, from + PAGE_SIZE - 1);
 
-  const [{ data, error, count }, { data: ejecutivosData }] = await Promise.all([
+  const [{ data, error, count }, { data: ejecutivosData }, { data: puedeEditar }] = await Promise.all([
     query,
     supabase.rpc("operaciones_maritima_ejecutivos", { p_anio: null, p_types: null, p_q: null, p_tarjeta: null, p_hoy: null }),
+    supabase.rpc("puedo_editar_cargolink"),
   ]);
   const filas = (data ?? []) as Embarque[];
   const totalCount = count ?? 0;
@@ -199,7 +201,10 @@ export default async function EmbarquesPage({
                 <FilaOperacion key={f.id_booking} idBooking={f.id_booking} className={`hover:bg-blue-50 dark:hover:bg-slate-800 ${claseFilaEstatus(f.status_booking)}`}>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-[13px] font-semibold text-slate-900 dark:text-slate-100">{f.no_booking}</td>
                   <td className="max-w-56 truncate px-3 py-2">{f.cliente ?? "—"}</td>
-                  <td className="whitespace-nowrap px-3 py-2">{f.ejecutivo ?? "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    {f.ejecutivo ??
+                      (puedeEditar === true ? <AsignarEjecutivoBoton idBooking={f.id_booking} noBooking={f.no_booking} /> : "—")}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2">{f.etapa}</td>
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fechaCorta(f.eta)}</td>
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fechaCorta(f.ata)}</td>

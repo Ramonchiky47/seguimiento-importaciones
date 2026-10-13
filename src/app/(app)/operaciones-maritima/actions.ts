@@ -6,6 +6,7 @@ import { getMyPermissions } from "@/lib/permissions";
 import { loginCargolink, type CargolinkBooking } from "@/lib/cargolink";
 import { ETAPAS_CARGOLINK } from "@/lib/etapasCargolink";
 import {
+  asignarEjecutivoEnCargolink,
   descargarOperacionesRecientes,
   eliminarTransbordoEnCargolink,
   guardarEtapaEnCargolink,
@@ -16,6 +17,7 @@ import {
   listarDocumentosBooking,
   subirDocumentoBooking,
   leerTransbordos,
+  listarUsuariosCargolink,
   mapOperacionMaritima,
   type FilaTransbordo,
 } from "@/lib/operacionesMaritima";
@@ -590,5 +592,98 @@ export async function subirDocumentoCargolink(idBooking: number, formData: FormD
     const msg = e instanceof Error ? e.message : "Error al subir a Cargolink.";
     await bitacora(false, msg, null, null, { archivo: archivo.name });
     return { ok: false, mensaje: msg };
+  }
+}
+
+// ---- Ejecutivo del booking (Track › Sin ejecutivo).
+
+// Usuarios de Cargolink que ya son ejecutivos de algún booking marítimo (los
+// operativos); la lista completa de Cargolink incluye vendedores y cuentas
+// de sistema.
+export async function ejecutivosCargolink(): Promise<{ ok: boolean; mensaje: string; usuarios: { id: string; nombre: string }[] }> {
+  const supabase = await createClient();
+  const { data: puedeEditar } = await supabase.rpc("puedo_editar_cargolink");
+  if (puedeEditar !== true) return { ok: false, mensaje: "Sin permiso para editar en Cargolink.", usuarios: [] };
+  try {
+    const session = await loginCargolink();
+    const [usuarios, { data: ejecutivos }] = await Promise.all([
+      listarUsuariosCargolink(session),
+      supabase.rpc("operaciones_maritima_ejecutivos", { p_anio: null, p_types: null, p_q: null, p_tarjeta: null, p_hoy: null }),
+    ]);
+    const nombres = new Set(((ejecutivos ?? []) as { ejecutivo: string }[]).map((e) => e.ejecutivo.trim().toUpperCase()));
+    const operativos = usuarios
+      .filter((u) => nombres.has(u.nombre.toUpperCase()))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+    return { ok: true, mensaje: "", usuarios: operativos };
+  } catch (e) {
+    return { ok: false, mensaje: e instanceof Error ? e.message : "Error al consultar Cargolink.", usuarios: [] };
+  }
+}
+
+export async function asignarEjecutivoCargolink(idBooking: number, idUsuario: string): Promise<ResultadoEtapa> {
+  if (!/^\d{1,6}$/.test(idUsuario)) return { ok: false, mensaje: "Usuario no válido." };
+  const supabase = await createClient();
+  const { data: puedeEditar } = await supabase.rpc("puedo_editar_cargolink");
+  if (puedeEditar !== true) return { ok: false, mensaje: "Sin permiso para editar en Cargolink." };
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const [{ data: op }, { data: operativo }] = await Promise.all([
+    supabase.from("operaciones_maritima").select("no_booking").eq("id_booking", idBooking).maybeSingle(),
+    user
+      ? supabase.from("catalogo_operativos").select("nombre_operativo").eq("user_id", user.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const noBooking = op?.no_booking as string | undefined;
+  if (!noBooking) return { ok: false, mensaje: "Operación no encontrada." };
+
+  const bitacora = async (ok: boolean, mensaje: string, antes: string | null, despues: string | null, elegido: string) => {
+    await supabase.from("bitacora_cargolink").insert({
+      id_booking: idBooking,
+      no_booking: noBooking,
+      etapa: "ejecutivo",
+      accion: "ASIGNAR_EJECUTIVO",
+      valores: { Ejecutivo: elegido },
+      valores_antes: { Ejecutivo: antes },
+      valores_despues: { Ejecutivo: despues },
+      usuario_email: user?.email ?? null,
+      usuario_nombre: (operativo?.nombre_operativo as string | undefined) ?? user?.email ?? null,
+      ok,
+      mensaje,
+    });
+  };
+
+  try {
+    const session = await loginCargolink();
+    const [usuarios, booking] = await Promise.all([listarUsuariosCargolink(session), leerBookingMaritimo(session, noBooking)]);
+    const usuario = usuarios.find((u) => u.id === idUsuario);
+    if (!usuario) return { ok: false, mensaje: "Ese usuario no existe en Cargolink." };
+    if (!booking) return { ok: false, mensaje: "No aparece en Servicios marítimos de Cargolink (¿archivado?)." };
+    const antes = typeof booking.ejecutivo === "string" && booking.ejecutivo.trim() ? booking.ejecutivo.trim() : null;
+    if (antes) {
+      return { ok: false, mensaje: `En Cargolink ya tiene ejecutivo: ${antes}. Actualiza la página.` };
+    }
+
+    await asignarEjecutivoEnCargolink(session, idBooking, idUsuario, { nombre: null, id: null });
+
+    // Verifica releyendo el booking y actualiza la fila en la app.
+    const despues = await leerBookingMaritimo(session, noBooking);
+    const nombreDespues = typeof despues?.ejecutivo === "string" && despues.ejecutivo.trim() ? despues.ejecutivo.trim() : null;
+    if (despues) {
+      await supabase.rpc("refrescar_operacion_maritima", {
+        p_row: { ...mapOperacionMaritima(despues), sincronizado_at: new Date().toISOString() },
+      });
+    }
+    const ok = nombreDespues?.toUpperCase() === usuario.nombre.toUpperCase();
+    const mensaje = ok
+      ? `Ejecutivo asignado en Cargolink: ${usuario.nombre}.`
+      : `Cargolink no confirmó el cambio (ejecutivo actual: ${nombreDespues ?? "sin ejecutivo"}).`;
+    await bitacora(ok, mensaje, antes, nombreDespues, usuario.nombre);
+    revalidatePath("/track", "layout");
+    return { ok, mensaje };
+  } catch (e) {
+    const mensaje = e instanceof Error ? e.message : "Error al guardar en Cargolink.";
+    await bitacora(false, mensaje, null, null, idUsuario);
+    return { ok: false, mensaje };
   }
 }

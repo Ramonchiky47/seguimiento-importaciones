@@ -297,3 +297,44 @@ export async function subirDocumentoBooking(
   if (!sub.ok) throw new Error(`Cargolink respondió con error ${sub.status} al subir el archivo.`);
   return String(insertId);
 }
+
+// ---- Ejecutivo del booking (pantalla Operaciones › Asignar ejecutivos).
+export type UsuarioCargolink = { id: string; nombre: string };
+
+export async function listarUsuariosCargolink(session: CargolinkSession): Promise<UsuarioCargolink[]> {
+  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api&fn=consultaUsuarios`;
+  const res = await fetch(url, { headers: { Cookie: session.cookie } });
+  if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status} al leer usuarios.`);
+  const data = await res.json();
+  return ((data?.valores ?? []) as Record<string, string>[])
+    .filter((u) => u.id_usuario && u.nombre)
+    .map((u) => ({ id: String(u.id_usuario), nombre: u.nombre.trim() }));
+}
+
+// Igual que "Asignar ejecutivo" (uno por uno) en Cargolink: from=undefined es
+// lo que manda su pantalla cuando no es asignación masiva.
+export async function asignarEjecutivoEnCargolink(
+  session: CargolinkSession,
+  idBooking: number,
+  idUsuario: string,
+  actual: { nombre: string | null; id: string | null },
+): Promise<Record<string, unknown>> {
+  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api2&fn=asignarBookingEjecutivo&from=undefined&executiveID=${encodeURIComponent(idUsuario)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: session.cookie },
+    body: JSON.stringify({
+      id_booking: String(idBooking),
+      ejecutivo_actual: actual.nombre,
+      id_ejecutivo_actual: actual.id ?? "0",
+      id_ejecutivo: idUsuario,
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status}.`);
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { raw: text.slice(0, 300) };
+  }
+}
