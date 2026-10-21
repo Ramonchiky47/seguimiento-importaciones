@@ -802,3 +802,19 @@ export async function datosAsignacionEjecutivos(): Promise<{
     return { ok: false, mensaje: e instanceof Error ? e.message : "Error al consultar Cargolink.", filas: [], usuarios: [] };
   }
 }
+
+// Instrucciones de revalidación propuestas por historial (función
+// propuesta_instrucciones: mismo cliente + naviera, luego cliente, luego naviera).
+export async function propuestaInstruccionesRevalidacion(idBooking: number): Promise<{
+  nivel: 1 | 2 | 3 | null;
+  muestra: number;
+  ultimo: string | null;
+  renglones: { etiqueta: string; valor: string; n: number }[];
+} | null> {
+  const myPermissions = await getMyPermissions();
+  if (!myPermissions.es_admin && !myPermissions.puede_operaciones) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("propuesta_instrucciones", { p_id_booking: idBooking });
+  if (error || !data) return null;
+  return data as { nivel: 1 | 2 | 3 | null; muestra: number; ultimo: string | null; renglones: { etiqueta: string; valor: string; n: number }[] };
+}

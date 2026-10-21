@@ -26,6 +26,7 @@ import {
   leerTransbordosCargolink,
   refrescarOperacionDesdeCargolink,
   type FilaTransbordoForm,
+  propuestaInstruccionesRevalidacion,
 } from "@/app/(app)/operaciones-maritima/actions";
 
 // Ventana emergente con todos los indicadores de una operación marítima.
@@ -742,6 +743,42 @@ function EditorEtapa({
   const [pending, startTransition] = useTransition();
   // Aviso de ATA: ver / imprimir el PDF NOT arribo desde el formulario.
   const [verPdf, setVerPdf] = useState(false);
+  // Instrucciones propuestas por historial (cliente + naviera).
+  const campoInstrucciones = etapa.campos.find((c) => c.porDefecto === "instrucciones_revalidacion");
+  const [propuesta, setPropuesta] = useState<Awaited<ReturnType<typeof propuestaInstruccionesRevalidacion>>>(null);
+  const textoPropuesta = (p: NonNullable<typeof propuesta>, lang: string) =>
+    unirInstrucciones([
+      ...p.renglones.map((r) => ({ etiqueta: repararAcentos(r.etiqueta), valor: repararAcentos(r.valor) })),
+      lang === "ING"
+        ? { etiqueta: "Days free of delays", valor: `${diasDemora ?? 0} days.` }
+        : { etiqueta: "Días libres de demoras", valor: `${diasDemora ?? 0} días.` },
+    ]);
+  useEffect(() => {
+    if (!campoInstrucciones) return;
+    let vigente = true;
+    propuestaInstruccionesRevalidacion(idBooking).then((p) => {
+      if (!vigente || !p || p.renglones.length === 0) return;
+      setPropuesta(p);
+      // Sin instrucciones guardadas en Cargolink: se precarga la propuesta en
+      // lugar del texto genérico (si no se ha tocado).
+      if (!datos[campoInstrucciones.actual.slice(6)]) {
+        setValores((v) =>
+          v[campoInstrucciones.key] === textoPorDefecto(v.lang ?? "")
+            ? { ...v, [campoInstrucciones.key]: textoPropuesta(p, v.lang ?? "") }
+            : v,
+        );
+      }
+    });
+    return () => {
+      vigente = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idBooking]);
+  const descripcionPropuesta = propuesta
+    ? `Según ${propuesta.muestra === 1 ? "el último booking" : `los últimos ${propuesta.muestra} bookings`} ${
+        propuesta.nivel === 1 ? "de este cliente con la misma naviera" : propuesta.nivel === 2 ? "de este cliente" : "con esta naviera"
+      }${propuesta.ultimo ? ` (último: ${propuesta.ultimo})` : ""}.`
+    : null;
 
   const ejecutar = (accion: AccionEtapa) => {
     // Toda acción escribe en Cargolink: siempre se confirma.
@@ -812,6 +849,7 @@ function EditorEtapa({
                       label={c.label}
                       valor={valores[c.key] ?? ""}
                       porDefecto={textoPorDefecto(valores.lang ?? "")}
+                      propuesta={propuesta ? { texto: textoPropuesta(propuesta, valores.lang ?? ""), descripcion: descripcionPropuesta ?? "" } : null}
                       onCambiar={cambiar}
                     />
                   );
@@ -1618,11 +1656,14 @@ function CampoInstrucciones({
   label,
   valor,
   porDefecto,
+  propuesta,
   onCambiar,
 }: {
   label: string;
   valor: string;
   porDefecto: string;
+  // Instrucciones según el historial del cliente / naviera.
+  propuesta: { texto: string; descripcion: string } | null;
   onCambiar: (valor: string) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -1657,6 +1698,12 @@ function CampoInstrucciones({
             </li>
           ))}
         </ul>
+        {propuesta && (
+          <p className="text-xs text-blue-800 dark:text-blue-300">
+            {valor === propuesta.texto ? "Propuesta según historial. " : "Hay una propuesta según historial. "}
+            {propuesta.descripcion}
+          </p>
+        )}
         <button
           type="button"
           onClick={abrir}
@@ -1724,13 +1771,25 @@ function CampoInstrucciones({
             <p className="whitespace-pre-line">{unirInstrucciones(renglones).replace(/ \n/g, "\n") || "—"}</p>
           </div>
           <div className="flex flex-wrap justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => setRenglones(conEtiquetasBase(porDefecto))}
-              className="min-h-10 rounded-md px-3 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
-            >
-              Usar texto por defecto
-            </button>
+            <div className="flex flex-wrap gap-1">
+              {propuesta && (
+                <button
+                  type="button"
+                  onClick={() => setRenglones(conEtiquetasBase(propuesta.texto))}
+                  title={propuesta.descripcion}
+                  className="min-h-10 rounded-md px-3 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+                >
+                  Usar propuesta del historial
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setRenglones(conEtiquetasBase(porDefecto))}
+                className="min-h-10 rounded-md px-3 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+              >
+                Usar texto por defecto
+              </button>
+            </div>
             <div className="flex gap-2">
               <button
                 type="button"
