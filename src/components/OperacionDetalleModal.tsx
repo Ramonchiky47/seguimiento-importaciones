@@ -740,6 +740,8 @@ function EditorEtapa({
   const grupos = Array.from(new Set(etapa.campos.map((c) => c.grupo ?? "")));
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Aviso de ATA: ver / imprimir el PDF NOT arribo desde el formulario.
+  const [verPdf, setVerPdf] = useState(false);
 
   const ejecutar = (accion: AccionEtapa) => {
     // Toda acción escribe en Cargolink: siempre se confirma.
@@ -825,8 +827,26 @@ function EditorEtapa({
                     />
                   );
                 }
+                const botonPdf =
+                  etapa.key === "aviso_ata" && c.key === "id_banco_usd" ? (
+                    <div className="flex flex-col justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setVerPdf(true)}
+                        title="Muestra el PDF con lo guardado en Cargolink; guarda primero si cambiaste algo."
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                      >
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                          <path d="M14 3v5h5" />
+                        </svg>
+                        PDF NOT arribo
+                      </button>
+                    </div>
+                  ) : null;
                 return (
-                  <label key={c.key} className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
+                  <Fragment key={c.key}>
+                  <label className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
                     <span>
                       {c.label}
                       {c.requerido && <span className="text-red-600"> *</span>}
@@ -852,11 +872,21 @@ function EditorEtapa({
                       />
                     )}
                   </label>
+                  {botonPdf}
+                  </Fragment>
                 );
               })}
           </div>
         </fieldset>
       ))}
+      {verPdf && (
+        <NotArriboDialog
+          idBooking={idBooking}
+          noBooking={String(op.no_booking ?? "")}
+          verDirecto={valores.lang === "ING" ? "ING" : "ESP"}
+          onCerrar={() => setVerPdf(false)}
+        />
+      )}
       <div className="flex flex-wrap gap-2">
         {etapa.acciones.map((a) => (
           <button
@@ -1360,10 +1390,21 @@ function DocumentosCargolink({
 
 // Acciones › PDF NOT arribo: elige idioma, ve el PDF de Cargolink y lo
 // descarga (ruta /api/cargolink/notificacion-arribo).
-function NotArriboDialog({ idBooking, noBooking, onCerrar }: { idBooking: number; noBooking: string; onCerrar: () => void }) {
+function NotArriboDialog({
+  idBooking,
+  noBooking,
+  onCerrar,
+  verDirecto,
+}: {
+  idBooking: number;
+  noBooking: string;
+  onCerrar: () => void;
+  // Desde Aviso de ATA: abre el PDF directo en el idioma del formulario.
+  verDirecto?: "ESP" | "ING";
+}) {
   const ref = useRef<HTMLDialogElement>(null);
-  const [lang, setLang] = useState<"ESP" | "ING">("ESP");
-  const [viendo, setViendo] = useState<"ESP" | "ING" | null>(null);
+  const [lang, setLang] = useState<"ESP" | "ING">(verDirecto ?? "ESP");
+  const [viendo, setViendo] = useState<"ESP" | "ING" | null>(verDirecto ?? null);
 
   useEffect(() => {
     ref.current?.showModal();
