@@ -12,11 +12,13 @@ const TABS = [
   { href: "/track/clientes", label: "Clientes asignados" },
 ];
 
-export function TrackTabs() {
+export function TrackTabs({ asignaEjecutivos = false }: { asignaEjecutivos?: boolean }) {
   const pathname = usePathname();
+  // "Asignar ejecutivos": administradores y asignadores (Adriana, Jair).
+  const tabs = asignaEjecutivos ? [...TABS, { href: "/track/asignar-ejecutivos", label: "Asignar ejecutivos" }] : TABS;
   return (
     <nav aria-label="Secciones de Track" className="flex gap-1 overflow-x-auto">
-      {TABS.map((t) => {
+      {tabs.map((t) => {
         const activa = pathname === t.href || pathname.startsWith(`${t.href}/`);
         return (
           <Link

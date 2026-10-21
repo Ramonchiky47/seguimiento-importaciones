@@ -626,25 +626,47 @@ export async function ejecutivosCargolink(): Promise<{ ok: boolean; mensaje: str
   }
 }
 
-export async function asignarEjecutivoCargolink(idBooking: number, idUsuario: string): Promise<ResultadoEtapa> {
-  if (!/^\d{1,6}$/.test(idUsuario)) return { ok: false, mensaje: "Usuario no válido." };
+// Asignan ejecutivo los editores de Cargolink y quienes están en
+// asignadores_ejecutivo (pantalla Track › Asignar ejecutivos).
+async function puedeAsignarEjecutivo(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const [{ data: editor }, { data: asignador }] = await Promise.all([
+    supabase.rpc("puedo_editar_cargolink"),
+    supabase.rpc("puedo_asignar_ejecutivo"),
+  ]);
+  return editor === true || asignador === true;
+}
+
+async function contextoAsignacion() {
   const supabase = await createClient();
-  const { data: puedeEditar } = await supabase.rpc("puedo_editar_cargolink");
-  if (puedeEditar !== true) return { ok: false, mensaje: "Sin permiso para editar en Cargolink." };
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const [{ data: op }, { data: operativo }] = await Promise.all([
-    supabase.from("operaciones_maritima").select("no_booking").eq("id_booking", idBooking).maybeSingle(),
-    user
-      ? supabase.from("catalogo_operativos").select("nombre_operativo").eq("user_id", user.id).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
+  const { data: operativo } = user
+    ? await supabase.from("catalogo_operativos").select("nombre_operativo").eq("user_id", user.id).maybeSingle()
+    : { data: null };
+  return {
+    supabase,
+    email: user?.email ?? null,
+    nombre: (operativo?.nombre_operativo as string | undefined) ?? user?.email ?? null,
+  };
+}
+
+// Asigna un booking (ya con sesión de Cargolink): verifica que siga sin
+// ejecutivo, asigna, relee para confirmar, refresca la fila y deja bitácora.
+async function asignarUno(
+  ctx: Awaited<ReturnType<typeof contextoAsignacion>>,
+  session: Awaited<ReturnType<typeof loginCargolink>>,
+  usuarios: { id: string; nombre: string }[],
+  idBooking: number,
+  idUsuario: string,
+): Promise<ResultadoEtapa> {
+  if (!/^\d{1,6}$/.test(idUsuario)) return { ok: false, mensaje: "Usuario no válido." };
+  const { data: op } = await ctx.supabase.from("operaciones_maritima").select("no_booking").eq("id_booking", idBooking).maybeSingle();
   const noBooking = op?.no_booking as string | undefined;
   if (!noBooking) return { ok: false, mensaje: "Operación no encontrada." };
 
   const bitacora = async (ok: boolean, mensaje: string, antes: string | null, despues: string | null, elegido: string) => {
-    await supabase.from("bitacora_cargolink").insert({
+    await ctx.supabase.from("bitacora_cargolink").insert({
       id_booking: idBooking,
       no_booking: noBooking,
       etapa: "ejecutivo",
@@ -652,18 +674,17 @@ export async function asignarEjecutivoCargolink(idBooking: number, idUsuario: st
       valores: { Ejecutivo: elegido },
       valores_antes: { Ejecutivo: antes },
       valores_despues: { Ejecutivo: despues },
-      usuario_email: user?.email ?? null,
-      usuario_nombre: (operativo?.nombre_operativo as string | undefined) ?? user?.email ?? null,
+      usuario_email: ctx.email,
+      usuario_nombre: ctx.nombre,
       ok,
       mensaje,
     });
   };
 
   try {
-    const session = await loginCargolink();
-    const [usuarios, booking] = await Promise.all([listarUsuariosCargolink(session), leerBookingMaritimo(session, noBooking)]);
     const usuario = usuarios.find((u) => u.id === idUsuario);
     if (!usuario) return { ok: false, mensaje: "Ese usuario no existe en Cargolink." };
+    const booking = await leerBookingMaritimo(session, noBooking);
     if (!booking) return { ok: false, mensaje: "No aparece en Servicios marítimos de Cargolink (¿archivado?)." };
     const antes = typeof booking.ejecutivo === "string" && booking.ejecutivo.trim() ? booking.ejecutivo.trim() : null;
     if (antes) {
@@ -672,24 +693,112 @@ export async function asignarEjecutivoCargolink(idBooking: number, idUsuario: st
 
     await asignarEjecutivoEnCargolink(session, idBooking, idUsuario, { nombre: null, id: null });
 
-    // Verifica releyendo el booking y actualiza la fila en la app.
     const despues = await leerBookingMaritimo(session, noBooking);
     const nombreDespues = typeof despues?.ejecutivo === "string" && despues.ejecutivo.trim() ? despues.ejecutivo.trim() : null;
     if (despues) {
-      await supabase.rpc("refrescar_operacion_maritima", {
+      await ctx.supabase.rpc("refrescar_operacion_maritima", {
         p_row: { ...mapOperacionMaritima(despues), sincronizado_at: new Date().toISOString() },
       });
     }
     const ok = nombreDespues?.toUpperCase() === usuario.nombre.toUpperCase();
     const mensaje = ok
-      ? `Ejecutivo asignado en Cargolink: ${usuario.nombre}.`
-      : `Cargolink no confirmó el cambio (ejecutivo actual: ${nombreDespues ?? "sin ejecutivo"}).`;
+      ? `${noBooking}: ejecutivo asignado en Cargolink (${usuario.nombre}).`
+      : `${noBooking}: Cargolink no confirmó el cambio (ejecutivo actual: ${nombreDespues ?? "sin ejecutivo"}).`;
     await bitacora(ok, mensaje, antes, nombreDespues, usuario.nombre);
-    revalidatePath("/track", "layout");
     return { ok, mensaje };
   } catch (e) {
-    const mensaje = e instanceof Error ? e.message : "Error al guardar en Cargolink.";
+    const mensaje = `${noBooking}: ${e instanceof Error ? e.message : "Error al guardar en Cargolink."}`;
     await bitacora(false, mensaje, null, null, idUsuario);
     return { ok: false, mensaje };
+  }
+}
+
+export async function asignarEjecutivoCargolink(idBooking: number, idUsuario: string): Promise<ResultadoEtapa> {
+  const ctx = await contextoAsignacion();
+  if (!(await puedeAsignarEjecutivo(ctx.supabase))) return { ok: false, mensaje: "Sin permiso para asignar ejecutivos." };
+  try {
+    const session = await loginCargolink();
+    const usuarios = await listarUsuariosCargolink(session);
+    const r = await asignarUno(ctx, session, usuarios, idBooking, idUsuario);
+    revalidatePath("/track", "layout");
+    return r;
+  } catch (e) {
+    return { ok: false, mensaje: e instanceof Error ? e.message : "Error al consultar Cargolink." };
+  }
+}
+
+// Varias asignaciones con una sola sesión de Cargolink (pantalla Asignar
+// ejecutivos). Se procesan una por una y se regresa el resultado de cada una.
+export async function asignarEjecutivosCargolink(
+  asignaciones: { idBooking: number; idUsuario: string }[],
+): Promise<{ ok: boolean; mensaje: string; resultados: (ResultadoEtapa & { idBooking: number })[] }> {
+  const ctx = await contextoAsignacion();
+  if (!(await puedeAsignarEjecutivo(ctx.supabase))) {
+    return { ok: false, mensaje: "Sin permiso para asignar ejecutivos.", resultados: [] };
+  }
+  if (asignaciones.length === 0 || asignaciones.length > 60) {
+    return { ok: false, mensaje: "Selecciona de 1 a 60 bookings.", resultados: [] };
+  }
+  try {
+    const session = await loginCargolink();
+    const usuarios = await listarUsuariosCargolink(session);
+    const resultados: (ResultadoEtapa & { idBooking: number })[] = [];
+    for (const a of asignaciones) {
+      resultados.push({ idBooking: a.idBooking, ...(await asignarUno(ctx, session, usuarios, a.idBooking, a.idUsuario)) });
+    }
+    revalidatePath("/track", "layout");
+    const bien = resultados.filter((r) => r.ok).length;
+    return { ok: bien === resultados.length, mensaje: `${bien} de ${resultados.length} asignados en Cargolink.`, resultados };
+  } catch (e) {
+    return { ok: false, mensaje: e instanceof Error ? e.message : "Error al consultar Cargolink.", resultados: [] };
+  }
+}
+
+export type FilaPorAsignar = {
+  id_booking: number;
+  no_booking: string;
+  fecha: string | null;
+  type: string | null;
+  cliente: string | null;
+  origen: string | null;
+  destino: string | null;
+  etd_atd: string | null;
+  eta: string | null;
+  propuesta: string | null;
+  propuesta_n: number | null;
+  propuesta_ultima: string | null;
+  otros: number;
+  // Usuario de Cargolink de la propuesta.
+  propuesta_id: string | null;
+};
+
+// Bookings vigentes sin ejecutivo con la propuesta por historial y la lista
+// de ejecutivos (usuarios de Cargolink que han llevado bookings marítimos en
+// el último año).
+export async function datosAsignacionEjecutivos(): Promise<{
+  ok: boolean;
+  mensaje: string;
+  filas: FilaPorAsignar[];
+  usuarios: { id: string; nombre: string }[];
+}> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("bookings_por_asignar");
+  if (error) return { ok: false, mensaje: error.message, filas: [], usuarios: [] };
+  const r = data as { filas: Omit<FilaPorAsignar, "propuesta_id">[]; ejecutivos: string[] };
+  try {
+    const session = await loginCargolink();
+    const todos = await listarUsuariosCargolink(session);
+    const porNombre = new Map(todos.map((u) => [u.nombre.toUpperCase(), u]));
+    const usuarios = r.ejecutivos
+      .map((n) => porNombre.get(n.trim().toUpperCase()))
+      .filter((u): u is { id: string; nombre: string } => Boolean(u))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+    const filas = r.filas.map((f) => ({
+      ...f,
+      propuesta_id: f.propuesta ? (porNombre.get(f.propuesta.trim().toUpperCase())?.id ?? null) : null,
+    }));
+    return { ok: true, mensaje: "", filas, usuarios };
+  } catch (e) {
+    return { ok: false, mensaje: e instanceof Error ? e.message : "Error al consultar Cargolink.", filas: [], usuarios: [] };
   }
 }

@@ -11,10 +11,11 @@ export default async function TrackLayout({ children }: { children: React.ReactN
   }
   // Admins y usuarios autorizados en editores_cargolink (piloto).
   const supabase = await createClient();
-  const [{ data: puedeEditarCargolink }, { data: restringido }, { data: permitidos }] = await Promise.all([
+  const [{ data: puedeEditarCargolink }, { data: restringido }, { data: permitidos }, { data: asignaEjecutivos }] = await Promise.all([
     supabase.rpc("puedo_editar_cargolink"),
     supabase.rpc("track_usuario_restringido"),
     supabase.rpc("track_clientes_permitidos"),
+    supabase.rpc("puedo_asignar_ejecutivo"),
   ]);
   const clientesAsignados = restringido === true ? ((permitidos ?? []) as unknown[]).length : 0;
 
@@ -32,7 +33,7 @@ export default async function TrackLayout({ children }: { children: React.ReactN
             </p>
           )}
           <div className="mt-2">
-            <TrackTabs />
+            <TrackTabs asignaEjecutivos={asignaEjecutivos === true} />
           </div>
         </div>
       </header>
