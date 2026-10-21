@@ -1606,8 +1606,8 @@ function CampoInstrucciones({
   return (
     <div className="flex w-full flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
       <span>{label}</span>
-      <div className="flex flex-wrap items-start gap-2">
-        <ul className="min-h-10 min-w-0 flex-1 space-y-0.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+      <div className="flex flex-col items-start gap-2">
+        <ul className="min-h-10 w-full min-w-0 space-y-0.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
           {vista.length === 0 && <li>—</li>}
           {vista.map((r, i) => (
             <li key={i}>
