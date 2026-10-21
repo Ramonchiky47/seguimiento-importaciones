@@ -147,15 +147,25 @@ export async function leerBookingMaritimo(
   noBooking: string,
 ): Promise<CargolinkBooking | null> {
   const url = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api&fn=consultaBookingConcentrado&limit=0`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Cookie: session.cookie },
-    body: JSON.stringify({ archivadoOperaciones: "0", no_booking: noBooking }),
-  });
-  if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status} al leer el booking.`);
-  const data = await res.json();
-  const valores = (data?.valores ?? []) as CargolinkBooking[];
-  return valores.find((b) => b.no_booking === noBooking) ?? null;
+  // Cargolink a veces regresa la lista vacía aunque el booking exista
+  // (2608-4169-FCLI, 21 oct); se reintenta antes de darlo por no encontrado.
+  for (let intento = 0; intento < 3; intento++) {
+    if (intento > 0) await new Promise((r) => setTimeout(r, 1500 * intento));
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: session.cookie },
+      body: JSON.stringify({ archivadoOperaciones: "0", no_booking: noBooking }),
+    });
+    if (!res.ok) {
+      if (intento === 2) throw new Error(`Cargolink respondió con error ${res.status} al leer el booking.`);
+      continue;
+    }
+    const data = await res.json().catch(() => null);
+    const valores = (data?.valores ?? []) as CargolinkBooking[];
+    const booking = valores.find((b) => b.no_booking === noBooking);
+    if (booking) return booking;
+  }
+  return null;
 }
 
 // Guarda una etapa en Cargolink con el mismo web service que su pantalla.

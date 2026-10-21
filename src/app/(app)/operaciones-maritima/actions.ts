@@ -250,7 +250,7 @@ export async function refrescarOperacionDesdeCargolink(idBooking: number): Promi
     const session = await loginCargolink();
     const booking = await leerBookingMaritimo(session, op.no_booking as string);
     if (!booking) {
-      return { ok: false, mensaje: "No aparece en Servicios marítimos de Cargolink (¿archivado?)." };
+      return { ok: false, mensaje: "Cargolink no regresó el booking (puede estar archivado o no respondió); intenta de nuevo en un momento." };
     }
     const { error } = await supabase.rpc("refrescar_operacion_maritima", {
       p_row: { ...mapOperacionMaritima(booking), sincronizado_at: new Date().toISOString() },
@@ -685,7 +685,7 @@ async function asignarUno(
     const usuario = usuarios.find((u) => u.id === idUsuario);
     if (!usuario) return { ok: false, mensaje: "Ese usuario no existe en Cargolink." };
     const booking = await leerBookingMaritimo(session, noBooking);
-    if (!booking) return { ok: false, mensaje: "No aparece en Servicios marítimos de Cargolink (¿archivado?)." };
+    if (!booking) return { ok: false, mensaje: "Cargolink no regresó el booking (puede estar archivado o no respondió); intenta de nuevo en un momento." };
     const antes = typeof booking.ejecutivo === "string" && booking.ejecutivo.trim() ? booking.ejecutivo.trim() : null;
     if (antes) {
       return { ok: false, mensaje: `En Cargolink ya tiene ejecutivo: ${antes}. Actualiza la página.` };
