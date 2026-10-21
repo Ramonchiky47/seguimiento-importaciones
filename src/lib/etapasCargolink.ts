@@ -9,12 +9,18 @@ export type CampoEtapa = {
   label: string;
   // number = entero (días); decimal = importe; select = lista (opciones fijas
   // o un catálogo de Cargolink).
-  tipo: "date" | "number" | "decimal" | "text" | "select";
+  // textarea = texto largo que se captura en una ventana emergente.
+  tipo: "date" | "number" | "decimal" | "text" | "select" | "textarea";
   requerido: boolean;
   // Columna de operaciones_maritima_vista (o datos.<key>) con el valor actual.
   actual: string;
   opciones?: { valor: string; label: string }[];
-  catalogo?: "aseguradoras" | "incoterms";
+  catalogo?: "aseguradoras" | "incoterms" | "bancos" | "bancosUSD";
+  // Cargolink cambia los acentos al guardar textos largos: no se compara
+  // contra lo releído.
+  sinVerificar?: boolean;
+  // Texto que propone Cargolink cuando el campo está vacío.
+  porDefecto?: "instrucciones_revalidacion";
   // Encabezado para agrupar campos en el formulario.
   grupo?: string;
   // "origen" = el valor vive en el registro de origen (consultaOrigen), no en
@@ -58,6 +64,19 @@ const NO_APLICA_AVISO: AccionEtapa = { status: "NO_APLICA", label: "No aplica", 
 // Mismas listas que la pantalla de Seguro de Cargolink.
 const ASEGURADO_POR = ["CONTENEDOR", "MERCANCIA", "AMBOS"].map((v) => ({ valor: v, label: v }));
 const MONEDAS = ["USD", "MXN", "EUR"].map((v) => ({ valor: v, label: v }));
+const IDIOMAS = [
+  { valor: "ESP", label: "Español" },
+  { valor: "ING", label: "Inglés" },
+];
+
+// Mismo texto que propone Cargolink (AV2, empresa 1) al abrir Aviso ATA sin
+// instrucciones guardadas.
+export function instruccionesRevalidacionPorDefecto(lang: string, diasDemora: string | number | null | undefined): string {
+  const dias = diasDemora ?? 0;
+  return lang === "ING"
+    ? `* BL Instruction: Original \n *Payment: Cash \n *Warranty: Deposit 1,000 usd per container \n *Days free of delays: ${dias} days.`
+    : `* Instrucción BL: Original \n *Forma de pago: Contado \n *Garantía: Deposito 1,000 usd por contenedor \n *Días libres de demoras: ${dias} días.`;
+}
 
 export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
   atd: {
@@ -228,7 +247,21 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     fn: "notificacionBookingCliente",
     desdeEtapa: "AVISO_ATA",
     mov: "his_mov_alertAta",
-    campos: [],
+    // Igual que la pantalla de Aviso ATA de Cargolink (transito/aviso.php).
+    campos: [
+      { key: "lang", label: "Idioma", tipo: "select", requerido: false, actual: "datos.lang", opciones: IDIOMAS },
+      { key: "id_banco", label: "Banco", tipo: "select", requerido: false, actual: "datos.id_banco", catalogo: "bancos" },
+      { key: "id_banco_usd", label: "Banco en USD", tipo: "select", requerido: false, actual: "datos.id_banco_usd", catalogo: "bancosUSD" },
+      {
+        key: "inst_revalidacion",
+        label: "Instrucciones de revalidación",
+        tipo: "textarea",
+        requerido: false,
+        actual: "datos.inst_revalidacion",
+        sinVerificar: true,
+        porDefecto: "instrucciones_revalidacion",
+      },
+    ],
     acciones: [GUARDAR, FINALIZAR_AVISO, NO_APLICA_AVISO],
   },
   vacio: {

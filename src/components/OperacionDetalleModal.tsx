@@ -4,7 +4,13 @@ import { Fragment, useCallback, useEffect, useRef, useState, useTransition } fro
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ESTADOS, fechaCorta, type EstadoHito } from "@/lib/track";
-import { ETAPAS_CARGOLINK, ETAPA_POR_HITO, type AccionEtapa, type EtapaCargolink } from "@/lib/etapasCargolink";
+import {
+  ETAPAS_CARGOLINK,
+  ETAPA_POR_HITO,
+  instruccionesRevalidacionPorDefecto,
+  type AccionEtapa,
+  type EtapaCargolink,
+} from "@/lib/etapasCargolink";
 import {
   eliminarFilaTransbordoCargolink,
   catalogosCargolink,
@@ -693,6 +699,12 @@ function EditorEtapa({
       return [c.key, s];
     }),
   );
+  // Instrucciones de revalidación: sin texto guardado, el que propone Cargolink.
+  const diasDemora = (op.dias_libres_demora as number | null) ?? datos.dias_demora;
+  const textoPorDefecto = (lang: string) => instruccionesRevalidacionPorDefecto(lang || "ESP", diasDemora);
+  for (const c of etapa.campos) {
+    if (c.porDefecto === "instrucciones_revalidacion" && !inicial[c.key]) inicial[c.key] = textoPorDefecto(inicial.lang ?? "ESP");
+  }
   const [valores, setValores] = useState<Record<string, string>>(inicial);
   // Listas que vienen de Cargolink (aseguradoras, incoterms).
   const usaCatalogos = etapa.campos.some((c) => c.catalogo);
@@ -751,7 +763,29 @@ function EditorEtapa({
               .map((c) => {
                 const clase =
                   "min-h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
-                const cambiar = (valor: string) => setValores((v) => ({ ...v, [c.key]: valor }));
+                const cambiar = (valor: string) =>
+                  setValores((v) => {
+                    const nuevo = { ...v, [c.key]: valor };
+                    // Al cambiar el idioma, si las instrucciones siguen siendo el
+                    // texto por defecto, se cambian al del otro idioma.
+                    if (c.key === "lang") {
+                      for (const t of etapa.campos.filter((x) => x.porDefecto === "instrucciones_revalidacion")) {
+                        if (v[t.key] === textoPorDefecto(v.lang ?? "")) nuevo[t.key] = textoPorDefecto(valor);
+                      }
+                    }
+                    return nuevo;
+                  });
+                if (c.tipo === "textarea") {
+                  return (
+                    <CampoTextoLargo
+                      key={c.key}
+                      label={c.label}
+                      valor={valores[c.key] ?? ""}
+                      porDefecto={c.porDefecto ? textoPorDefecto(valores.lang ?? "") : null}
+                      onCambiar={cambiar}
+                    />
+                  );
+                }
                 return (
                   <label key={c.key} className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
                     <span>
@@ -1392,5 +1426,106 @@ function NotArriboDialog({ idBooking, noBooking, onCerrar }: { idBooking: number
         </div>
       )}
     </dialog>
+  );
+}
+
+// Texto largo (p. ej. instrucciones de revalidación): se ve en el formulario
+// y se captura en una ventana emergente; se guarda en Cargolink con los
+// botones de la etapa.
+function CampoTextoLargo({
+  label,
+  valor,
+  porDefecto,
+  onCambiar,
+}: {
+  label: string;
+  valor: string;
+  porDefecto: string | null;
+  onCambiar: (valor: string) => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const [borrador, setBorrador] = useState(valor);
+  const abrir = () => {
+    setBorrador(valor);
+    ref.current?.showModal();
+  };
+  return (
+    <div className="flex w-full flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
+      <span>{label}</span>
+      <div className="flex flex-wrap items-start gap-2">
+        <p className="min-h-10 min-w-0 flex-1 whitespace-pre-line rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+          {valor || "—"}
+        </p>
+        <button
+          type="button"
+          onClick={abrir}
+          className="min-h-10 shrink-0 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+        >
+          Editar
+        </button>
+      </div>
+      <dialog
+        ref={ref}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (e.target === ref.current) ref.current?.close();
+        }}
+        onClose={(e) => e.stopPropagation()}
+        aria-labelledby="texto-largo-titulo"
+        className="m-auto w-[min(680px,calc(100vw-32px))] rounded-xl bg-white p-0 shadow-2xl backdrop:bg-slate-900/40 dark:bg-slate-900"
+      >
+        <div className="space-y-3 p-5">
+          <h4 id="texto-largo-titulo" className="text-base font-semibold text-slate-900 dark:text-slate-50">
+            {label}
+          </h4>
+          <label className="sr-only" htmlFor="texto-largo-campo">
+            {label}
+          </label>
+          <textarea
+            id="texto-largo-campo"
+            value={borrador}
+            onChange={(e) => setBorrador(e.target.value)}
+            rows={12}
+            maxLength={2000}
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+          />
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Al aceptar, el texto queda en el formulario; se guarda en Cargolink al presionar Guardar o Finalizar.
+          </p>
+          <div className="flex flex-wrap justify-between gap-2">
+            {porDefecto ? (
+              <button
+                type="button"
+                onClick={() => setBorrador(porDefecto)}
+                className="min-h-10 rounded-md px-3 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+              >
+                Usar texto por defecto
+              </button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => ref.current?.close()}
+                className="min-h-10 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onCambiar(borrador);
+                  ref.current?.close();
+                }}
+                className="min-h-10 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900"
+              >
+                Aceptar
+              </button>
+            </div>
+          </div>
+        </div>
+      </dialog>
+    </div>
   );
 }

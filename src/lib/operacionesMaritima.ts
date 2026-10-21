@@ -232,6 +232,8 @@ export async function eliminarTransbordoEnCargolink(session: CargolinkSession, i
 export async function leerCatalogosSeguro(session: CargolinkSession): Promise<{
   aseguradoras: { valor: string; label: string }[];
   incoterms: { valor: string; label: string }[];
+  bancos: { valor: string; label: string }[];
+  bancosUSD: { valor: string; label: string }[];
 }> {
   const get = async (fn: string) => {
     const res = await fetch(`${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api&fn=${fn}`, {
@@ -241,10 +243,19 @@ export async function leerCatalogosSeguro(session: CargolinkSession): Promise<{
     const data = await res.json();
     return (data?.valores ?? []) as Record<string, string>[];
   };
-  const [aseg, inco] = await Promise.all([get("consultaAseguradoras"), get("consultaIncoterm")]);
+  // Bancos propios (Aviso ATA): todos y solo los de USD.
+  const [aseg, inco, bancos, bancosUSD] = await Promise.all([
+    get("consultaAseguradoras"),
+    get("consultaIncoterm"),
+    get("consultaBanco&tipo=Propios"),
+    get("consultaBanco&tipo=Propios&moneda=USD"),
+  ]);
+  const banco = (b: Record<string, string>) => ({ valor: String(b.id_banco), label: b.nombre_banco });
   return {
     aseguradoras: aseg.map((a) => ({ valor: String(a.id_aseguradora), label: a.nombre })),
     incoterms: inco.map((i) => ({ valor: i.tipo, label: i.tipo })),
+    bancos: bancos.map(banco),
+    bancosUSD: bancosUSD.map(banco),
   };
 }
 

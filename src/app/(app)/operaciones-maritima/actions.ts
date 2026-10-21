@@ -136,6 +136,7 @@ export async function guardarEtapaCargolink(
       if (c.tipo === "number" && !/^\d{1,3}$/.test(v)) return { ok: false, mensaje: `${c.label}: número no válido.` };
       if (c.tipo === "decimal" && !/^\d{1,12}(\.\d{1,2})?$/.test(v)) return { ok: false, mensaje: `${c.label}: importe no válido.` };
       if (c.tipo === "text" && v.length > 300) return { ok: false, mensaje: `${c.label}: máximo 300 caracteres.` };
+      if (c.tipo === "textarea" && v.length > 2000) return { ok: false, mensaje: `${c.label}: máximo 2,000 caracteres.` };
       if (c.tipo === "select" && c.opciones && !c.opciones.some((o) => o.valor === v)) {
         return { ok: false, mensaje: `${c.label}: opción no válida.` };
       }
@@ -201,7 +202,9 @@ export async function guardarEtapaCargolink(
       await bitacora(false, "Guardado, pero no se pudo releer el booking.", cambios);
       return { ok: false, mensaje: "Cargolink aceptó el guardado, pero no se pudo releer el booking para confirmarlo." };
     }
-    const noCuadran = Object.entries(cambios).filter(([k, v]) => String(despues[k] ?? "").slice(0, v.length) !== v);
+    const noCuadran = Object.entries(cambios).filter(
+      ([k, v]) => !etapa.campos.find((c) => c.key === k)?.sinVerificar && String(despues[k] ?? "").slice(0, v.length) !== v,
+    );
     if (despues[etapa.mov] !== accion.resultado || noCuadran.length > 0) {
       const msg = `Cargolink respondió OK pero quedó: etapa ${String(despues[etapa.mov] ?? "sin estatus")}${
         noCuadran.length ? `, campos sin cambio: ${noCuadran.map(([k]) => k).join(", ")}` : ""
@@ -477,14 +480,17 @@ export async function eliminarFilaTransbordoCargolink(idBooking: number, idTrans
 export async function catalogosCargolink(): Promise<{
   aseguradoras: { valor: string; label: string }[];
   incoterms: { valor: string; label: string }[];
+  bancos: { valor: string; label: string }[];
+  bancosUSD: { valor: string; label: string }[];
 }> {
+  const vacio = { aseguradoras: [], incoterms: [], bancos: [], bancosUSD: [] };
   const myPermissions = await getMyPermissions();
-  if (!myPermissions.es_admin && !myPermissions.puede_operaciones) return { aseguradoras: [], incoterms: [] };
+  if (!myPermissions.es_admin && !myPermissions.puede_operaciones) return vacio;
   try {
     const session = await loginCargolink();
     return await leerCatalogosSeguro(session);
   } catch {
-    return { aseguradoras: [], incoterms: [] };
+    return vacio;
   }
 }
 
