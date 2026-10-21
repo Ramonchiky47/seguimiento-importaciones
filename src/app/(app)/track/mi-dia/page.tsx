@@ -285,7 +285,7 @@ export default async function MiDiaPage({
             return (
               <Fragment key={`${f.seccion}-${f.id_booking}`}>
               {nuevaSeccion && (
-                <li className="flex items-center justify-between gap-2 bg-slate-50 px-4 py-2 dark:bg-slate-800/60">
+                <li data-encabezado={f.seccion} className="flex items-center justify-between gap-2 bg-slate-50 px-4 py-2 dark:bg-slate-800/60">
                   <h3 className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
                     {SECCIONES[f.seccion] ?? f.seccion}
                   </h3>
@@ -295,6 +295,8 @@ export default async function MiDiaPage({
                 </li>
               )}
               <li
+                data-buscar={`${f.no_booking} ${f.cliente ?? ""} ${f.ejecutivo ?? "Sin ejecutivo"}`}
+                data-seccion={f.seccion}
                 className={`${claseFilaEstatus(f.status_booking)} grid grid-cols-[6px_minmax(0,1fr)_minmax(0,2.2fr)] gap-4 py-3 pr-4 text-sm sm:grid-cols-[6px_minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,0.6fr)]`}
               >
                 <span className={`self-stretch ${peor.barra}`} aria-hidden="true" />
@@ -395,6 +397,7 @@ export default async function MiDiaPage({
           {porZarpar.map((z) => (
             <li
               key={z.id_booking}
+              data-buscar={`${z.no_booking} ${z.cliente ?? ""} ${z.ejecutivo ?? "Sin ejecutivo"}`}
               className={`${claseFilaEstatus(z.status_booking)} grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-x-4 gap-y-1 px-4 py-2.5 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)_auto]`}
             >
               <AbrirOperacionBoton
