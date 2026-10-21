@@ -850,6 +850,7 @@ function EditorEtapa({
                       valor={valores[c.key] ?? ""}
                       porDefecto={textoPorDefecto(valores.lang ?? "")}
                       propuesta={propuesta ? { texto: textoPropuesta(propuesta, valores.lang ?? ""), descripcion: descripcionPropuesta ?? "" } : null}
+                      guardado={repararAcentos(String(datos[c.actual.slice(6)] ?? ""))}
                       onCambiar={cambiar}
                     />
                   );
@@ -1657,6 +1658,7 @@ function CampoInstrucciones({
   valor,
   porDefecto,
   propuesta,
+  guardado,
   onCambiar,
 }: {
   label: string;
@@ -1664,6 +1666,8 @@ function CampoInstrucciones({
   porDefecto: string;
   // Instrucciones según el historial del cliente / naviera.
   propuesta: { texto: string; descripcion: string } | null;
+  // Lo que hoy está guardado en Cargolink.
+  guardado: string;
   onCambiar: (valor: string) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -1688,6 +1692,22 @@ function CampoInstrucciones({
   return (
     <div className="flex w-full flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
       <span>{label}</span>
+      {/* Leyenda cuando lo que se ve no es lo guardado en Cargolink. */}
+      {valor.trim() !== guardado.trim() && (
+        <span
+          className={`self-start rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ${
+            propuesta && valor === propuesta.texto
+              ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+              : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+          }`}
+        >
+          {propuesta && valor === propuesta.texto
+            ? "Propuesta · aún no guardada en Cargolink"
+            : valor === porDefecto
+              ? "Texto por defecto · aún no guardado en Cargolink"
+              : "Modificado · aún no guardado en Cargolink"}
+        </span>
+      )}
       <div className="flex flex-col items-start gap-2">
         <ul className="min-h-10 w-full min-w-0 space-y-0.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
           {vista.length === 0 && <li>—</li>}
