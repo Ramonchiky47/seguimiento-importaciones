@@ -1691,14 +1691,23 @@ function CampoInstrucciones({
   const cambiar = (i: number, campo: keyof RenglonInstruccion, v: string) =>
     setRenglones((rs) => rs.map((r, j) => (j === i ? { ...r, [campo]: v } : r)));
   const vista = separarInstrucciones(valor);
+  // Lo que se ve ya está guardado en Cargolink (instrucciones reales) o es la
+  // propuesta del historial sin guardar.
+  const esGuardado = Boolean(guardado.trim()) && valor.trim() === guardado.trim();
+  const esPropuesta = !esGuardado && Boolean(propuesta) && valor === propuesta?.texto;
   const claseInput =
     "min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
 
   return (
     <div className="flex w-full flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
       <span>{label}</span>
-      {/* Leyenda cuando lo que se ve no es lo guardado en Cargolink. */}
-      {valor.trim() !== guardado.trim() && (
+      {/* Leyenda: guardado en Cargolink o, si no, de dónde sale el texto. */}
+      {esGuardado && (
+        <span className="self-start rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-green-800 dark:bg-green-950 dark:text-green-300">
+          Guardado en Cargolink
+        </span>
+      )}
+      {!esGuardado && (
         <span
           className={`self-start rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ${
             propuesta && valor === propuesta.texto
@@ -1718,14 +1727,19 @@ function CampoInstrucciones({
           {vista.length === 0 && <li>—</li>}
           {vista.map((r, i) => (
             <li key={i}>
-              * {r.etiqueta && <span className="font-semibold">{r.etiqueta}: </span>}
+              * {esPropuesta && <span className="font-semibold text-blue-700 dark:text-blue-400">Propuesta · </span>}
+              {r.etiqueta && <span className="font-semibold">{r.etiqueta}: </span>}
               {r.valor}
             </li>
           ))}
         </ul>
         {propuesta && (
           <p className="text-xs text-blue-800 dark:text-blue-300">
-            {valor === propuesta.texto ? "Propuesta según historial. " : "Hay una propuesta según historial. "}
+            {esPropuesta
+              ? "Propuesta según historial, aún no guardada. "
+              : valor === propuesta.texto
+                ? "Coincide con la propuesta según historial. "
+                : "Hay una propuesta según historial (botón Editar › Usar propuesta). "}
             {propuesta.descripcion}
           </p>
         )}
