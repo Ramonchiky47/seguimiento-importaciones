@@ -212,6 +212,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   const [editando, setEditando] = useState<number | null>(null);
   // Etapa de Cargolink abierta en la ventana de detalle (clave his_mov_*).
   const [etapaAbierta, setEtapaAbierta] = useState<{ clave: string; label: string; n: number } | null>(null);
+  const [pdfNotArribo, setPdfNotArribo] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   // Estado del refresco contra Cargolink al abrir la ventana.
   const [refresco, setRefresco] = useState<{ estado: "cargando" | "ok" | "error"; mensaje: string } | null>(null);
@@ -343,6 +344,9 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
           }}
         />
       )}
+      {idBooking !== null && op && pdfNotArribo && (
+        <NotArriboDialog idBooking={idBooking} noBooking={texto(op.no_booking)} onCerrar={() => setPdfNotArribo(false)} />
+      )}
       {idBooking !== null && (
         <div className="flex max-h-[90vh] flex-col">
           <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
@@ -375,6 +379,33 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                 </p>
               )}
             </div>
+            <div className="flex shrink-0 items-center gap-2">
+            {op && (
+              <details className="relative">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden">
+                  Acciones
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </summary>
+                <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.currentTarget.closest("details")?.removeAttribute("open");
+                      setPdfNotArribo(true);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                      <path d="M14 3v5h5" />
+                    </svg>
+                    PDF NOT arribo
+                  </button>
+                </div>
+              </details>
+            )}
             <button
               type="button"
               onClick={cerrar}
@@ -385,6 +416,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                 <path d="M6 6l12 12M18 6 6 18" />
               </svg>
             </button>
+            </div>
           </div>
 
           <div className="space-y-4 overflow-y-auto p-5">
@@ -1250,5 +1282,115 @@ function DocumentosCargolink({
         </p>
       )}
     </section>
+  );
+}
+
+// Acciones › PDF NOT arribo: elige idioma, ve el PDF de Cargolink y lo
+// descarga (ruta /api/cargolink/notificacion-arribo).
+function NotArriboDialog({ idBooking, noBooking, onCerrar }: { idBooking: number; noBooking: string; onCerrar: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const [lang, setLang] = useState<"ESP" | "ING">("ESP");
+  const [viendo, setViendo] = useState<"ESP" | "ING" | null>(null);
+
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+
+  const url = (l: "ESP" | "ING", descargar = false) =>
+    `/api/cargolink/notificacion-arribo?id=${idBooking}&lang=${l}${descargar ? "&descargar=1" : ""}`;
+
+  return (
+    <dialog
+      ref={ref}
+      onClose={(e) => {
+        if (e.target === ref.current) onCerrar();
+      }}
+      onClick={(e) => {
+        if (e.target === ref.current) ref.current?.close();
+      }}
+      aria-labelledby="not-arribo-titulo"
+      className={`m-auto flex flex-col rounded-xl bg-white p-0 shadow-2xl backdrop:bg-slate-900/40 dark:bg-slate-900 ${
+        viendo ? "h-[90vh] w-[min(1000px,calc(100vw-32px))]" : "w-[min(420px,calc(100vw-32px))]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+        <div className="min-w-0">
+          <p className="text-xs text-slate-500 dark:text-slate-400">{noBooking}</p>
+          <h3 id="not-arribo-titulo" className="text-base font-semibold text-slate-900 dark:text-slate-50">
+            Notificación de arribo{viendo ? ` · ${viendo === "ESP" ? "Español" : "Inglés"}` : ""}
+          </h3>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {viendo && (
+            <>
+              <button
+                type="button"
+                onClick={() => setViendo(null)}
+                className="min-h-10 rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cambiar idioma
+              </button>
+              <a
+                href={url(viendo, true)}
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" />
+                </svg>
+                Descargar
+              </a>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => ref.current?.close()}
+            aria-label="Cerrar"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {viendo ? (
+        <iframe
+          key={viendo}
+          src={url(viendo)}
+          title={`Notificación de arribo ${noBooking}`}
+          className="min-h-0 w-full flex-1 rounded-b-xl bg-slate-100"
+        />
+      ) : (
+        <div className="space-y-4 p-5">
+          <fieldset className="space-y-2">
+            <legend className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-200">Idioma del PDF</legend>
+            {(
+              [
+                ["ESP", "Español"],
+                ["ING", "Inglés"],
+              ] as const
+            ).map(([valor, label]) => (
+              <label
+                key={valor}
+                className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-slate-200 px-3 text-sm has-checked:border-blue-700 has-checked:bg-blue-50 dark:border-slate-700 dark:has-checked:bg-blue-950"
+              >
+                <input type="radio" name="lang-not-arribo" value={valor} checked={lang === valor} onChange={() => setLang(valor)} />
+                {label}
+              </label>
+            ))}
+          </fieldset>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setViendo(lang)}
+              className="min-h-10 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900"
+            >
+              Ver PDF
+            </button>
+          </div>
+        </div>
+      )}
+    </dialog>
   );
 }

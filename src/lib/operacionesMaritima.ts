@@ -338,3 +338,20 @@ export async function asignarEjecutivoEnCargolink(
     return { raw: text.slice(0, 300) };
   }
 }
+
+// PDF "NOT arribo" (notificación de arribo) tal como lo genera Cargolink en
+// Acciones › PDF NOT arribo: lang ESP o ING, tipo "revalidacion".
+export async function descargarNotificacionArribo(
+  session: CargolinkSession,
+  idBooking: number,
+  lang: "ESP" | "ING",
+): Promise<ArrayBuffer> {
+  const url = `${BASE_URL}/templates/pdfs/notificacion_arribo.php?idb=${idBooking}&lang=${lang}&tipo=revalidacion`;
+  const res = await fetch(url, { headers: { Cookie: session.cookie } });
+  if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status} al generar el PDF.`);
+  const pdf = await res.arrayBuffer();
+  if (new TextDecoder().decode(pdf.slice(0, 5)) !== "%PDF-") {
+    throw new Error("Cargolink no regresó un PDF.");
+  }
+  return pdf;
+}
