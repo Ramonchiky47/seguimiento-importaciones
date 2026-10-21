@@ -376,3 +376,12 @@ export async function descargarNotificacionArribo(
   }
   return pdf;
 }
+
+// Cargos del booking (costos y ventas que captura Comercial), igual que la
+// pantalla de cargos de Cargolink (consultaBookingCargosRefactorizada).
+export async function leerCargosBooking(session: CargolinkSession, idBooking: number): Promise<Record<string, unknown>> {
+  const url = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=ApiBookingCargos&fn=consultaBookingCargosRefactorizada&tipo=&booking=${idBooking}`;
+  const res = await fetch(url, { headers: { Cookie: session.cookie } });
+  if (!res.ok) throw new Error(`Cargolink respondió con error ${res.status} al leer los cargos.`);
+  return (await res.json()) as Record<string, unknown>;
+}

@@ -13,6 +13,7 @@ import {
   guardarTransbordosEnCargolink,
   leerBookingMaritimo,
   leerCatalogosSeguro,
+  leerCargosBooking,
   leerOrigen,
   listarDocumentosBooking,
   subirDocumentoBooking,
@@ -817,4 +818,203 @@ export async function propuestaInstruccionesRevalidacion(idBooking: number): Pro
   const { data, error } = await supabase.rpc("propuesta_instrucciones", { p_id_booking: idBooking });
   if (error || !data) return null;
   return data as { nivel: 1 | 2 | 3 | null; muestra: number; ultimo: string | null; renglones: { etiqueta: string; valor: string; n: number }[] };
+}
+
+// ---- Resumen comercial: conceptos y costos capturados por Comercial, con
+// aviso si cambian después de que Operaciones los revisó.
+
+export type ConceptoComercial = {
+  id: string;
+  tipo: string;
+  concepto: string;
+  proveedor: string | null;
+  cantidad: number;
+  costo: number;
+  costoMoneda: string;
+  costoBase: string;
+  venta: number;
+  ventaMoneda: string;
+  ventaBase: string;
+  pdd: string;
+  observaciones: string;
+  factura: string;
+};
+
+type FirmaComercial = {
+  conceptos: { id: string; tipo: string; concepto: string; proveedor: string; cantidad: number; costo: number; costoMoneda: string; venta: number; ventaMoneda: string; ventaBase: string }[];
+  datos: Record<string, string>;
+};
+
+export type CambioComercial = { tipo: "nuevo" | "eliminado" | "modificado" | "dato"; id?: string; texto: string };
+
+export type ResumenComercial = {
+  ok: boolean;
+  mensaje: string;
+  conceptos: ConceptoComercial[];
+  totales: { venta: number | null; costo: number | null; profit: number | null };
+  datos: { label: string; valor: string }[];
+  firma: FirmaComercial | null;
+  cambios: CambioComercial[];
+  revisadoAt: string | null;
+  revisadoPor: string | null;
+  // Aviso propio de Cargolink cuando Comercial cambia el servicio.
+  avisoCargolink: boolean;
+};
+
+const TIPOS_CARGO: Record<string, string> = {
+  detalle_maritimo: "Marítimo",
+  detalle_origen: "Origen",
+  detalle_destino: "Destino",
+  detalle_terrestre: "Terrestre",
+  detalle_aduana: "Aduana",
+  detalle_seguro: "Seguro",
+  detalle_aereo: "Aéreo",
+  detalle_ferrocarril: "Ferrocarril",
+  detalle_general: "General",
+};
+const DATOS_COMERCIALES: [string, string][] = [
+  ["servicio", "Servicio"],
+  ["modo_transportacion", "Equipo"],
+  ["contenedores", "Contenedores"],
+  ["incoterm", "Incoterm"],
+  ["seguro", "Seguro"],
+  ["mercancia", "Mercancía"],
+];
+
+const num = (v: unknown) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+const txt = (v: unknown) => (typeof v === "string" ? v.trim() : v === null || v === undefined ? "" : String(v));
+
+function compararFirmas(base: FirmaComercial, actual: FirmaComercial): CambioComercial[] {
+  const cambios: CambioComercial[] = [];
+  const antes = new Map(base.conceptos.map((c) => [c.id, c]));
+  const ahora = new Map(actual.conceptos.map((c) => [c.id, c]));
+  const fmt = (n: number, m: string) => `${n.toLocaleString("es-MX", { maximumFractionDigits: 2 })} ${m}`;
+  for (const c of actual.conceptos) {
+    const a = antes.get(c.id);
+    if (!a) {
+      cambios.push({ tipo: "nuevo", id: c.id, texto: `Nuevo concepto ${c.tipo}: ${c.concepto} (venta ${fmt(c.venta, c.ventaMoneda)}, costo ${fmt(c.costo, c.costoMoneda)})` });
+      continue;
+    }
+    const partes: string[] = [];
+    if (a.venta !== c.venta || a.ventaMoneda !== c.ventaMoneda) partes.push(`venta ${fmt(a.venta, a.ventaMoneda)} → ${fmt(c.venta, c.ventaMoneda)}`);
+    if (a.costo !== c.costo || a.costoMoneda !== c.costoMoneda) partes.push(`costo ${fmt(a.costo, a.costoMoneda)} → ${fmt(c.costo, c.costoMoneda)}`);
+    if (a.cantidad !== c.cantidad) partes.push(`cantidad ${a.cantidad} → ${c.cantidad}`);
+    if (a.ventaBase !== c.ventaBase) partes.push(`base de venta ${a.ventaBase || "—"} → ${c.ventaBase || "—"}`);
+    if (a.proveedor !== c.proveedor) partes.push(`proveedor ${a.proveedor || "—"} → ${c.proveedor || "—"}`);
+    if (a.concepto !== c.concepto) partes.push(`concepto ${a.concepto} → ${c.concepto}`);
+    if (partes.length) cambios.push({ tipo: "modificado", id: c.id, texto: `${c.tipo} · ${c.concepto}: ${partes.join("; ")}` });
+  }
+  for (const a of base.conceptos) {
+    if (!ahora.has(a.id)) cambios.push({ tipo: "eliminado", id: a.id, texto: `Se quitó ${a.tipo}: ${a.concepto} (venta ${fmt(a.venta, a.ventaMoneda)})` });
+  }
+  for (const [k, label] of DATOS_COMERCIALES) {
+    if ((base.datos[k] ?? "") !== (actual.datos[k] ?? "")) {
+      cambios.push({ tipo: "dato", texto: `${label}: ${base.datos[k] || "—"} → ${actual.datos[k] || "—"}` });
+    }
+  }
+  return cambios;
+}
+
+export async function resumenComercialCargolink(idBooking: number): Promise<ResumenComercial> {
+  const vacio: ResumenComercial = {
+    ok: false,
+    mensaje: "",
+    conceptos: [],
+    totales: { venta: null, costo: null, profit: null },
+    datos: [],
+    firma: null,
+    cambios: [],
+    revisadoAt: null,
+    revisadoPor: null,
+    avisoCargolink: false,
+  };
+  const myPermissions = await getMyPermissions();
+  if (!myPermissions.es_admin && !myPermissions.puede_operaciones) return { ...vacio, mensaje: "Sin permiso de operaciones." };
+  const supabase = await createClient();
+  const { data: op } = await supabase
+    .from("operaciones_maritima_vista")
+    .select("servicio, modo_transportacion, contenedores, incoterm, seguro, mercancia, datos")
+    .eq("id_booking", idBooking)
+    .maybeSingle();
+  if (!op) return { ...vacio, mensaje: "Operación no encontrada." };
+
+  try {
+    const session = await loginCargolink();
+    const r = await leerCargosBooking(session, idBooking);
+    const conceptos: ConceptoComercial[] = [];
+    for (const [clave, tipo] of Object.entries(TIPOS_CARGO)) {
+      for (const x of (Array.isArray(r[clave]) ? r[clave] : []) as Record<string, unknown>[]) {
+        conceptos.push({
+          id: txt(x.id_booking_cargo),
+          tipo,
+          concepto: txt(x.nombre_tipo) || txt((x.conceptos as Record<string, unknown> | undefined)?.nombre_tipo),
+          proveedor: txt(x.razonsocial) || null,
+          cantidad: num(x.multiplica_por ?? x.v_multiplica_por) || 1,
+          costo: num(x.costo),
+          costoMoneda: txt(x.c_moneda),
+          costoBase: txt(x.c_basado),
+          venta: num(x.venta),
+          ventaMoneda: txt(x.v_moneda),
+          ventaBase: txt(x.v_basado),
+          pdd: txt(x.v_pdd),
+          observaciones: [txt(x.v_observaciones), txt(x.c_observaciones)].filter(Boolean).join(" · "),
+          factura: txt(x.no_facturas),
+        });
+      }
+    }
+    const datosOp = op as Record<string, unknown>;
+    const datos = DATOS_COMERCIALES.map(([k, label]) => ({
+      label,
+      valor: k === "seguro" ? (datosOp.seguro ? "Sí" : "No") : txt(datosOp[k]),
+    }));
+    const firma: FirmaComercial = {
+      conceptos: conceptos
+        .map((c) => ({
+          id: c.id,
+          tipo: c.tipo,
+          concepto: c.concepto,
+          proveedor: c.proveedor ?? "",
+          cantidad: c.cantidad,
+          costo: c.costo,
+          costoMoneda: c.costoMoneda,
+          venta: c.venta,
+          ventaMoneda: c.ventaMoneda,
+          ventaBase: c.ventaBase,
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+      datos: Object.fromEntries(DATOS_COMERCIALES.map(([k], i) => [k, datos[i].valor])),
+    };
+    const { data: base, error } = await supabase.rpc("resumen_comercial_comparar", { p_id_booking: idBooking, p_firma: firma });
+    const b = (base ?? null) as { firma: FirmaComercial; tomada_at: string; revisado_por: string | null } | null;
+    return {
+      ok: true,
+      mensaje: error ? `No se pudo comparar contra la revisión anterior: ${error.message}` : "",
+      conceptos,
+      totales: {
+        venta: r.total_venta === undefined ? null : num(r.total_venta),
+        costo: r.total_costo === undefined ? null : num(r.total_costo),
+        profit: r.profit_estimado === undefined ? null : num(r.profit_estimado),
+      },
+      datos,
+      firma,
+      cambios: b ? compararFirmas(b.firma, firma) : [],
+      revisadoAt: b?.tomada_at ?? null,
+      revisadoPor: b?.revisado_por ?? null,
+      avisoCargolink: txt((datosOp.datos as Record<string, unknown> | null)?.aviso_servicio_pendiente) === "1",
+    };
+  } catch (e) {
+    return { ...vacio, mensaje: e instanceof Error ? e.message : "Error al consultar Cargolink." };
+  }
+}
+
+// "Enterado": lo que hoy tiene el booking queda como la referencia.
+export async function marcarResumenComercialRevisado(idBooking: number, firma: unknown): Promise<ResultadoEtapa> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("resumen_comercial_revisado", { p_id_booking: idBooking, p_firma: firma });
+  if (error) return { ok: false, mensaje: error.message };
+  revalidatePath("/track", "layout");
+  return { ok: true, mensaje: "Cambios marcados como revisados." };
 }

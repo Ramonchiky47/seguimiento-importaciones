@@ -11,6 +11,7 @@ import {
   ESTADOS,
   ESTATUS_OPCIONES,
   ESTATUS_TRACK,
+  cambiosComerciales,
   claseFilaEstatus,
   hoyMexico,
   VER_EMBARQUES,
@@ -107,6 +108,7 @@ export default async function EmbarquesPage({
     supabase.rpc("puedo_editar_cargolink"),
   ]);
   const filas = (data ?? []) as Embarque[];
+  const cambios = await cambiosComerciales(supabase, filas.map((f) => f.id_booking));
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const availableEjecutivos = Array.from(
@@ -235,7 +237,14 @@ export default async function EmbarquesPage({
               const s = ESTADOS[f.semaforo] ?? ESTADOS.en_tiempo;
               return (
                 <FilaOperacion key={f.id_booking} idBooking={f.id_booking} className={`hover:bg-blue-50 dark:hover:bg-slate-800 ${claseFilaEstatus(f.status_booking)}`}>
-                  <td className="whitespace-nowrap px-3 py-2 font-mono text-[13px] font-semibold text-slate-900 dark:text-slate-100">{f.no_booking}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-[13px] font-semibold text-slate-900 dark:text-slate-100">
+                    {f.no_booking}
+                    {cambios.has(f.id_booking) && (
+                      <span title={cambios.get(f.id_booking)} className="ml-1.5 font-sans text-sm font-bold text-red-700 dark:text-red-400">
+                        ⚠<span className="sr-only"> {cambios.get(f.id_booking)}</span>
+                      </span>
+                    )}
+                  </td>
                   <td className="max-w-56 truncate px-3 py-2">{f.cliente ?? "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2">
                     {f.ejecutivo ??

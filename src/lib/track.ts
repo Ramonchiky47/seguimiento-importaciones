@@ -196,3 +196,20 @@ export type ConteosTrack = {
   por_vencer: number;
   por_corregir: number;
 };
+
+// Bookings (de una lista) con cambio comercial pendiente de revisar: la foto
+// de resumen_comercial_base difiere, o Cargolink marca aviso_servicio_pendiente.
+export async function cambiosComerciales(
+  supabase: { from: (t: string) => any }, // eslint-disable-line @typescript-eslint/no-explicit-any
+  ids: number[],
+): Promise<Map<number, string>> {
+  const r = new Map<number, string>();
+  if (ids.length === 0) return r;
+  const [{ data: base }, { data: aviso }] = await Promise.all([
+    supabase.from("resumen_comercial_base").select("id_booking").in("id_booking", ids).eq("cambio_pendiente", true),
+    supabase.from("operaciones_maritima_vista").select("id_booking").in("id_booking", ids).eq("datos->>aviso_servicio_pendiente", "1"),
+  ]);
+  for (const x of (aviso ?? []) as { id_booking: number }[]) r.set(x.id_booking, "Cargolink: cambio de servicio sin revisar");
+  for (const x of (base ?? []) as { id_booking: number }[]) r.set(x.id_booking, "Comercial cambió conceptos o costos después de la revisión");
+  return r;
+}

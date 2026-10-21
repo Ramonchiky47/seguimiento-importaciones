@@ -17,6 +17,7 @@ import {
   VALOR_COMPACTO,
   claseTarjetaCompacta,
   type ConteosTrack,
+  cambiosComerciales,
   claseFilaEstatus,
   ejecutivosTrack,
   estatusBooking,
@@ -136,6 +137,7 @@ export default async function MiDiaPage({
     status_booking: string | null;
   }[];
   const filas = resultado.filas;
+  const cambios = await cambiosComerciales(supabase, filas.map((f) => f.id_booking));
   const totales = NIVELES.map((n) => resultado.conteos[n.key] ?? 0);
   const totalCount = resultado.total;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -289,6 +291,11 @@ export default async function MiDiaPage({
                   >
                     {f.no_booking}
                   </AbrirOperacionBoton>
+                  {cambios.has(f.id_booking) && (
+                    <span title={cambios.get(f.id_booking)} className="ml-1.5 text-sm font-bold text-red-700 dark:text-red-400">
+                      ⚠<span className="sr-only"> {cambios.get(f.id_booking)}</span>
+                    </span>
+                  )}
                   <p className="truncate text-xs text-slate-500 dark:text-slate-400">{f.cliente ?? "—"}</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     ETA {fechaCorta(f.eta)} · {f.hitos.length} {f.hitos.length === 1 ? "pendiente" : "pendientes"}

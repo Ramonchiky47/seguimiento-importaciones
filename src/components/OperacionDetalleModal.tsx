@@ -27,6 +27,9 @@ import {
   refrescarOperacionDesdeCargolink,
   type FilaTransbordoForm,
   propuestaInstruccionesRevalidacion,
+  marcarResumenComercialRevisado,
+  resumenComercialCargolink,
+  type ResumenComercial,
 } from "@/app/(app)/operaciones-maritima/actions";
 
 // Ventana emergente con todos los indicadores de una operación marítima.
@@ -466,6 +469,8 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                     {campo("Regreso de vacío", fechaCorta(op.regreso_vacio as string | null))}
                   </dl>
                 </section>
+
+                <ResumenComercialSeccion key={idBooking} idBooking={idBooking} />
 
                 <section className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
                   <h3 className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 dark:border-slate-800 dark:text-slate-50">
@@ -1834,5 +1839,178 @@ function CampoInstrucciones({
         </div>
       </dialog>
     </div>
+  );
+}
+
+// Resumen comercial: conceptos, costos y ventas que capturó Comercial en
+// Cargolink, con aviso ⚠ si algo cambió desde la última revisión de
+// Operaciones (foto en resumen_comercial_base).
+function ResumenComercialSeccion({ idBooking }: { idBooking: number }) {
+  const [r, setR] = useState<ResumenComercial | null>(null);
+  const [abierto, setAbierto] = useState(false);
+  const [pending, startTransition] = useTransition();
+  useEffect(() => {
+    let vigente = true;
+    resumenComercialCargolink(idBooking).then((x) => {
+      if (vigente) {
+        setR(x);
+        if (x.cambios.length > 0 || x.avisoCargolink) setAbierto(true);
+      }
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [idBooking]);
+
+  const dinero = (n: number | null, m = "") =>
+    n === null ? "—" : `${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${m ? ` ${m}` : ""}`;
+  const cambiados = new Map((r?.cambios ?? []).filter((c) => c.id).map((c) => [c.id as string, c.tipo]));
+  const hayCambios = (r?.cambios.length ?? 0) > 0;
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        aria-expanded={abierto}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+      >
+        <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
+          Resumen comercial (conceptos y costos)
+          {hayCambios && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800 dark:bg-red-950 dark:text-red-300">
+              ⚠ Cambio de Comercial
+            </span>
+          )}
+          {r?.avisoCargolink && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              ⚠ Cargolink: cambio de servicio sin revisar
+            </span>
+          )}
+          {!r && <span className="text-xs font-normal text-slate-500">Cargando…</span>}
+        </span>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className={abierto ? "rotate-180" : ""}>
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+
+      {abierto && r && (
+        <div className="space-y-3 border-t border-slate-200 p-4 dark:border-slate-800">
+          {!r.ok && <p className="text-sm text-red-700 dark:text-red-400">No se pudo leer de Cargolink: {r.mensaje}</p>}
+          {r.ok && r.mensaje && <p className="text-xs text-amber-800 dark:text-amber-300">{r.mensaje}</p>}
+
+          {hayCambios && (
+            <div role="alert" className="space-y-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+              <p className="font-semibold">
+                ⚠ Comercial cambió el booking después de la revisión
+                {r.revisadoAt ? ` del ${new Date(r.revisadoAt).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}` : ""}
+                {r.revisadoPor ? ` (${r.revisadoPor})` : ""}:
+              </p>
+              <ul className="list-disc space-y-0.5 pl-5">
+                {r.cambios.map((c, i) => (
+                  <li key={i}>{c.texto}</li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    const x = await marcarResumenComercialRevisado(idBooking, r.firma);
+                    if (x.ok) setR({ ...r, cambios: [], revisadoAt: new Date().toISOString() });
+                    else alert(x.mensaje);
+                  })
+                }
+                className="min-h-10 rounded-md bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+              >
+                {pending ? "Guardando…" : "Enterado, ya lo revisé"}
+              </button>
+            </div>
+          )}
+
+          {r.ok && (
+            <>
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
+                {r.datos.map((d) => (
+                  <div key={d.label}>
+                    <dt className="text-xs text-slate-500 dark:text-slate-400">{d.label}</dt>
+                    <dd className="text-slate-900 dark:text-slate-100">{d.valor || "—"}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    <tr>
+                      {["Tipo", "Concepto", "Proveedor", "Cant.", "Costo", "Venta", "Factura / pago"].map((h) => (
+                        <th key={h} scope="col" className="whitespace-nowrap px-2 py-2 font-semibold">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {r.conceptos.map((c) => {
+                      const cambio = cambiados.get(c.id);
+                      return (
+                        <tr key={c.id} className={cambio ? "bg-red-50 dark:bg-red-950/40" : ""}>
+                          <td className="whitespace-nowrap px-2 py-1.5">
+                            {cambio && (
+                              <span title={cambio === "nuevo" ? "Concepto nuevo" : "Concepto modificado"} className="mr-1 font-bold text-red-700 dark:text-red-400">
+                                ⚠
+                              </span>
+                            )}
+                            {c.tipo}
+                          </td>
+                          <td className="px-2 py-1.5 font-medium text-slate-900 dark:text-slate-100">
+                            {c.concepto}
+                            {c.observaciones && <span className="block text-xs font-normal text-slate-500">{c.observaciones}</span>}
+                          </td>
+                          <td className="max-w-48 truncate px-2 py-1.5 text-xs">{c.proveedor ?? "—"}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">{c.cantidad}</td>
+                          <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">
+                            {dinero(c.costo, c.costoMoneda)}
+                            {c.costoBase && <span className="block text-xs text-slate-500">{c.costoBase}</span>}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">
+                            {dinero(c.venta, c.ventaMoneda)}
+                            {(c.ventaBase || c.pdd) && (
+                              <span className="block text-xs text-slate-500">{[c.ventaBase, c.pdd].filter(Boolean).join(" · ")}</span>
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400">{c.factura || "—"}</td>
+                        </tr>
+                      );
+                    })}
+                    {r.conceptos.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-2 py-4 text-center text-slate-500">Comercial no ha capturado conceptos.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                  {r.conceptos.length > 0 && (
+                    <tfoot className="border-t border-slate-200 text-sm font-semibold dark:border-slate-700">
+                      <tr>
+                        <td colSpan={4} className="px-2 py-2 text-right text-slate-600 dark:text-slate-300">
+                          Totales según Cargolink
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">{dinero(r.totales.costo)}</td>
+                        <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">{dinero(r.totales.venta)}</td>
+                        <td className="whitespace-nowrap px-2 py-2 tabular-nums text-green-800 dark:text-green-300">Profit {dinero(r.totales.profit)}</td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Referencia para avisar cambios: {r.revisadoAt ? new Date(r.revisadoAt).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                {r.revisadoPor ? ` · ${r.revisadoPor}` : ""}. Si Comercial agrega, quita o cambia un concepto (o el seguro, incoterm, servicio o
+                contenedores), aquí aparece ⚠.
+              </p>
+            </>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
