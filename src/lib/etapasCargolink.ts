@@ -21,6 +21,8 @@ export type CampoEtapa = {
   sinVerificar?: boolean;
   // Texto que propone Cargolink cuando el campo está vacío.
   porDefecto?: "instrucciones_revalidacion";
+  // Si no está capturado en Cargolink, el título de la etapa va en rojo.
+  marcarSiFalta?: boolean;
   // Encabezado para agrupar campos en el formulario.
   grupo?: string;
   // "origen" = el valor vive en el registro de origen (consultaOrigen), no en
@@ -250,7 +252,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     // Igual que la pantalla de Aviso ATA de Cargolink (transito/aviso.php).
     campos: [
       { key: "lang", label: "Idioma", tipo: "select", requerido: false, actual: "datos.lang", opciones: IDIOMAS },
-      { key: "id_banco", label: "Banco", tipo: "select", requerido: false, actual: "datos.id_banco", catalogo: "bancos" },
+      { key: "id_banco", label: "Banco", tipo: "select", requerido: false, actual: "datos.id_banco", catalogo: "bancos", marcarSiFalta: true },
       { key: "id_banco_usd", label: "Banco en USD", tipo: "select", requerido: false, actual: "datos.id_banco_usd", catalogo: "bancosUSD" },
       {
         key: "inst_revalidacion",
@@ -260,6 +262,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
         actual: "datos.inst_revalidacion",
         sinVerificar: true,
         porDefecto: "instrucciones_revalidacion",
+        marcarSiFalta: true,
       },
     ],
     acciones: [GUARDAR, FINALIZAR_AVISO, NO_APLICA_AVISO],
@@ -294,3 +297,54 @@ export const ETAPA_POR_HITO: Record<number, string> = {
   10: "vacio",
   11: "transbordo",
 };
+
+// ---- Instrucciones de revalidación.
+
+// Cargolink guarda los acentos como "?" (p. ej. "D?as libres"); se reparan
+// con las palabras que se usan en las instrucciones.
+const PALABRAS_CON_ACENTO = [
+  "Instrucción", "Instrucciones", "Crédito", "Días", "Día", "Garantía", "Depósito", "Revalidación", "Marítimo",
+  "Aéreo", "Número", "Información", "Notificación", "Liberación", "Atención", "Más", "Según", "También",
+  "Después", "Inglés", "Español", "Operación", "Facturación", "Cotización", "Dirección", "Teléfono",
+  "Electrónico", "Válido", "Mínimo", "Máximo", "Período", "Póliza", "Código", "Condición", "Condiciones",
+];
+
+function sinAcentos(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+export function repararAcentos(texto: string): string {
+  if (!texto.includes("?")) return texto;
+  return texto.replace(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]*\?[A-Za-zÁÉÍÓÚÜÑáéíóúüñ?]*/g, (token) => {
+    const patron = new RegExp(`^${token.split("?").map((t) => sinAcentos(t)).join(".")}$`, "i");
+    const palabra = PALABRAS_CON_ACENTO.find((p) => patron.test(sinAcentos(p)) && p.length === token.length);
+    if (!palabra) return token;
+    // Respeta mayúscula inicial / todo en mayúsculas del original.
+    if (token === token.toUpperCase()) return palabra.toUpperCase();
+    return token[0] === token[0].toLowerCase() ? palabra.toLowerCase() : palabra;
+  });
+}
+
+// Cada renglón "*Etiqueta: valor"; el valor es opcional. Un renglón sin ":"
+// queda como texto libre (etiqueta vacía).
+export type RenglonInstruccion = { etiqueta: string; valor: string };
+
+export function separarInstrucciones(texto: string): RenglonInstruccion[] {
+  return repararAcentos(texto)
+    .split(/\r?\n/)
+    .map((l) => l.trim().replace(/^\*\s*/, ""))
+    .filter((l) => l)
+    .map((l) => {
+      const i = l.indexOf(":");
+      return i < 0 ? { etiqueta: "", valor: l } : { etiqueta: l.slice(0, i).trim(), valor: l.slice(i + 1).trim() };
+    });
+}
+
+// Mismo formato que Cargolink ("* Etiqueta: valor \n *Etiqueta: valor").
+// Los renglones sin valor no se incluyen.
+export function unirInstrucciones(renglones: RenglonInstruccion[]): string {
+  return renglones
+    .filter((r) => r.valor.trim())
+    .map((r, i) => `${i === 0 ? "* " : " *"}${r.etiqueta.trim() ? `${r.etiqueta.trim()}: ` : ""}${r.valor.trim()}`)
+    .join(" \n");
+}

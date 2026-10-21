@@ -8,7 +8,11 @@ import {
   ETAPAS_CARGOLINK,
   ETAPA_POR_HITO,
   instruccionesRevalidacionPorDefecto,
+  repararAcentos,
+  separarInstrucciones,
+  unirInstrucciones,
   type AccionEtapa,
+  type RenglonInstruccion,
   type EtapaCargolink,
 } from "@/lib/etapasCargolink";
 import {
@@ -170,7 +174,7 @@ function valorEtapa(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
   if (!s || s.startsWith("0000") || s === "0" || s === "0.00" || s === "0.000") return null;
-  return /^\d{4}-\d{2}-\d{2}/.test(s) ? fechaCorta(s) : s;
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? fechaCorta(s) : repararAcentos(s);
 }
 
 const ESTATUS_ETAPA: Record<string, { label: string; clase: string; tarjeta: string }> = {
@@ -703,8 +707,16 @@ function EditorEtapa({
   const diasDemora = (op.dias_libres_demora as number | null) ?? datos.dias_demora;
   const textoPorDefecto = (lang: string) => instruccionesRevalidacionPorDefecto(lang || "ESP", diasDemora);
   for (const c of etapa.campos) {
-    if (c.porDefecto === "instrucciones_revalidacion" && !inicial[c.key]) inicial[c.key] = textoPorDefecto(inicial.lang ?? "ESP");
+    if (c.porDefecto === "instrucciones_revalidacion") {
+      inicial[c.key] = inicial[c.key] ? repararAcentos(inicial[c.key]) : textoPorDefecto(inicial.lang ?? "ESP");
+    }
   }
+  // Algún dato marcado como necesario sin capturar en Cargolink: título en rojo.
+  const faltaCaptura = etapa.campos.some((c) => {
+    if (!c.marcarSiFalta) return false;
+    const v = c.actual.startsWith("datos.") ? datos[c.actual.slice(6)] : op[c.actual];
+    return v === null || v === undefined || /^\s*0?\s*$/.test(String(v));
+  });
   const [valores, setValores] = useState<Record<string, string>>(inicial);
   // Listas que vienen de Cargolink (aseguradoras, incoterms).
   const usaCatalogos = etapa.campos.some((c) => c.catalogo);
@@ -751,8 +763,24 @@ function EditorEtapa({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-        {etapa.label} <span className="font-normal text-slate-500 dark:text-slate-400">· se guarda en Cargolink sin notificar al cliente</span>
+      <p className={`text-sm font-semibold ${faltaCaptura ? "text-red-700 dark:text-red-400" : "text-slate-900 dark:text-slate-100"}`}>
+        {etapa.label}{" "}
+        <span className={`font-normal ${faltaCaptura ? "text-red-700 dark:text-red-400" : "text-slate-500 dark:text-slate-400"}`}>
+          · se guarda en Cargolink sin notificar al cliente
+        </span>
+        {faltaCaptura && (
+          <span className="mt-0.5 block text-xs font-semibold">
+            Falta capturar en Cargolink:{" "}
+            {etapa.campos
+              .filter((c) => {
+                if (!c.marcarSiFalta) return false;
+                const v = c.actual.startsWith("datos.") ? datos[c.actual.slice(6)] : op[c.actual];
+                return v === null || v === undefined || /^\s*0?\s*$/.test(String(v));
+              })
+              .map((c) => c.label.toLowerCase())
+              .join(" y ")}
+          </span>
+        )}
       </p>
       {grupos.map((g) => (
         <fieldset key={g || "campos"} className="space-y-2">
@@ -775,6 +803,17 @@ function EditorEtapa({
                     }
                     return nuevo;
                   });
+                if (c.porDefecto === "instrucciones_revalidacion") {
+                  return (
+                    <CampoInstrucciones
+                      key={c.key}
+                      label={c.label}
+                      valor={valores[c.key] ?? ""}
+                      porDefecto={textoPorDefecto(valores.lang ?? "")}
+                      onCambiar={cambiar}
+                    />
+                  );
+                }
                 if (c.tipo === "textarea") {
                   return (
                     <CampoTextoLargo
@@ -1524,6 +1563,154 @@ function CampoTextoLargo({
               </button>
             </div>
           </div>
+        </div>
+      </dialog>
+    </div>
+  );
+}
+
+// Instrucciones de revalidación: un renglón por instrucción ("Etiqueta:
+// valor"); el valor es opcional y editable. Los renglones sin valor no se
+// mandan a Cargolink, pero las etiquetas del texto por defecto siempre
+// aparecen para poder llenarlas.
+function CampoInstrucciones({
+  label,
+  valor,
+  porDefecto,
+  onCambiar,
+}: {
+  label: string;
+  valor: string;
+  porDefecto: string;
+  onCambiar: (valor: string) => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const conEtiquetasBase = (texto: string): RenglonInstruccion[] => {
+    const renglones = separarInstrucciones(texto);
+    const faltan = separarInstrucciones(porDefecto)
+      .filter((b) => b.etiqueta && !renglones.some((r) => r.etiqueta.toLowerCase() === b.etiqueta.toLowerCase()))
+      .map((b) => ({ etiqueta: b.etiqueta, valor: "" }));
+    return [...renglones, ...faltan];
+  };
+  const [renglones, setRenglones] = useState<RenglonInstruccion[]>([]);
+  const abrir = () => {
+    setRenglones(conEtiquetasBase(valor));
+    ref.current?.showModal();
+  };
+  const cambiar = (i: number, campo: keyof RenglonInstruccion, v: string) =>
+    setRenglones((rs) => rs.map((r, j) => (j === i ? { ...r, [campo]: v } : r)));
+  const vista = separarInstrucciones(valor);
+  const claseInput =
+    "min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
+
+  return (
+    <div className="flex w-full flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
+      <span>{label}</span>
+      <div className="flex flex-wrap items-start gap-2">
+        <ul className="min-h-10 min-w-0 flex-1 space-y-0.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+          {vista.length === 0 && <li>—</li>}
+          {vista.map((r, i) => (
+            <li key={i}>
+              * {r.etiqueta && <span className="font-semibold">{r.etiqueta}: </span>}
+              {r.valor}
+            </li>
+          ))}
+        </ul>
+        <button
+          type="button"
+          onClick={abrir}
+          className="min-h-10 shrink-0 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+        >
+          Editar
+        </button>
+      </div>
+      <dialog
+        ref={ref}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (e.target === ref.current) ref.current?.close();
+        }}
+        onClose={(e) => e.stopPropagation()}
+        aria-labelledby="instrucciones-titulo"
+        className="m-auto w-[min(720px,calc(100vw-32px))] rounded-xl bg-white p-0 shadow-2xl backdrop:bg-slate-900/40 dark:bg-slate-900"
+      >
+        <div className="space-y-3 p-5">
+          <h4 id="instrucciones-titulo" className="text-base font-semibold text-slate-900 dark:text-slate-50">
+            {label}
+          </h4>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Lo que va después de los dos puntos es opcional: si lo dejas vacío, ese renglón no se incluye.
+          </p>
+          <ul className="space-y-2">
+            {renglones.map((r, i) => (
+              <li key={i} className="grid grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto] items-center gap-2">
+                <input
+                  value={r.etiqueta}
+                  onChange={(e) => cambiar(i, "etiqueta", e.target.value)}
+                  aria-label={`Instrucción ${i + 1}: etiqueta`}
+                  placeholder="Etiqueta"
+                  className={`${claseInput} font-semibold`}
+                />
+                <input
+                  value={r.valor}
+                  onChange={(e) => cambiar(i, "valor", e.target.value)}
+                  aria-label={`${r.etiqueta || `Instrucción ${i + 1}`}: valor`}
+                  placeholder="(opcional)"
+                  className={claseInput}
+                />
+                <button
+                  type="button"
+                  onClick={() => setRenglones((rs) => rs.filter((_, j) => j !== i))}
+                  aria-label={`Quitar ${r.etiqueta || `instrucción ${i + 1}`}`}
+                  className="flex h-10 w-10 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-red-700 dark:hover:bg-slate-800"
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6 6 18" />
+                  </svg>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => setRenglones((rs) => [...rs, { etiqueta: "", valor: "" }])}
+            className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+          >
+            + Agregar instrucción
+          </button>
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            <p className="mb-1 font-semibold">Así se guardará en Cargolink:</p>
+            <p className="whitespace-pre-line">{unirInstrucciones(renglones).replace(/ \n/g, "\n") || "—"}</p>
+          </div>
+          <div className="flex flex-wrap justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setRenglones(conEtiquetasBase(porDefecto))}
+              className="min-h-10 rounded-md px-3 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+            >
+              Usar texto por defecto
+            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => ref.current?.close()}
+                className="min-h-10 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onCambiar(unirInstrucciones(renglones));
+                  ref.current?.close();
+                }}
+                className="min-h-10 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900"
+              >
+                Aceptar
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Se guarda en Cargolink al presionar Guardar o Finalizar.</p>
         </div>
       </dialog>
     </div>
