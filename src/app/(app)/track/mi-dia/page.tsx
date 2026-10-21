@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import { RegresarTablero } from "@/components/RegresarTablero";
+import { BuscadorTrack } from "@/components/BuscadorTrack";
 import {
   DIAS_REZAGO,
   EJECUTIVO_TODOS,
@@ -80,9 +81,11 @@ const SECCIONES: Record<string, string> = {
 export default async function MiDiaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ nivel?: string; ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[]; page?: string; volver?: string }>;
+  searchParams: Promise<{ nivel?: string; ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[]; page?: string; volver?: string; q?: string }>;
 }) {
-  const { nivel, ejecutivo, estatus, atd, page, volver } = await searchParams;
+  const { nivel, ejecutivo, estatus, atd, page, volver, q } = await searchParams;
+  // Búsqueda parcial por booking, cliente o ejecutivo.
+  const busqueda = (q ?? "").replace(/[,()%]/g, " ").trim();
   const nivelActivo: Nivel = nivel && NIVEL_KEYS.has(nivel) ? (nivel as Nivel) : "pendientes";
   const supabase = await createClient();
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
@@ -92,19 +95,21 @@ export default async function MiDiaPage({
   const from = (currentPage - 1) * PAGE_SIZE;
 
 
-  const { data, error } = await supabase.rpc("track_mi_dia_atd", {
+  const { data, error } = await supabase.rpc("track_mi_dia_q", {
     p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
     p_estatus: estatusSel.codigos,
     p_atd: atdSel.codigos,
+    p_q: busqueda || null,
     p_nivel: nivelActivo,
     p_limit: PAGE_SIZE,
     p_offset: from,
   });
   const resultado = (data ?? { conteos: {}, total: 0, filas: [] }) as MiDia;
-  const { data: conteosData } = await supabase.rpc("track_conteos", {
+  const { data: conteosData } = await supabase.rpc("track_conteos_q", {
     p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
     p_estatus: estatusSel.codigos,
     p_atd: atdSel.codigos,
+    p_q: busqueda || null,
   });
   const c = (conteosData ?? null) as ConteosTrack | null;
 
@@ -125,6 +130,11 @@ export default async function MiDiaPage({
   }
   if (estatusSel.codigos) porZarparQuery = porZarparQuery.in("status_booking", estatusSel.codigos);
   if (atdSel.codigos) porZarparQuery = porZarparQuery.in("periodo_atd", atdSel.codigos);
+  if (busqueda) {
+    porZarparQuery = porZarparQuery.or(
+      `no_booking.ilike.%${busqueda}%,cliente.ilike.%${busqueda}%,ejecutivo.ilike.%${busqueda}%`,
+    );
+  }
   const { data: porZarparData, count: porZarparCount } = await porZarparQuery
     .order("fecha", { ascending: true, nullsFirst: false })
     .limit(200);
@@ -161,6 +171,7 @@ export default async function MiDiaPage({
     for (const v of estatusSel.enUrl) params.append("estatus", v);
     for (const v of atdSel.enUrl) params.append("atd", v);
     if (volver) params.set("volver", volver);
+    if (busqueda) params.set("q", busqueda);
     if (cambios.page && cambios.page > 1) params.set("page", String(cambios.page));
     const q = params.toString();
     return q ? `?${q}` : "?";
@@ -171,6 +182,7 @@ export default async function MiDiaPage({
     ...estatusSel.enUrl.map((v) => ["estatus", v]),
     ...atdSel.enUrl.map((v) => ["atd", v]),
     ...(volver ? [["volver", volver]] : []),
+    ...(busqueda ? [["q", busqueda]] : []),
             ["ejecutivo", EJECUTIVO_TODOS],
   ]).toString()}`;
 
@@ -181,6 +193,7 @@ export default async function MiDiaPage({
     for (const v of ejecutivos) params.append("ejecutivo", v);
     for (const v of estatusSel.enUrl) params.append("estatus", v);
     for (const v of atdSel.enUrl) params.append("atd", v);
+    if (busqueda) params.set("q", busqueda);
     return `${path}?${params.toString()}`;
   };
   const totalNivel = (key: Nivel) => totales[NIVELES.findIndex((n) => n.key === key)] ?? 0;
@@ -234,6 +247,7 @@ export default async function MiDiaPage({
           <MultiSelectFilter paramName="atd" label="ATD real" options={PERIODO_ATD_OPCIONES} current={atdSel.seleccion} />
           <MultiSelectFilter paramName="estatus" label="Estatus" options={ESTATUS_OPCIONES} current={estatusSel.seleccion} />
           <TrackEjecutivoFilter options={availableEjecutivos} filtro={ejecutivoRaw} hrefTodos={hrefTodos} />
+          <BuscadorTrack />
         </div>
       </div>
 
