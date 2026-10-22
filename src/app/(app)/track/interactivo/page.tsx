@@ -128,6 +128,17 @@ export default async function TrackInteractivoBandeja({
     )
     .sort((a, b) => b.faltan - a.faltan || (b.max_dias_atraso ?? 0) - (a.max_dias_atraso ?? 0));
 
+  // Los que aún no zarpan van al final, con su propio título.
+  const grupos = [
+    { clave: "en-curso", titulo: null as string | null, ayuda: "", lista: visibles.filter((f) => f.etapa !== "Por zarpar") },
+    {
+      clave: "por-zarpar",
+      titulo: "Por zarpar",
+      ayuda: "Sin ATD real todavía: sus compromisos empiezan al zarpar.",
+      lista: visibles.filter((f) => f.etapa === "Por zarpar"),
+    },
+  ].filter((g) => g.lista.length > 0 || g.titulo === null);
+
   const availableEjecutivos = Array.from(
     new Set([SIN_EJECUTIVO, ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((x) => x.ejecutivo), ...ejecutivoRaw]),
   ).sort((a, b) => (a === SIN_EJECUTIVO ? -1 : b === SIN_EJECUTIVO ? 1 : a.localeCompare(b, "es")));
@@ -202,8 +213,18 @@ export default async function TrackInteractivoBandeja({
 
       {error && <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">Error al cargar: {error.message}</p>}
 
+      {grupos.map((g) => (
+      <section key={g.clave} aria-labelledby={g.titulo ? `grupo-${g.clave}` : undefined} className="flex flex-col gap-2">
+        {g.titulo && (
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-slate-300 pb-2 dark:border-slate-700">
+            <h2 id={`grupo-${g.clave}`} className="text-lg font-extrabold">
+              {g.titulo} <span className="text-sm font-semibold text-slate-500">· {g.lista.length}</span>
+            </h2>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{g.ayuda}</span>
+          </div>
+        )}
       <ul className="flex flex-col gap-2">
-        {visibles.map((f) => {
+        {g.lista.map((f) => {
           const sig = f.siguiente;
           return (
             <li key={f.id_booking} data-buscar={`${f.no_booking} ${f.cliente ?? ""} ${f.ejecutivo ?? "Sin ejecutivo"}`}>
@@ -270,12 +291,14 @@ export default async function TrackInteractivoBandeja({
             </li>
           );
         })}
-        {visibles.length === 0 && !error && (
+        {g.titulo === null && visibles.length === 0 && !error && (
           <li className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
             No hay bookings en esta bandeja.
           </li>
         )}
       </ul>
+      </section>
+      ))}
       {embarques.length >= MAX_BOOKINGS && (
         <p className="text-center text-xs text-slate-500">Se muestran los primeros {MAX_BOOKINGS}; usa los filtros o la búsqueda para acotar.</p>
       )}
