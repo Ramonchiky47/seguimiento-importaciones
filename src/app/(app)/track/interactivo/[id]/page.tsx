@@ -34,8 +34,23 @@ export default async function TrackInteractivoBooking({ params }: { params: Prom
         .eq("status_booking", "1")
         .neq("id_booking", idBooking)
         .order("no_booking")
-        .limit(12)
+        .limit(20)
     : { data: [] };
+  // Los que también salen en Por viaje (Track: ejecutivos de la prueba, ATD
+  // desde el corte); el resto se muestra aparte con el motivo.
+  const idsViaje = ((mismoBuque ?? []) as { id_booking: number }[]).map((b) => b.id_booking);
+  const { data: enTrack } = idsViaje.length
+    ? await supabase.from("track_embarques").select("id_booking, periodo_atd").in("id_booking", idsViaje)
+    : { data: [] };
+  const periodo = new Map(((enTrack ?? []) as { id_booking: number; periodo_atd: string }[]).map((x) => [x.id_booking, x.periodo_atd]));
+  const viaje_ = ((mismoBuque ?? []) as { id_booking: number; no_booking: string; cliente: string | null; ejecutivo: string | null }[]).map((b) => ({
+    ...b,
+    motivo: !periodo.has(b.id_booking)
+      ? `${b.ejecutivo ?? "Sin ejecutivo"} no está en la prueba de Track`
+      : periodo.get(b.id_booking) !== "desde"
+        ? "ATD antes del corte del 15 sep"
+        : null,
+  }));
 
   return (
     <BookingGuiado
@@ -44,7 +59,7 @@ export default async function TrackInteractivoBooking({ params }: { params: Prom
       op={op as Record<string, unknown>}
       hitos={(hitos ?? []) as HitoTrack[]}
       puedeEditar={puedeEditar === true}
-      mismoBuque={(mismoBuque ?? []) as { id_booking: number; no_booking: string; cliente: string | null; ejecutivo: string | null }[]}
+      mismoBuque={viaje_}
     />
   );
 }

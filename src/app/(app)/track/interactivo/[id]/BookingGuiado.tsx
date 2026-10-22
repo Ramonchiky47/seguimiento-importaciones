@@ -58,7 +58,8 @@ export function BookingGuiado({
   op: Record<string, unknown>;
   hitos: HitoTrack[];
   puedeEditar: boolean;
-  mismoBuque: { id_booking: number; no_booking: string; cliente: string | null; ejecutivo: string | null }[];
+  // motivo = por qué no sale en Por viaje (null = sí sale).
+  mismoBuque: { id_booking: number; no_booking: string; cliente: string | null; ejecutivo: string | null; motivo: string | null }[];
 }) {
   const router = useRouter();
   const datos = (op.datos ?? {}) as Record<string, string>;
@@ -424,41 +425,68 @@ export function BookingGuiado({
         </aside>
       </div>
 
-      {/* Mismo buque */}
-      {mismoBuque.length > 0 && (
-        <section aria-labelledby="buque-titulo" className="flex flex-wrap items-center gap-5 rounded-2xl bg-[#16232f] px-6 py-5 text-white">
-          <svg aria-hidden="true" width="56" height="56" viewBox="0 0 56 56" className="flex-none">
-            <rect width="56" height="56" rx="14" fill="#c65a1f" />
-            <path d="M10 33h36l-6 9H16z" fill="#fff" />
-            <rect x="17" y="22" width="9" height="11" fill="#fde68a" />
-            <rect x="28" y="16" width="11" height="17" fill="#fff" />
-          </svg>
-          <div className="flex min-w-0 flex-[999_1_420px] flex-col gap-2">
-            <h3 id="buque-titulo" className="text-lg font-extrabold">
-              {mismoBuque.length === 1 ? "Otro booking viene" : `Otros ${mismoBuque.length} bookings vienen`} en el mismo buque y viaje ({datos.buque} · {datos.no_viaje})
-            </h3>
-            <span className="text-sm text-slate-300">
-              Comparten ATD, ETA y ATA:{" "}
-              <Link href="/track/viajes" className="font-semibold text-white underline">
-                captúralos juntos en Por viaje
-              </Link>
-              .
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {mismoBuque.map((b) => (
-                <Link
-                  key={b.id_booking}
-                  href={`/track/interactivo/${b.id_booking}`}
-                  title={`${b.cliente ?? ""} · ${b.ejecutivo ?? "Sin ejecutivo"}`}
-                  className="rounded-md bg-white/10 px-2.5 py-1.5 font-mono text-sm font-semibold text-white hover:bg-white/20"
-                >
-                  {b.no_booking}
-                </Link>
-              ))}
+      {/* Mismo buque y viaje */}
+      {mismoBuque.length > 0 && (() => {
+        const enViaje = mismoBuque.filter((b) => !b.motivo);
+        const fuera = mismoBuque.filter((b) => b.motivo);
+        return (
+          <section aria-labelledby="buque-titulo" className="flex flex-wrap items-center gap-5 rounded-2xl bg-[#16232f] px-6 py-5 text-white">
+            <svg aria-hidden="true" width="56" height="56" viewBox="0 0 56 56" className="flex-none">
+              <rect width="56" height="56" rx="14" fill="#c65a1f" />
+              <path d="M10 33h36l-6 9H16z" fill="#fff" />
+              <rect x="17" y="22" width="9" height="11" fill="#fde68a" />
+              <rect x="28" y="16" width="11" height="17" fill="#fff" />
+            </svg>
+            <div className="flex min-w-0 flex-[999_1_420px] flex-col gap-2">
+              <h3 id="buque-titulo" className="text-lg font-extrabold">
+                {enViaje.length === 0
+                  ? "Ningún otro booking de Track viene"
+                  : enViaje.length === 1
+                    ? "Otro booking de Track viene"
+                    : `Otros ${enViaje.length} bookings de Track vienen`}{" "}
+                en el mismo buque y viaje ({datos.buque} · {datos.no_viaje})
+              </h3>
+              {enViaje.length > 0 && (
+                <>
+                  <span className="text-sm text-slate-300">
+                    Comparten ATD, ETA y ATA:{" "}
+                    <Link href="/track/viajes" className="font-semibold text-white underline">
+                      captúralos juntos en Por viaje
+                    </Link>
+                    .
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {enViaje.map((b) => (
+                      <Link
+                        key={b.id_booking}
+                        href={`/track/interactivo/${b.id_booking}`}
+                        title={`${b.cliente ?? ""} · ${b.ejecutivo ?? "Sin ejecutivo"}`}
+                        className="rounded-md bg-white/10 px-2.5 py-1.5 font-mono text-sm font-semibold text-white hover:bg-white/20"
+                      >
+                        {b.no_booking}
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              )}
+              {fuera.length > 0 && (
+                <div className="flex flex-col gap-1 border-t border-white/15 pt-2">
+                  <span className="text-xs font-semibold text-slate-300">
+                    También en este viaje, pero no salen en Por viaje ({fuera.length}):
+                  </span>
+                  <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-300">
+                    {fuera.map((b) => (
+                      <li key={b.id_booking}>
+                        <span className="font-mono font-semibold text-slate-200">{b.no_booking}</span> · {b.motivo}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-          </div>
-        </section>
-      )}
+          </section>
+        );
+      })()}
     </main>
   );
 }
