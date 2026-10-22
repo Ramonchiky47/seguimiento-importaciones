@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, useTransition } fro
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ESTADOS, explicarPropuestaDias, fechaCorta, type EstadoHito } from "@/lib/track";
-import { NAVIERAS_CON_AGENTE, coincideRazonSocial, navieraRastreo, nombreNaviera } from "@/lib/navieras";
+import { NAVIERAS_CON_AGENTE, coincideRazonSocial, ligaRastreo, navieraRastreo, nombreNaviera } from "@/lib/navieras";
 import {
   ETAPAS_CARGOLINK,
   ETAPA_POR_HITO,
@@ -2248,6 +2248,18 @@ export function NavieraSeccion({
 
   // La que encontró el embarque (puede ser otra si la de la referencia no lo tenía).
   const naviera = t?.ok ? nombreNaviera(t.naviera) : (detectada.naviera ?? "la naviera");
+  const liga = ligaRastreo(t?.ok ? nombreNaviera(t.naviera) : detectada.naviera, mbl, contenedores);
+  const verEnSitio = liga && (
+    <a
+      href={liga}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex min-h-10 items-center gap-1 rounded-md px-2 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+    >
+      Ver en el sitio de {t?.ok ? naviera : detectada.naviera}
+      <span aria-hidden="true">↗</span>
+    </a>
+  );
   if (sinAgente)
     return (
       <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
@@ -2258,6 +2270,7 @@ export function NavieraSeccion({
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Todavía no hay agente de rastreo para {detectada.naviera ?? "esta naviera"}. Hoy se consultan {NAVIERAS_CON_AGENTE.join(", ")}.
         </p>
+        {verEnSitio && <div className="mt-1">{verEnSitio}</div>}
       </section>
     );
   const difEta = t?.ok && t.eta_naviera && eta ? Math.round((Date.parse(t.eta_naviera) - Date.parse(eta.slice(0, 10))) / 86400000) : null;
@@ -2286,14 +2299,17 @@ export function NavieraSeccion({
             </span>
           )}
         </h3>
-        <button
-          type="button"
-          disabled={esperando}
-          onClick={pedir}
-          className="min-h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-        >
-          {esperando ? "Consultando…" : `Actualizar desde ${t?.ok || detectada.naviera ? naviera : "las navieras"}`}
-        </button>
+        <span className="flex flex-wrap items-center gap-2">
+          {verEnSitio}
+          <button
+            type="button"
+            disabled={esperando}
+            onClick={pedir}
+            className="min-h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            {esperando ? "Consultando…" : `Actualizar desde ${t?.ok || detectada.naviera ? naviera : "las navieras"}`}
+          </button>
+        </span>
       </div>
 
       {navieraMal}

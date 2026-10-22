@@ -75,3 +75,26 @@ export function coincideRazonSocial(naviera: string, razonSocial: string | null 
 export function nombreNaviera(n: string): string {
   return NAVIERAS_CON_AGENTE.find((x) => x.toUpperCase() === n.toUpperCase()) ?? n;
 }
+
+// Página de rastreo de la naviera, con la referencia cargada cuando la página lo permite.
+export function ligaRastreo(naviera: string | null, mbl: string | null | undefined, contenedores: string | null | undefined): string | null {
+  const cont = (contenedores ?? "")
+    .split(",")
+    .map((c) => c.trim().toUpperCase().replace(/^\./, ""))
+    .find((c) => /^[A-Z]{4}\d{7}$/.test(c));
+  const ref = encodeURIComponent((mbl ?? "").trim() || cont || "");
+  switch (naviera) {
+    case "MSC":
+      return "https://www.msc.com/en/track-a-shipment";
+    case "Maersk":
+      return ref ? `https://www.maersk.com/tracking/${ref}` : "https://www.maersk.com/tracking/";
+    case "Yang Ming":
+      return "https://www.yangming.com/en/esolution/cargo_tracking";
+    case "Hapag-Lloyd":
+      return `https://www.hapag-lloyd.com/solutions/tracking/#/${ref}`;
+    case "ZIM":
+      return `https://www.zim.com/tools/track-a-shipment?consnumber=${ref}`;
+    default:
+      return null;
+  }
+}
