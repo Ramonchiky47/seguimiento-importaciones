@@ -1944,82 +1944,117 @@ function ResumenComercialSeccion({ idBooking }: { idBooking: number }) {
 
           {r.ok && (
             <>
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
+              {/* Datos clave en una línea. */}
+              <dl className="flex flex-wrap gap-1.5 text-xs">
                 {r.datos.map((d) => (
-                  <div key={d.label}>
-                    <dt className="text-xs text-slate-500 dark:text-slate-400">{d.label}</dt>
-                    <dd className="text-slate-900 dark:text-slate-100">{d.valor || "—"}</dd>
+                  <div
+                    key={d.label}
+                    className="flex items-baseline gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-700 dark:bg-slate-800"
+                  >
+                    <dt className="text-slate-500 dark:text-slate-400">{d.label}</dt>
+                    <dd className="max-w-56 truncate font-semibold text-slate-900 dark:text-slate-100" title={d.valor}>
+                      {d.valor || "—"}
+                    </dd>
                   </div>
                 ))}
               </dl>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+
+              <div className="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                     <tr>
-                      {["Tipo", "Concepto", "Proveedor", "Cant.", "Costo", "Venta", "Factura / pago"].map((h) => (
-                        <th key={h} scope="col" className="whitespace-nowrap px-2 py-2 font-semibold">
-                          {h}
-                        </th>
-                      ))}
+                      <th scope="col" className="px-2 py-1.5 font-semibold">Concepto</th>
+                      <th scope="col" className="px-2 py-1.5 font-semibold">Proveedor</th>
+                      <th scope="col" className="px-2 py-1.5 text-right font-semibold">Cant.</th>
+                      <th scope="col" className="px-2 py-1.5 text-right font-semibold">Costo</th>
+                      <th scope="col" className="px-2 py-1.5 text-right font-semibold">Venta</th>
+                      <th scope="col" className="px-2 py-1.5 font-semibold">Factura / pago</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {r.conceptos.map((c) => {
                       const cambio = cambiados.get(c.id);
+                      const [estadoPago, ...detallePago] = (c.factura || "—").split(" / ");
+                      const clasePago = /pagado/i.test(estadoPago)
+                        ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
+                        : /pend/i.test(estadoPago)
+                          ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
                       return (
-                        <tr key={c.id} className={cambio ? "bg-red-50 dark:bg-red-950/40" : ""}>
-                          <td className="whitespace-nowrap px-2 py-1.5">
-                            {cambio && (
-                              <span title={cambio === "nuevo" ? "Concepto nuevo" : "Concepto modificado"} className="mr-1 font-bold text-red-700 dark:text-red-400">
-                                ⚠
+                        <tr key={c.id} className={`align-top ${cambio ? "bg-red-50 dark:bg-red-950/40" : ""}`}>
+                          <td className="px-2 py-1.5">
+                            <span className="flex items-start gap-1.5">
+                              {cambio && (
+                                <span title={cambio === "nuevo" ? "Concepto nuevo" : "Concepto modificado"} className="font-bold text-red-700 dark:text-red-400">
+                                  ⚠
+                                </span>
+                              )}
+                              <span>
+                                <span className="mr-1 rounded bg-slate-100 px-1 py-px text-[10px] font-semibold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                  {c.tipo}
+                                </span>
+                                <span className="font-medium text-slate-900 dark:text-slate-100">{c.concepto}</span>
+                                {c.observaciones && <span className="block text-[11px] text-slate-500">{c.observaciones}</span>}
                               </span>
-                            )}
-                            {c.tipo}
+                            </span>
                           </td>
-                          <td className="px-2 py-1.5 font-medium text-slate-900 dark:text-slate-100">
-                            {c.concepto}
-                            {c.observaciones && <span className="block text-xs font-normal text-slate-500">{c.observaciones}</span>}
+                          <td className="max-w-40 truncate px-2 py-1.5 text-slate-600 dark:text-slate-300" title={c.proveedor ?? undefined}>
+                            {c.proveedor ?? "—"}
                           </td>
-                          <td className="max-w-48 truncate px-2 py-1.5 text-xs">{c.proveedor ?? "—"}</td>
                           <td className="px-2 py-1.5 text-right tabular-nums">{c.cantidad}</td>
-                          <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">
+                          <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums" title={c.costoBase || undefined}>
                             {dinero(c.costo, c.costoMoneda)}
-                            {c.costoBase && <span className="block text-xs text-slate-500">{c.costoBase}</span>}
+                            {c.costoBase && <span className="block text-[10px] lowercase text-slate-500">{c.costoBase}</span>}
                           </td>
-                          <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">
-                            {dinero(c.venta, c.ventaMoneda)}
+                          <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums" title={c.ventaBase || undefined}>
+                            <span className="font-semibold text-slate-900 dark:text-slate-100">{dinero(c.venta, c.ventaMoneda)}</span>
                             {(c.ventaBase || c.pdd) && (
-                              <span className="block text-xs text-slate-500">{[c.ventaBase, c.pdd].filter(Boolean).join(" · ")}</span>
+                              <span className="block text-[10px] lowercase text-slate-500">{[c.ventaBase, c.pdd].filter(Boolean).join(" · ")}</span>
                             )}
                           </td>
-                          <td className="px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400">{c.factura || "—"}</td>
+                          <td className="px-2 py-1.5" title={detallePago.join(" / ") || undefined}>
+                            <span className={`whitespace-nowrap rounded-full px-1.5 py-px text-[10px] font-semibold ${clasePago}`}>{estadoPago}</span>
+                            {detallePago.length > 0 && (
+                              <span className="mt-0.5 block max-w-44 truncate text-[10px] text-slate-500">{detallePago.join(" / ")}</span>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
                     {r.conceptos.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-2 py-4 text-center text-slate-500">Comercial no ha capturado conceptos.</td>
+                        <td colSpan={6} className="px-2 py-4 text-center text-slate-500">Comercial no ha capturado conceptos.</td>
                       </tr>
                     )}
                   </tbody>
-                  {r.conceptos.length > 0 && (
-                    <tfoot className="border-t border-slate-200 text-sm font-semibold dark:border-slate-700">
-                      <tr>
-                        <td colSpan={4} className="px-2 py-2 text-right text-slate-600 dark:text-slate-300">
-                          Totales según Cargolink
-                        </td>
-                        <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">{dinero(r.totales.costo)}</td>
-                        <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">{dinero(r.totales.venta)}</td>
-                        <td className="whitespace-nowrap px-2 py-2 tabular-nums text-green-800 dark:text-green-300">Profit {dinero(r.totales.profit)}</td>
-                      </tr>
-                    </tfoot>
-                  )}
                 </table>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Referencia para avisar cambios: {r.revisadoAt ? new Date(r.revisadoAt).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "—"}
-                {r.revisadoPor ? ` · ${r.revisadoPor}` : ""}. Si Comercial agrega, quita o cambia un concepto (o el seguro, incoterm, servicio o
-                contenedores), aquí aparece ⚠.
+
+              {r.conceptos.length > 0 && (
+                <div className="flex flex-wrap justify-end gap-2 text-xs">
+                  {[
+                    ["Costo", r.totales.costo, "text-slate-900 dark:text-slate-100"],
+                    ["Venta", r.totales.venta, "text-slate-900 dark:text-slate-100"],
+                    ["Profit", r.totales.profit, (r.totales.profit ?? 0) < 0 ? "text-red-700 dark:text-red-400" : "text-green-800 dark:text-green-300"],
+                  ].map(([label, valor, clase]) => (
+                    <div key={label as string} className="rounded-md border border-slate-200 px-3 py-1.5 text-right dark:border-slate-700">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label as string}</p>
+                      <p className={`text-sm font-bold tabular-nums ${clase as string}`}>
+                        {dinero(valor as number | null)}
+                        {label === "Profit" && r.totales.venta ? (
+                          <span className="ml-1 text-[11px] font-semibold">
+                            ({Math.round((100 * (r.totales.profit ?? 0)) / r.totales.venta)} %)
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Totales según Cargolink. Referencia para avisar cambios:{" "}
+                {r.revisadoAt ? new Date(r.revisadoAt).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                {r.revisadoPor ? ` (${r.revisadoPor})` : ""}.
               </p>
             </>
           )}
