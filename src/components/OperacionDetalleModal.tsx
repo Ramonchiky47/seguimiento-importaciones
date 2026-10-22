@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { ESTADOS, fechaCorta, type EstadoHito } from "@/lib/track";
+import { ESTADOS, explicarPropuestaDias, fechaCorta, type EstadoHito } from "@/lib/track";
 import {
   ETAPAS_CARGOLINK,
   ETAPA_POR_HITO,
@@ -30,6 +30,7 @@ import {
   marcarResumenComercialRevisado,
   resumenComercialCargolink,
   type ResumenComercial,
+  propuestaDiasLibres,
 } from "@/app/(app)/operaciones-maritima/actions";
 
 // Ventana emergente con todos los indicadores de una operación marítima.
@@ -730,6 +731,7 @@ export function EditorEtapa({
   const diasDemora = (op.dias_libres_demora as number | null) ?? datos.dias_demora;
   const textoPorDefecto = (lang: string) => instruccionesRevalidacionPorDefecto(lang || "ESP", diasDemora);
   for (const c of etapa.campos) {
+    if (c.propuesta && /^0?$/.test(inicial[c.key] ?? "")) inicial[c.key] = "";
     if (c.porDefecto === "instrucciones_revalidacion") {
       inicial[c.key] = inicial[c.key] ? repararAcentos(inicial[c.key]) : textoPorDefecto(inicial.lang ?? "ESP");
     }
@@ -741,6 +743,24 @@ export function EditorEtapa({
     return v === null || v === undefined || /^\s*0?\s*$/.test(String(v));
   });
   const [valores, setValores] = useState<Record<string, string>>(inicial);
+  // Propuestas por historial para campos vacíos (días libres por naviera).
+  const camposPropuesta = etapa.campos.filter((c) => c.propuesta && !inicial[c.key]);
+  const [propuestas, setPropuestas] = useState<Record<string, { valor: string; explicacion: string }>>({});
+  useEffect(() => {
+    if (camposPropuesta.length === 0) return;
+    let vigente = true;
+    propuestaDiasLibres([idBooking]).then((r) => {
+      const p = r[String(idBooking)];
+      if (!vigente || !p) return;
+      const nuevas = Object.fromEntries(camposPropuesta.map((c) => [c.key, { valor: String(p.dias), explicacion: explicarPropuestaDias(p) }]));
+      setPropuestas(nuevas);
+      setValores((v) => ({ ...v, ...Object.fromEntries(camposPropuesta.filter((c) => !v[c.key]).map((c) => [c.key, String(p.dias)])) }));
+    });
+    return () => {
+      vigente = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idBooking]);
   // Listas que vienen de Cargolink (aseguradoras, incoterms).
   const usaCatalogos = etapa.campos.some((c) => c.catalogo);
   const [catalogos, setCatalogos] = useState<Record<string, { valor: string; label: string }[]>>({});
@@ -812,7 +832,13 @@ export function EditorEtapa({
           : "La etapa quedará en edición (se puede volver a cambiar).";
     const texto =
       `Este cambio se reflejará en Cargolink, en el booking ${String(op.no_booking ?? "")}.\n\n` +
-      `${etapa.label}: ${accion.label}.\n${detalle}\nNo se notificará al cliente.\n\n¿Continuar?`;
+      `${etapa.label}: ${accion.label}.\n${detalle}\nNo se notificará al cliente.` +
+      // Avisa si se va a guardar un valor propuesto sin cambiarlo.
+      etapa.campos
+        .filter((c) => propuestas[c.key] && valores[c.key] === propuestas[c.key].valor)
+        .map((c) => `\n\nIncluye una PROPUESTA: ${c.label} = ${valores[c.key]}. Confírmala o cámbiala antes de continuar.`)
+        .join("") +
+      `\n\n¿Continuar?`;
     if (!window.confirm(texto)) return;
     setError(null);
     startTransition(async () => {
@@ -922,15 +948,32 @@ export function EditorEtapa({
                         ))}
                       </select>
                     ) : (
-                      <input
-                        type={c.tipo === "decimal" ? "text" : c.tipo}
-                        inputMode={c.tipo === "decimal" ? "decimal" : undefined}
-                        min={c.tipo === "number" ? 0 : undefined}
-                        max={c.tipo === "number" ? 365 : undefined}
-                        value={valores[c.key] ?? ""}
-                        onChange={(e) => cambiar(e.target.value)}
-                        className={`${clase} ${c.tipo === "text" ? "min-w-72" : ""}`}
-                      />
+                      <>
+                        {propuestas[c.key] && valores[c.key] === propuestas[c.key].valor && (
+                          <span className="self-start rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                            Propuesta · aún no guardada
+                          </span>
+                        )}
+                        <input
+                          type={c.tipo === "decimal" ? "text" : c.tipo}
+                          inputMode={c.tipo === "decimal" ? "decimal" : undefined}
+                          min={c.tipo === "number" ? 0 : undefined}
+                          max={c.tipo === "number" ? 365 : undefined}
+                          value={valores[c.key] ?? ""}
+                          onChange={(e) => cambiar(e.target.value)}
+                          className={`${clase} ${c.tipo === "text" ? "min-w-72" : ""} ${
+                            propuestas[c.key] && valores[c.key] === propuestas[c.key].valor
+                              ? "border-2 border-dashed border-blue-500! bg-blue-50 font-semibold text-blue-900 dark:bg-blue-950 dark:text-blue-200"
+                              : ""
+                          }`}
+                        />
+                        {propuestas[c.key] && (
+                          <span className="max-w-64 text-[11px] text-blue-800 dark:text-blue-300">
+                            {valores[c.key] === propuestas[c.key].valor ? "" : `Propuesta: ${propuestas[c.key].valor}. `}
+                            {propuestas[c.key].explicacion} Revisa y presiona Guardar.
+                          </span>
+                        )}
+                      </>
                     )}
                   </label>
                   {botonPdf}

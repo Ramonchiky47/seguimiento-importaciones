@@ -53,7 +53,9 @@ export function BookingGuiado({
   hitos,
   puedeEditar,
   mismoBuque,
+  propuestaDias,
 }: {
+  propuestaDias: { dias: number; explicacion: string } | null;
   idBooking: number;
   op: Record<string, unknown>;
   hitos: HitoTrack[];
@@ -63,7 +65,7 @@ export function BookingGuiado({
 }) {
   const router = useRouter();
   const datos = (op.datos ?? {}) as Record<string, string>;
-  const tareas = calcularTareas(op, hitos);
+  const tareas = calcularTareas(op, hitos, propuestaDias);
   const sig = siguientePaso(tareas);
   const [fase, setFase] = useState<FaseClave>(sig?.fase ?? faseActual(tareas));
   const [editando, setEditando] = useState<string | null>(null);
@@ -116,7 +118,14 @@ export function BookingGuiado({
       : regresado
         ? { tono: "green", centro: "✓", titulo: "Vacío regresado", texto: `Regresó el ${fechaCortaTN(op.regreso_vacio)}.` }
         : dl <= 0
-          ? { tono: "red", centro: "?", titulo: "Sin capturar", texto: `Arribó hace ${Math.max(0, diasEntre(ata as string, hoy))} días: captúralos para saber cuándo empieza a cobrar la naviera.` }
+          ? {
+              tono: "red",
+              centro: "?",
+              titulo: propuestaDias ? `Sin capturar · propuesta ${propuestaDias.dias} días` : "Sin capturar",
+              texto: propuestaDias
+                ? `La propuesta aún no está guardada. ${propuestaDias.explicacion}`
+                : `Arribó hace ${Math.max(0, diasEntre(ata as string, hoy))} días: captúralos para saber cuándo empieza a cobrar la naviera.`,
+            }
           : diasDemora !== null && diasDemora > 0
             ? { tono: "red", centro: String(diasDemora), titulo: `${diasDemora} días de demora`, texto: `Se vencieron el ${fechaCortaTN(ultimo)}: regresa el vacío lo antes posible.` }
             : { tono: (diasDemora ?? -99) >= -4 ? "amber" : "green", centro: String(-(diasDemora ?? 0)), titulo: `Quedan ${-(diasDemora ?? 0)} de ${dl} días`, texto: `Último día libre: ${fechaCortaTN(ultimo)}.` };

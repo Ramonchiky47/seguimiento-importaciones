@@ -60,6 +60,7 @@ export async function actualizarOperacionesMaritima(): Promise<ResultadoActualiz
   }
 
   revalidatePath("/operaciones-maritima");
+  revalidatePath("/track/operaciones");
   return { actualizadas: lista.length, total, completo };
 }
 
@@ -222,6 +223,7 @@ export async function guardarEtapaCargolink(
     }`;
     await bitacora(true, mensaje, cambios);
     revalidatePath("/operaciones-maritima");
+    revalidatePath("/track/operaciones");
     revalidatePath("/track", "layout");
     return { ok: true, mensaje };
   } catch (e) {
@@ -437,6 +439,7 @@ export async function guardarTransbordosCargolink(
     const mensaje = `Transbordo: ${accion.label.toLowerCase()} en Cargolink (${filasDespues.length} fila(s)).`;
     await bitacora({ accion: accion.status, ok: true, mensaje, valores: { transbordos: filas }, valores_antes: valoresAntes, valores_despues: valoresDespues, estatus_antes: estatusAntes, estatus_despues: estatusDespues });
     revalidatePath("/operaciones-maritima");
+    revalidatePath("/track/operaciones");
     revalidatePath("/track", "layout");
     return { ok: true, mensaje };
   } catch (e) {
@@ -1017,4 +1020,16 @@ export async function marcarResumenComercialRevisado(idBooking: number, firma: u
   if (error) return { ok: false, mensaje: error.message };
   revalidatePath("/track", "layout");
   return { ok: true, mensaje: "Cambios marcados como revisados." };
+}
+
+// Días libres de demora propuestos por historial (función
+// propuesta_dias_libres: cliente + naviera, luego cliente, luego naviera).
+export type PropuestaDiasLibres = { dias: number; nivel: 1 | 2 | 3; coinciden: number; muestra: number; ultimo: string | null };
+
+export async function propuestaDiasLibres(ids: number[]): Promise<Record<string, PropuestaDiasLibres>> {
+  const myPermissions = await getMyPermissions();
+  if ((!myPermissions.es_admin && !myPermissions.puede_operaciones) || ids.length === 0) return {};
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("propuesta_dias_libres", { p_ids: ids.slice(0, 200) });
+  return (data ?? {}) as Record<string, PropuestaDiasLibres>;
 }

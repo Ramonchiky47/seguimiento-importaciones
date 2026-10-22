@@ -12,6 +12,7 @@ import {
   ESTATUS_OPCIONES,
   ESTATUS_TRACK,
   cambiosComerciales,
+  explicarPropuestaDias,
   claseFilaEstatus,
   hoyMexico,
   VER_EMBARQUES,
@@ -109,6 +110,12 @@ export default async function EmbarquesPage({
   ]);
   const filas = (data ?? []) as Embarque[];
   const cambios = await cambiosComerciales(supabase, filas.map((f) => f.id_booking));
+  // En "Sin días libres" se muestra la propuesta por historial (no guardada).
+  const { data: propDias } =
+    verActivo === "sin_dias_libres" && filas.length > 0
+      ? await supabase.rpc("propuesta_dias_libres", { p_ids: filas.map((f) => f.id_booking) })
+      : { data: null };
+  const propuestas = (propDias ?? {}) as Record<string, { dias: number; nivel: number; coinciden: number; muestra: number; ultimo: string | null }>;
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const availableEjecutivos = Array.from(
@@ -273,7 +280,14 @@ export default async function EmbarquesPage({
                     </span>
                   </td>
                   <td className="px-3 py-2 text-center tabular-nums">
-                    {f.dias_demora !== null && f.dias_demora > 0 ? (
+                    {propuestas[String(f.id_booking)] ? (
+                      <span
+                        title={explicarPropuestaDias(propuestas[String(f.id_booking)])}
+                        className="whitespace-nowrap rounded border border-dashed border-blue-500 bg-blue-50 px-1.5 py-0.5 text-xs font-semibold text-blue-900 dark:bg-blue-950 dark:text-blue-200"
+                      >
+                        Propuesta {propuestas[String(f.id_booking)].dias} d
+                      </span>
+                    ) : f.dias_demora !== null && f.dias_demora > 0 ? (
                       <span className="rounded bg-red-100 px-1.5 py-0.5 font-semibold text-red-800 dark:bg-red-950 dark:text-red-300">{f.dias_demora}</span>
                     ) : (
                       "—"

@@ -213,3 +213,9 @@ export async function cambiosComerciales(
   for (const x of (base ?? []) as { id_booking: number }[]) r.set(x.id_booking, "Comercial cambió conceptos o costos después de la revisión");
   return r;
 }
+
+// Texto de dónde sale la propuesta de días libres (función propuesta_dias_libres).
+export function explicarPropuestaDias(p: { dias: number; nivel: number; coinciden: number; muestra: number; ultimo: string | null }): string {
+  const base = p.nivel === 1 ? "de este cliente con la misma naviera" : p.nivel === 2 ? "de este cliente" : "de esta naviera";
+  return `Según ${p.coinciden} de ${p.muestra} ${p.muestra === 1 ? "booking" : "bookings"} ${base}${p.ultimo ? ` (último: ${p.ultimo})` : ""}.`;
+}

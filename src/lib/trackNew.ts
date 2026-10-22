@@ -79,7 +79,12 @@ const ESTATUS_MOV: Record<string, string> = {
   EDICION: "En edición en Cargolink",
 };
 
-export function calcularTareas(op: Record<string, unknown>, hitos: HitoTrack[]): Tarea[] {
+export function calcularTareas(
+  op: Record<string, unknown>,
+  hitos: HitoTrack[],
+  // Días libres propuestos por historial (no guardados).
+  propuestaDias?: { dias: number; explicacion: string } | null,
+): Tarea[] {
   const datos = (op.datos ?? {}) as Record<string, string>;
   const porOrden = new Map(hitos.map((h) => [h.orden, h]));
   const tareas: Tarea[] = [];
@@ -117,6 +122,9 @@ export function calcularTareas(op: Record<string, unknown>, hitos: HitoTrack[]):
       if (dl > 0) {
         estado = "hecho";
         valor = `${dl} días`;
+      } else if (propuestaDias) {
+        valor = `Propuesta: ${propuestaDias.dias} días`;
+        detalle = `${propuestaDias.explicacion} Aún no guardada: revísala y guarda.`;
       }
     }
     // Aviso de ATA: sin banco o instrucciones, aunque no esté atrasado.

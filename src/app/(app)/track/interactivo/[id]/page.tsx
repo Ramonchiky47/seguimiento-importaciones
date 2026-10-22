@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { BookingGuiado } from "./BookingGuiado";
 import type { HitoTrack } from "@/lib/trackNew";
+import { explicarPropuestaDias } from "@/lib/track";
 
 export const dynamic = "force-dynamic";
 
@@ -52,8 +53,16 @@ export default async function TrackInteractivoBooking({ params }: { params: Prom
         : null,
   }));
 
+  // Días libres propuestos por historial si no están capturados.
+  const { data: propDias } =
+    Number(op.dias_libres_demora) > 0 ? { data: null } : await supabase.rpc("propuesta_dias_libres", { p_ids: [idBooking] });
+  const pd = (propDias as Record<string, { dias: number; nivel: number; coinciden: number; muestra: number; ultimo: string | null }> | null)?.[
+    String(idBooking)
+  ];
+
   return (
     <BookingGuiado
+      propuestaDias={pd ? { dias: pd.dias, explicacion: explicarPropuestaDias(pd) } : null}
       key={idBooking}
       idBooking={idBooking}
       op={op as Record<string, unknown>}

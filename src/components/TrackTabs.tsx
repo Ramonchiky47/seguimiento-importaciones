@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/track/mi-dia", label: "Mi día" },
   { href: "/track/tablero", label: "Tablero" },
+  { href: "/track/operaciones", label: "Operaciones Marítima" },
   { href: "/track/embarques", label: "Embarques" },
   { href: "/track/viajes", label: "Por viaje" },
   { href: "/track/bitacora", label: "Bitácora" },

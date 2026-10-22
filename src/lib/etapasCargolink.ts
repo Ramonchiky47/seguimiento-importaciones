@@ -23,6 +23,9 @@ export type CampoEtapa = {
   porDefecto?: "instrucciones_revalidacion";
   // Si no está capturado en Cargolink, el título de la etapa va en rojo.
   marcarSiFalta?: boolean;
+  // Sin valor capturado, se precarga una propuesta por historial (marcada
+  // como propuesta hasta guardar).
+  propuesta?: "dias_libres";
   // Encabezado para agrupar campos en el formulario.
   grupo?: string;
   // "origen" = el valor vive en el registro de origen (consultaOrigen), no en
@@ -239,7 +242,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     mov: "his_mov_ata",
     campos: [
       { key: "fecha_ata", label: "Fecha de arribo efectivo", tipo: "date", requerido: true, actual: "ata" },
-      { key: "dias_demora", label: "Días libres de demora", tipo: "number", requerido: false, actual: "dias_libres_demora" },
+      { key: "dias_demora", label: "Días libres de demora", tipo: "number", requerido: false, actual: "dias_libres_demora", propuesta: "dias_libres" },
     ],
     acciones: [GUARDAR, FINALIZAR],
   },
