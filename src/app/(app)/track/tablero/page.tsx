@@ -19,11 +19,9 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const PERIODOS = [
-  { key: "7", label: "Semana" },
-  { key: "30", label: "Mes" },
-  { key: "365", label: "Año" },
-];
+// El % a tiempo se mide sobre los compromisos de los últimos 30 días (ya no
+// hay selector de periodo).
+const DIAS_PERIODO = "30";
 
 const ETAPAS = [
   { key: "Por zarpar", color: "bg-slate-400" },
@@ -103,10 +101,10 @@ const CLASE_PRIORIDAD: Record<number, string> = {
 export default async function TableroPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[] }>;
+  searchParams: Promise<{ ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[] }>;
 }) {
-  const { periodo, ejecutivo, estatus, atd } = await searchParams;
-  const periodoActivo = PERIODOS.some((p) => p.key === periodo) ? (periodo as string) : "30";
+  const { ejecutivo, estatus, atd } = await searchParams;
+  const periodoActivo = DIAS_PERIODO;
   const supabase = await createClient();
   const { filtro: ejecutivoRaw, enUrl: ejecutivoEnUrl } = ejecutivosTrack(ejecutivo);
   const estatusSel = estatusBooking(estatus, ESTATUS_TRACK);
@@ -244,23 +242,7 @@ export default async function TableroPage({
 
   return (
     <main className="mx-auto max-w-7xl space-y-5 px-6 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="group" aria-label="Periodo" className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900">
-          {PERIODOS.map((p) => (
-            <Link
-              key={p.key}
-              href={periodoHref(p.key)}
-              aria-current={p.key === periodoActivo ? "true" : undefined}
-              className={`rounded-md px-4 py-1.5 text-sm font-semibold ${
-                p.key === periodoActivo
-                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                  : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-              }`}
-            >
-              {p.label}
-            </Link>
-          ))}
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex flex-wrap items-center gap-3">
         <MultiSelectFilter paramName="atd" label="ATD real" options={PERIODO_ATD_OPCIONES} current={atdSel.seleccion} />
         <MultiSelectFilter paramName="estatus" label="Estatus" options={ESTATUS_OPCIONES} current={estatusSel.seleccion} />
