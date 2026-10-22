@@ -5,8 +5,8 @@
 // Mismas reglas que ~/Agentes/operaciones_maritima/navieras.py.
 
 // buque_carrier de Cargolink -> naviera con agente de rastreo.
-const POR_CARRIER: Record<string, string> = { "157": "MSC", "1497": "Maersk", "1419": "Yang Ming" };
-export const NAVIERAS_CON_AGENTE = ["MSC", "Maersk", "Yang Ming"];
+const POR_CARRIER: Record<string, string> = { "157": "MSC", "1497": "Maersk", "1419": "Yang Ming", "2129": "ZIM", "1387": "ZIM" };
+export const NAVIERAS_CON_AGENTE = ["MSC", "Maersk", "Yang Ming", "ZIM"];
 
 // Prefijos de contenedores propios (los rentados, como TEMU o TGBU, no delatan naviera).
 const CONTENEDORES: [string, string[]][] = [

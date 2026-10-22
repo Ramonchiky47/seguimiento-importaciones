@@ -115,6 +115,9 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     fn: "registraOrigen",
     guardado: "origen",
     mov: "his_mov_origen",
+    // registraOrigen también guarda Recepción de documentos; con este valor
+    // (el mismo que pone la pantalla de Cargolink) actualiza his_mov_origen.
+    desdeEtapa: "SALIDA DE MERCANCIA",
     campos: [
       { key: "contacto", label: "Fecha de contacto", tipo: "date", requerido: false, actual: "datos.contacto", fuente: "origen" },
       { key: "fecha_estimada", label: "Fecha estimada de salida", tipo: "date", requerido: false, actual: "datos.fecha_estimada", fuente: "origen" },

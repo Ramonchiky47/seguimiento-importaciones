@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
+import { ReenviarCambioBoton } from "@/components/ReenviarCambioBoton";
 import { ETAPAS_CARGOLINK } from "@/lib/etapasCargolink";
 import { fechaCorta } from "@/lib/track";
 
@@ -92,11 +93,34 @@ export default async function BitacoraPage({
   if (desdeOk) query = query.gte("created_at", `${desdeOk}T00:00:00-06:00`);
   if (hastaOk) query = query.lte("created_at", `${hastaOk}T23:59:59-06:00`);
 
-  const [{ data, error, count }, { data: usuariosData }] = await Promise.all([
+  const [{ data, error, count }, { data: usuariosData }, { data: puedeEditar }] = await Promise.all([
     query,
     supabase.from("bitacora_cargolink").select("usuario_email, usuario_nombre").limit(1000),
+    supabase.rpc("puedo_editar_cargolink"),
   ]);
   const registros = (data ?? []) as Registro[];
+  // Solo se reenvía el error más reciente de cada booking y etapa (si después
+  // hubo otro intento, ese manda) y solo etapas con campos (no transbordos,
+  // documentos ni ejecutivo).
+  const { data: recientes } = registros.some((r) => !r.ok)
+    ? await supabase
+        .from("bitacora_cargolink")
+        .select("id, id_booking, etapa, created_at")
+        .in("id_booking", Array.from(new Set(registros.filter((r) => !r.ok).map((r) => r.id_booking))))
+        .order("created_at", { ascending: false })
+    : { data: [] };
+  const ultimoPorEtapa = new Map<string, number>();
+  for (const x of (recientes ?? []) as { id: number; id_booking: number; etapa: string }[]) {
+    const k = `${x.id_booking}|${x.etapa}`;
+    if (!ultimoPorEtapa.has(k)) ultimoPorEtapa.set(k, x.id);
+  }
+  const reenviable = (r: Registro) =>
+    puedeEditar === true &&
+    !r.ok &&
+    ultimoPorEtapa.get(`${r.id_booking}|${r.etapa}`) === r.id &&
+    Boolean(ETAPAS_CARGOLINK[r.etapa]?.acciones.some((a) => a.status === r.accion)) &&
+    r.valores !== null &&
+    !("transbordos" in r.valores);
   const totalCount = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const usuarios = Array.from(
@@ -242,6 +266,15 @@ export default async function BitacoraPage({
                       {r.ok ? "Aplicado" : "Error"}
                     </span>
                     {!r.ok && r.mensaje && <p className="mt-1 max-w-64 text-xs text-red-700 dark:text-red-400">{r.mensaje}</p>}
+                    {reenviable(r) && (
+                      <ReenviarCambioBoton
+                        idBooking={r.id_booking}
+                        etapa={r.etapa}
+                        accion={r.accion}
+                        valores={Object.fromEntries(Object.entries(r.valores ?? {}).map(([k, v]) => [k, String(v ?? "")]))}
+                        resumen={[`${etapa?.label ?? r.etapa} · ${accion?.label ?? r.accion}`, ...describir(r.etapa, null, r.valores)]}
+                      />
+                    )}
                   </td>
                 </tr>
               );
