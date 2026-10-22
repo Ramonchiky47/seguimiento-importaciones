@@ -89,6 +89,8 @@ export default async function EmbarquesPage({
   if (estatusSel.codigos) query = query.in("status_booking", estatusSel.codigos);
   if (verActivo === "sin_eta") query = query.is("eta", null);
   if (verActivo === "sin_dias_libres") query = query.eq("sin_dias_libres", true);
+  if (verActivo === "sin_dias_arribo") query = query.eq("sin_dias_libres", true).not("ata", "is", null).lte("ata", hoyMexico());
+  if (verActivo === "sin_eta_zarpo") query = query.is("eta", null).not("etd_atd", "is", null).lte("etd_atd", hoyMexico());
   if (verActivo === "por_vencer") query = query.gte("dias_demora", -4).lte("dias_demora", -1);
   if (verActivo === "aviso_arribo") {
     const hoy = hoyMexico();
@@ -112,7 +114,7 @@ export default async function EmbarquesPage({
   const cambios = await cambiosComerciales(supabase, filas.map((f) => f.id_booking));
   // En "Sin días libres" se muestra la propuesta por historial (no guardada).
   const { data: propDias } =
-    verActivo === "sin_dias_libres" && filas.length > 0
+    (verActivo === "sin_dias_libres" || verActivo === "sin_dias_arribo") && filas.length > 0
       ? await supabase.rpc("propuesta_dias_libres", { p_ids: filas.map((f) => f.id_booking) })
       : { data: null };
   const propuestas = (propDias ?? {}) as Record<string, { dias: number; nivel: number; coinciden: number; muestra: number; ultimo: string | null }>;

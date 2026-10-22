@@ -181,6 +181,8 @@ export const VER_EMBARQUES: Record<string, string> = {
   aviso_arribo: "Aviso de arribo (ETA ≤ 7 días)",
   sin_dias_libres: "Sin días libres de demora",
   por_vencer: "Por vencer demoras (1–4 días)",
+  sin_dias_arribo: "Ya arribó y no tiene días libres",
+  sin_eta_zarpo: "Ya zarpó y no tiene ETA",
 };
 
 export type ConteosTrack = {
@@ -195,6 +197,8 @@ export type ConteosTrack = {
   sin_dias_libres: number;
   por_vencer: number;
   por_corregir: number;
+  sin_eta_zarpo?: number;
+  sin_dias_arribo?: number;
 };
 
 // Bookings (de una lista) con cambio comercial pendiente de revisar: la foto

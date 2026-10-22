@@ -3,15 +3,13 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
+import { FilasTarjetas, type FilaTarjetas } from "@/components/FilasTarjetas";
 import {
   EJECUTIVO_TODOS,
   SIN_EJECUTIVO,
   ESTATUS_OPCIONES,
   ESTATUS_TRACK,
-  ETIQUETA_COMPACTA,
   TONO_TARJETA,
-  VALOR_COMPACTO,
-  claseTarjetaCompacta,
   type ConteosTrack,
   ejecutivosTrack,
   estatusBooking,
@@ -128,12 +126,32 @@ export default async function TableroPage({
       p_tarjeta: null,
       p_hoy: null,
     }),
-    supabase.rpc("track_conteos", {
+    supabase.rpc("track_conteos_q", {
+      p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
+      p_estatus: estatusSel.codigos,
+      p_atd: atdSel.codigos,
+      p_q: null,
+    }),
+  ]);
+  // Mismos conteos de compromisos que Mi día y propuestas por confirmar.
+  const [{ data: miDiaData }, { data: propuestasData }] = await Promise.all([
+    supabase.rpc("track_mi_dia_q", {
+      p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
+      p_estatus: estatusSel.codigos,
+      p_atd: atdSel.codigos,
+      p_q: null,
+      p_nivel: "pendientes",
+      p_limit: 0,
+      p_offset: 0,
+    }),
+    supabase.rpc("track_propuestas", {
       p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
       p_estatus: estatusSel.codigos,
       p_atd: atdSel.codigos,
     }),
   ]);
+  const niveles = ((miDiaData as { conteos?: Record<string, number> } | null)?.conteos ?? {}) as Record<string, number>;
+  const totalPropuestas = ((propuestasData ?? []) as unknown[]).length;
   const r = (data ?? null) as Tablero | null;
   const c = (conteosData ?? null) as ConteosTrack | null;
   const availableEjecutivos = Array.from(
@@ -172,36 +190,56 @@ export default async function TableroPage({
     return `?${params.toString()}`;
   };
 
-  // Dos filas en orden logístico: el recorrido del embarque y, abajo, las
-  // alertas de puerto y de seguimiento.
-  const filasTarjetas =
-    r && c
-      ? [
-          {
-            titulo: "Flujo del embarque",
-            tarjetas: [
-              { label: "Embarques", valor: c.embarques, nota: "Activos con estos filtros", tono: TONO_TARJETA.neutro, href: conFiltros("/track/embarques") },
-              { label: "Por asignar", valor: c.por_asignar, nota: "Sin ejecutivo en Cargolink", tono: TONO_TARJETA.azul, href: conFiltros("/track/embarques", [SIN_EJECUTIVO]) },
-              { label: "Por zarpar", valor: c.por_zarpar, nota: "Sin ATD real todavía", tono: TONO_TARJETA.gris, href: conFiltros("/track/embarques?etapa=Por%20zarpar") },
-              { label: "Sin ETA", valor: c.sin_eta, nota: "ETA sin capturar", tono: TONO_TARJETA.violeta, href: conFiltros("/track/embarques?ver=sin_eta") },
-              { label: "En tránsito", valor: c.en_transito, nota: "Zarpó y no ha arribado", tono: TONO_TARJETA.azul, href: conFiltros(`/track/embarques?etapa=${encodeURIComponent("En tránsito")}`) },
-              { label: "Aviso de arribo", valor: c.aviso_arribo, nota: "ETA en los próximos 7 días", tono: TONO_TARJETA.azul, href: conFiltros("/track/embarques?ver=aviso_arribo") },
-              { label: "En puerto", valor: c.en_puerto, nota: "Arribó, con días libres", tono: TONO_TARJETA.gris, href: conFiltros("/track/embarques?etapa=En%20puerto") },
-            ],
-          },
-          {
-            titulo: "Alertas",
-            tarjetas: [
-              { label: "Sin días libres", valor: c.sin_dias_libres, nota: "FCL sin días libres de demora", tono: TONO_TARJETA.violeta, href: conFiltros("/track/embarques?ver=sin_dias_libres") },
-              { label: "Por vencer demoras", valor: c.por_vencer, nota: "Le quedan 1 a 4 días libres", tono: TONO_TARJETA.ambar, href: conFiltros("/track/embarques?ver=por_vencer") },
-              { label: "En demora", valor: c.en_demora, nota: "Días libres agotados", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques?etapa=En%20demora") },
-              { label: "Vencen en 3 días", valor: r.vencen, nota: "Hitos para hoy o los próximos 3 días", tono: TONO_TARJETA.ambar, href: conFiltros("/track/mi-dia") },
-              { label: "Atrasados", valor: r.atrasados, nota: "Algún hito vencido sin marcar", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques") },
-              { label: "Datos por corregir", valor: c.por_corregir, nota: "Captura pendiente o inconsistente", tono: TONO_TARJETA.violeta, href: conFiltros(`/track/embarques?etapa=${encodeURIComponent("Dato por corregir")}`) },
-            ],
-          },
-        ]
-      : [];
+  // Cuatro filas en el orden en que se revisa la operación (igual que Mi día).
+  const filasTarjetas: FilaTarjetas[] = c
+    ? [
+        {
+          titulo: "¿Perdemos dinero?",
+          tarjetas: [
+            { key: "en_demora", label: "En demora", valor: c.en_demora, nota: "Días libres agotados", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques?etapa=En%20demora") },
+            { key: "por_vencer", label: "Por vencer demoras", valor: c.por_vencer, nota: "Le quedan 1 a 4 días libres", tono: TONO_TARJETA.ambar, href: conFiltros("/track/embarques?ver=por_vencer") },
+            { key: "sin_dias", label: "Sin días libres (ya arribó)", valor: c.sin_dias_arribo ?? 0, nota: "Arribó y no se capturaron", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques?ver=sin_dias_arribo") },
+          ],
+        },
+        {
+          titulo: "¿Cumplimos hoy?",
+          tarjetas: [
+            { key: "atrasado", label: "Atrasados", valor: niveles.atrasado ?? 0, nota: "Hasta 30 días", tono: TONO_TARJETA.rojo, href: conFiltros("/track/mi-dia?nivel=atrasado") },
+            { key: "hoy", label: "Vencen hoy", valor: niveles.hoy ?? 0, nota: "Compromiso de hoy", tono: TONO_TARJETA.ambar, href: conFiltros("/track/mi-dia?nivel=hoy") },
+            { key: "pronto", label: "Próximos 3 días", valor: niveles.pronto ?? 0, nota: "Para adelantar", tono: TONO_TARJETA.azul, href: conFiltros("/track/mi-dia?nivel=pronto") },
+            { key: "rezago", label: "Rezago", valor: niveles.rezago ?? 0, nota: "Más de 30 días sin marcar", tono: TONO_TARJETA.gris, href: conFiltros("/track/mi-dia?nivel=rezago") },
+          ],
+        },
+        {
+          titulo: "¿Dónde van los embarques?",
+          tarjetas: [
+            { key: "por_zarpar", label: "Por zarpar", valor: c.por_zarpar, nota: "Sin ATD real todavía", tono: TONO_TARJETA.gris, href: conFiltros("/track/embarques?etapa=Por%20zarpar") },
+            { key: "en_transito", label: "En tránsito", valor: c.en_transito, nota: "Zarpó y no ha arribado", tono: TONO_TARJETA.azul, href: conFiltros(`/track/embarques?etapa=${encodeURIComponent("En tránsito")}`) },
+            { key: "llegan", label: "Llegan en 7 días", valor: c.aviso_arribo, nota: "ETA en los próximos 7 días", tono: TONO_TARJETA.azul, href: conFiltros("/track/embarques?ver=aviso_arribo") },
+            { key: "en_puerto", label: "En puerto", valor: c.en_puerto, nota: "Arribó, con días libres", tono: TONO_TARJETA.gris, href: conFiltros("/track/embarques?etapa=En%20puerto") },
+          ],
+        },
+        {
+          titulo: "¿La captura está bien?",
+          tarjetas: [
+            { key: "por_corregir", label: "Datos por corregir", valor: c.por_corregir, nota: "Captura pendiente o inconsistente", tono: TONO_TARJETA.violeta, href: conFiltros(`/track/embarques?etapa=${encodeURIComponent("Dato por corregir")}`) },
+            { key: "sin_eta", label: "Zarpó sin ETA", valor: c.sin_eta_zarpo ?? 0, nota: "Ya zarpó y no tiene ETA", tono: TONO_TARJETA.violeta, href: conFiltros("/track/embarques?ver=sin_eta_zarpo") },
+            { key: "por_asignar", label: "Por asignar", valor: c.por_asignar, nota: "Sin ejecutivo en Cargolink", tono: TONO_TARJETA.azul, href: conFiltros("/track/embarques", [SIN_EJECUTIVO]) },
+            { key: "propuestas", label: "Propuestas por confirmar", valor: totalPropuestas, nota: "Listas por historial", tono: TONO_TARJETA.azul, href: conFiltros("/track/propuestas") },
+          ],
+        },
+      ]
+    : [];
+  const enRiesgo = c ? c.en_demora + c.por_vencer : 0;
+  const resumenTarjetas = c ? (
+    <>
+      <strong>{c.embarques.toLocaleString("es-MX")}</strong> embarques ·{" "}
+      <Link href={conFiltros("/track/mi-dia")} className="font-semibold text-blue-700 hover:underline dark:text-blue-400">
+        {niveles.pendientes ?? 0} requieren acción
+      </Link>{" "}
+      · <strong className={enRiesgo > 0 ? "text-red-700 dark:text-red-400" : ""}>{enRiesgo} en riesgo de demora</strong>
+    </>
+  ) : null;
   const totalEtapas = r ? Math.max(1, ETAPAS.reduce((t, e) => t + (r.etapas[e.key] ?? 0), 0)) : 1;
 
   return (
@@ -247,21 +285,8 @@ export default async function TableroPage({
 
       {r && (
         <>
-          {/* 1. ¿Cómo vamos? */}
-          <section aria-labelledby="como-vamos" className="space-y-2">
-            <h2 id="como-vamos" className="text-sm font-semibold text-slate-900 dark:text-slate-50">¿Cómo vamos?</h2>
-            {filasTarjetas.map((fila) => (
-              <div key={fila.titulo} role="group" aria-label={fila.titulo} className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-                {fila.tarjetas.map((k) => (
-                  <Link key={k.label} href={k.href} title={k.nota} className={claseTarjetaCompacta(false, k.tono)}>
-                    <span className={ETIQUETA_COMPACTA}>{k.label}</span>
-                    <span className={VALOR_COMPACTO}>{k.valor}</span>
-                    <span className="truncate text-[10px] text-slate-500 dark:text-slate-400">{k.nota}</span>
-                  </Link>
-                ))}
-              </div>
-            ))}
-          </section>
+          {/* 1. Estatus en cuatro filas */}
+          <FilasTarjetas resumen={resumenTarjetas} filas={filasTarjetas} />
 
           {/* 2. ¿Quién necesita apoyo? */}
           <section aria-labelledby="por-operativo" className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">

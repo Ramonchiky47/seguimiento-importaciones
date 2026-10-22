@@ -6,6 +6,7 @@ import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import { RegresarTablero } from "@/components/RegresarTablero";
 import { BuscadorTrack } from "@/components/BuscadorTrack";
+import { FilasTarjetas, type FilaTarjetas } from "@/components/FilasTarjetas";
 import {
   DIAS_REZAGO,
   EJECUTIVO_TODOS,
@@ -13,10 +14,7 @@ import {
   ESTADOS,
   ESTATUS_OPCIONES,
   ESTATUS_TRACK,
-  ETIQUETA_COMPACTA,
   TONO_TARJETA,
-  VALOR_COMPACTO,
-  claseTarjetaCompacta,
   type ConteosTrack,
   cambiosComerciales,
   claseFilaEstatus,
@@ -117,6 +115,12 @@ export default async function MiDiaPage({
     p_estatus: estatusSel.codigos,
     p_atd: atdSel.codigos,
   });
+  const { data: propuestasData } = await supabase.rpc("track_propuestas", {
+    p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
+    p_estatus: estatusSel.codigos,
+    p_atd: atdSel.codigos,
+  });
+  const totalPropuestas = ((propuestasData ?? []) as unknown[]).length;
   const viajesPendientes = ((viajesData ?? []) as { distintas: boolean; faltan: number }[]).filter((v) => v.distintas || v.faltan > 0).length;
 
   // Por zarpar sin nada vencido: sin ATD ni ETA todavía no generan
@@ -203,38 +207,65 @@ export default async function MiDiaPage({
     return `${path}?${params.toString()}`;
   };
   const totalNivel = (key: Nivel) => totales[NIVELES.findIndex((n) => n.key === key)] ?? 0;
-  const nivelInfo = (key: Nivel) => NIVELES.find((n) => n.key === key)!;
-  // Dos filas en orden logístico: el recorrido del embarque y, abajo, los
-  // hitos por urgencia.
-  const filasTarjetas = [
+  // Cuatro filas en el orden en que se revisa la operación: dinero en riesgo,
+  // compromisos, flujo del embarque y calidad de captura.
+  const nivelCard = (k: Nivel, label: string, nota: string, tono: string) => ({
+    key: k,
+    label,
+    valor: totalNivel(k),
+    nota,
+    tono,
+    href: href({ nivel: k }),
+    activa: nivelActivo === k,
+  });
+  const filasTarjetas: FilaTarjetas[] = [
     {
-      titulo: "Flujo del embarque",
+      titulo: "¿Perdemos dinero?",
       tarjetas: [
-        { key: "por_asignar", label: "Por asignar", valor: c?.por_asignar ?? 0, nota: "Sin ejecutivo en Cargolink", tono: TONO_TARJETA.azul, href: embarquesHref("/track/embarques", [SIN_EJECUTIVO]), activa: false },
-        { key: "por_zarpar", label: "Por zarpar", valor: porZarparCount ?? 0, nota: "Sin nada vencido aún · al final", tono: TONO_TARJETA.gris, href: "#por-zarpar", activa: false },
-        { key: "sin_eta", label: "Sin ETA", valor: c?.sin_eta ?? 0, nota: "ETA sin capturar", tono: TONO_TARJETA.violeta, href: embarquesHref("/track/embarques?ver=sin_eta"), activa: false },
-        { key: "aviso_arribo", label: "Aviso de arribo", valor: c?.aviso_arribo ?? 0, nota: "ETA en los próximos 7 días", tono: TONO_TARJETA.azul, href: embarquesHref("/track/embarques?ver=aviso_arribo"), activa: false },
-        { key: "sin_dias_libres", label: "Sin días libres", valor: c?.sin_dias_libres ?? 0, nota: "FCL sin días libres de demora", tono: TONO_TARJETA.violeta, href: embarquesHref("/track/embarques?ver=sin_dias_libres"), activa: false },
-        { key: "por_vencer", label: "Por vencer demoras", valor: c?.por_vencer ?? 0, nota: "Le quedan 1 a 4 días libres", tono: TONO_TARJETA.ambar, href: embarquesHref("/track/embarques?ver=por_vencer"), activa: false },
-        { key: "en_demora", label: "En demora", valor: c?.en_demora ?? 0, nota: "Días libres agotados", tono: TONO_TARJETA.rojo, href: embarquesHref("/track/embarques?etapa=En%20demora"), activa: false },
+        { key: "en_demora", label: "En demora", valor: c?.en_demora ?? 0, nota: "Días libres agotados", tono: TONO_TARJETA.rojo, href: embarquesHref("/track/embarques?etapa=En%20demora") },
+        { key: "por_vencer", label: "Por vencer demoras", valor: c?.por_vencer ?? 0, nota: "Le quedan 1 a 4 días libres", tono: TONO_TARJETA.ambar, href: embarquesHref("/track/embarques?ver=por_vencer") },
+        { key: "sin_dias", label: "Sin días libres (ya arribó)", valor: c?.sin_dias_arribo ?? 0, nota: "Arribó y no se capturaron", tono: TONO_TARJETA.rojo, href: embarquesHref("/track/embarques?ver=sin_dias_arribo") },
       ],
     },
     {
-      titulo: "Hitos por urgencia",
+      titulo: "¿Cumplimos hoy?",
       tarjetas: [
-        ...(["pendientes", "hoy", "pronto", "atrasado", "rezago", "falta_dato"] as Nivel[]).map((k) => ({
-          key: k,
-          label: nivelInfo(k).label,
-          valor: totalNivel(k),
-          nota: nivelInfo(k).ayuda,
-          tono: nivelInfo(k).tono,
-          href: href({ nivel: k }),
-          activa: nivelActivo === k,
-        })),
-        { key: "por_corregir", label: "Datos por corregir", valor: c?.por_corregir ?? 0, nota: "Captura pendiente o inconsistente", tono: TONO_TARJETA.violeta, href: embarquesHref(`/track/embarques?etapa=${encodeURIComponent("Dato por corregir")}`), activa: false },
+        nivelCard("atrasado", "Atrasados", `Hasta ${DIAS_REZAGO} días`, TONO_TARJETA.rojo),
+        nivelCard("hoy", "Vencen hoy", "Compromiso de hoy", TONO_TARJETA.ambar),
+        nivelCard("pronto", "Próximos 3 días", "Para adelantar", TONO_TARJETA.azul),
+        nivelCard("rezago", "Rezago", `Más de ${DIAS_REZAGO} días sin marcar`, TONO_TARJETA.gris),
+      ],
+    },
+    {
+      titulo: "¿Dónde van los embarques?",
+      tarjetas: [
+        { key: "por_zarpar", label: "Por zarpar", valor: c?.por_zarpar ?? 0, nota: "Sin ATD real · al final", tono: TONO_TARJETA.gris, href: "#por-zarpar" },
+        { key: "en_transito", label: "En tránsito", valor: c?.en_transito ?? 0, nota: "Zarpó y no ha arribado", tono: TONO_TARJETA.azul, href: embarquesHref(`/track/embarques?etapa=${encodeURIComponent("En tránsito")}`) },
+        { key: "llegan", label: "Llegan en 7 días", valor: c?.aviso_arribo ?? 0, nota: "ETA en los próximos 7 días", tono: TONO_TARJETA.azul, href: embarquesHref("/track/embarques?ver=aviso_arribo") },
+        { key: "en_puerto", label: "En puerto", valor: c?.en_puerto ?? 0, nota: "Arribó, con días libres", tono: TONO_TARJETA.gris, href: embarquesHref("/track/embarques?etapa=En%20puerto") },
+      ],
+    },
+    {
+      titulo: "¿La captura está bien?",
+      tarjetas: [
+        { key: "por_corregir", label: "Datos por corregir", valor: c?.por_corregir ?? 0, nota: "Captura pendiente o inconsistente", tono: TONO_TARJETA.violeta, href: embarquesHref(`/track/embarques?etapa=${encodeURIComponent("Dato por corregir")}`) },
+        { key: "sin_eta", label: "Zarpó sin ETA", valor: c?.sin_eta_zarpo ?? 0, nota: "Ya zarpó y no tiene ETA", tono: TONO_TARJETA.violeta, href: embarquesHref("/track/embarques?ver=sin_eta_zarpo") },
+        { key: "por_asignar", label: "Por asignar", valor: c?.por_asignar ?? 0, nota: "Sin ejecutivo en Cargolink", tono: TONO_TARJETA.azul, href: embarquesHref("/track/embarques", [SIN_EJECUTIVO]) },
+        { key: "propuestas", label: "Propuestas por confirmar", valor: totalPropuestas, nota: "Listas por historial", tono: TONO_TARJETA.azul, href: embarquesHref("/track/propuestas") },
       ],
     },
   ];
+  const resumenTarjetas = (
+    <>
+      <strong>{(c?.embarques ?? 0).toLocaleString("es-MX")}</strong> embarques ·{" "}
+      <Link href={href({ nivel: "pendientes" })} className="font-semibold text-blue-700 hover:underline dark:text-blue-400">
+        {totalNivel("pendientes")} requieren acción
+      </Link>{" "}
+      · <strong className={(c?.en_demora ?? 0) + (c?.por_vencer ?? 0) > 0 ? "text-red-700 dark:text-red-400" : ""}>
+        {(c?.en_demora ?? 0) + (c?.por_vencer ?? 0)} en riesgo de demora
+      </strong>
+    </>
+  );
 
   const tituloLista = NIVELES.find((n) => n.key === nivelActivo)?.label ?? "Pendientes";
   const pagerClass = (disabled: boolean) =>
@@ -266,19 +297,7 @@ export default async function MiDiaPage({
         </div>
       </div>
 
-      <div className="space-y-2">
-        {filasTarjetas.map((fila) => (
-          <div key={fila.titulo} role="group" aria-label={fila.titulo} className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-            {fila.tarjetas.map((t) => (
-              <Link key={t.key} href={t.href} title={t.nota} className={claseTarjetaCompacta(t.activa, t.tono)}>
-                <span className={ETIQUETA_COMPACTA}>{t.label}</span>
-                <span className={VALOR_COMPACTO}>{t.valor}</span>
-                <span className="truncate text-[10px] text-slate-500 dark:text-slate-400">{t.nota}</span>
-              </Link>
-            ))}
-          </div>
-        ))}
-      </div>
+      <FilasTarjetas resumen={resumenTarjetas} filas={filasTarjetas} />
 
       {viajesPendientes > 0 && (
         <Link
