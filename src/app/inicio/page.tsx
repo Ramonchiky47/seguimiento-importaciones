@@ -162,7 +162,7 @@ export default async function InicioPage() {
           )}
 
           {showOperaciones ? (
-            <Link href="/dashboard" className="contents">
+            <Link href="/track/tablero" className="contents">
               <CardShell
                 icon={<IconOperaciones />}
                 title="Operaciones"
