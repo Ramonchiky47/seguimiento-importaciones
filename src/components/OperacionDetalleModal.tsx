@@ -488,6 +488,14 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                   </dl>
                 </section>
 
+                <NavieraSeccion
+                  key={`naviera-${idBooking}`}
+                  idBooking={idBooking}
+                  carrier={datos.buque_carrier ?? null}
+                  eta={(op.eta as string | null) ?? null}
+                  ata={(op.ata as string | null) ?? null}
+                />
+
                 <ResumenComercialSeccion key={idBooking} idBooking={idBooking} />
 
                 <section className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -2120,6 +2128,182 @@ export function ResumenComercialSeccion({ idBooking }: { idBooking: number }) {
           )}
         </div>
       )}
+    </section>
+  );
+}
+
+// Navieras con agente de rastreo en la Mac (buque_carrier de Cargolink).
+const NAVIERAS_CON_AGENTE: Record<string, string> = { "157": "MSC", "1497": "Maersk", "1419": "Yang Ming" };
+
+type TrackingNaviera = {
+  naviera: string;
+  referencia: string | null;
+  ok: boolean;
+  error: string | null;
+  eta_naviera: string | null;
+  pod: string | null;
+  transbordos: { lugar: string; fecha: string | null }[] | null;
+  ultimo_evento: string | null;
+  ultimo_evento_fecha: string | null;
+  ata_naviera: string | null;
+  consultado_at: string;
+};
+type SolicitudTracking = { estado: "pendiente" | "en_proceso" | "hecho" | "error"; mensaje: string | null; solicitado_at: string };
+
+async function leerTrackingNaviera(idBooking: number) {
+  const supabase = createClient();
+  const [tr, so] = await Promise.all([
+    supabase
+      .from("tracking_naviera")
+      .select("naviera, referencia, ok, error, eta_naviera, pod, transbordos, ultimo_evento, ultimo_evento_fecha, ata_naviera, consultado_at")
+      .eq("id_booking", idBooking)
+      .maybeSingle(),
+    supabase.from("tracking_solicitudes").select("estado, mensaje, solicitado_at").eq("id_booking", idBooking).maybeSingle(),
+  ]);
+  return { tracking: (tr.data as TrackingNaviera | null) ?? null, solicitud: (so.data as SolicitudTracking | null) ?? null };
+}
+
+// Lo que dice la naviera (agentes de las 2 PM). Si no hay información, se
+// pide a la Mac al abrir el detalle y se espera la respuesta (~1 min).
+function NavieraSeccion({ idBooking, carrier, eta, ata }: { idBooking: number; carrier: string | null; eta: string | null; ata: string | null }) {
+  const naviera = carrier ? NAVIERAS_CON_AGENTE[carrier] : undefined;
+  const [t, setT] = useState<TrackingNaviera | null>(null);
+  const [sol, setSol] = useState<SolicitudTracking | null>(null);
+  const [leido, setLeido] = useState(false);
+  const [errorPedir, setErrorPedir] = useState<string | null>(null);
+  const autoPedido = useRef(false);
+  const esperando = sol?.estado === "pendiente" || sol?.estado === "en_proceso";
+
+  const leer = useCallback(() => leerTrackingNaviera(idBooking), [idBooking]);
+  const aplicar = useCallback((x: Awaited<ReturnType<typeof leerTrackingNaviera>>) => {
+    setT(x.tracking);
+    setSol(x.solicitud);
+    setLeido(true);
+    return x;
+  }, []);
+
+  const pedir = useCallback(async () => {
+    setErrorPedir(null);
+    const { error } = await createClient().rpc("solicitar_tracking_naviera", { p_id_booking: idBooking });
+    if (error) setErrorPedir(error.message);
+    else setSol({ estado: "pendiente", mensaje: null, solicitado_at: new Date().toISOString() });
+  }, [idBooking]);
+
+  useEffect(() => {
+    if (!naviera) return;
+    leer().then((x) => {
+      const { tracking, solicitud } = aplicar(x);
+      // Sin información de la naviera: se consulta mientras se ve el detalle.
+      const pendiente = solicitud?.estado === "pendiente" || solicitud?.estado === "en_proceso";
+      if (!tracking && !pendiente && !autoPedido.current) {
+        autoPedido.current = true;
+        pedir();
+      }
+    });
+  }, [naviera, leer, aplicar, pedir]);
+
+  useEffect(() => {
+    if (!esperando) return;
+    const intervalo = setInterval(() => leer().then(aplicar), 5000);
+    return () => clearInterval(intervalo);
+  }, [esperando, leer, aplicar]);
+
+  if (!naviera)
+    return (
+      <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50">Información de la naviera</h3>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          Todavía no hay agente de rastreo para esta naviera. Hoy se consultan {Object.values(NAVIERAS_CON_AGENTE).join(", ")}.
+        </p>
+      </section>
+    );
+  const difEta = t?.ok && t.eta_naviera && eta ? Math.round((Date.parse(t.eta_naviera) - Date.parse(eta.slice(0, 10))) / 86400000) : null;
+  const difAta = t?.ok && t.ata_naviera && ata ? Math.round((Date.parse(t.ata_naviera) - Date.parse(ata.slice(0, 10))) / 86400000) : null;
+  const dif = (d: number | null, base: string | null) =>
+    base === null ? (
+      <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Cargolink sin capturar</span>
+    ) : d === 0 ? (
+      <span className="text-xs font-semibold text-green-700 dark:text-green-400">✓ Igual que Cargolink</span>
+    ) : d !== null ? (
+      <span className="text-xs font-semibold text-red-700 dark:text-red-400">
+        Cargolink {fechaCorta(base)} ({d > 0 ? "+" : ""}
+        {d} días)
+      </span>
+    ) : null;
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+          Información de la naviera ({naviera})
+          {t && (
+            <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
+              Consultado el {new Date(t.consultado_at).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}
+              {t.referencia ? ` · ${t.referencia}` : ""}
+            </span>
+          )}
+        </h3>
+        <button
+          type="button"
+          disabled={esperando}
+          onClick={pedir}
+          className="min-h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+        >
+          {esperando ? "Consultando…" : `Actualizar desde ${naviera}`}
+        </button>
+      </div>
+
+      {esperando && (
+        <p role="status" className="mb-3 flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-9-9" />
+          </svg>
+          Consultando a {naviera}… el agente de la Mac lo atiende en 1 a 2 minutos; puedes seguir trabajando.
+        </p>
+      )}
+      {sol?.estado === "error" && sol.mensaje && <p className="mb-3 text-xs text-red-700 dark:text-red-400">Última consulta: {sol.mensaje}</p>}
+      {errorPedir && <p className="mb-3 text-xs text-red-700 dark:text-red-400">No se pudo pedir la consulta: {errorPedir}</p>}
+      {leido && !t && !esperando && !sol && <p className="text-sm text-slate-500">Sin información de la naviera todavía.</p>}
+      {t && !t.ok && <p className="text-sm text-red-700 dark:text-red-400">{t.error ?? `${naviera} no regresó información.`}</p>}
+
+      {t?.ok && (
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="min-w-0">
+            <dt className="text-xs text-slate-500 dark:text-slate-400">ETA según {naviera}</dt>
+            <dd className="text-sm font-semibold text-slate-900 dark:text-slate-100">{fechaCorta(t.eta_naviera)}</dd>
+            <dd>{t.eta_naviera && dif(difEta, eta)}</dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-xs text-slate-500 dark:text-slate-400">ATA según {naviera}</dt>
+            <dd className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t.ata_naviera ? fechaCorta(t.ata_naviera) : "Aún no arriba"}</dd>
+            <dd>{t.ata_naviera && dif(difAta, ata)}</dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-xs text-slate-500 dark:text-slate-400">Puerto de descarga</dt>
+            <dd className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{t.pod ?? "—"}</dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-xs text-slate-500 dark:text-slate-400">Transbordos</dt>
+            <dd className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              {t.transbordos && t.transbordos.length > 0
+                ? t.transbordos.map((x) => `${x.lugar}${x.fecha ? ` (${fechaCorta(x.fecha)})` : ""}`).join(", ")
+                : "Directo"}
+            </dd>
+          </div>
+          <div className="col-span-2 min-w-0 sm:col-span-3 lg:col-span-4">
+            <dt className="text-xs text-slate-500 dark:text-slate-400">Último evento</dt>
+            <dd className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              {t.ultimo_evento ?? "—"}
+              {t.ultimo_evento_fecha ? ` · ${fechaCorta(t.ultimo_evento_fecha)}` : ""}
+            </dd>
+          </div>
+        </dl>
+      )}
+      {t?.ok && (difEta || difAta) ? (
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+          La información de la naviera no se escribe sola en Cargolink: confírmala en Track › Propuestas o en la etapa correspondiente.
+        </p>
+      ) : null}
     </section>
   );
 }
