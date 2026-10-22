@@ -7,7 +7,6 @@ import { logout } from "@/app/login/actions";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/importaciones", label: "Importaciones" },
-  { href: "/operaciones-maritima", label: "Operaciones Marítima" },
   { href: "/track", label: "Track" },
   { href: "/exportaciones", label: "Exportaciones" },
   { href: "/catalogos", label: "Catálogos" },
@@ -75,7 +74,6 @@ export function AppNav({
               return (
                 item.href === "/dashboard" ||
                 item.href === "/importaciones" ||
-                item.href === "/operaciones-maritima" ||
                 item.href === "/track"
               );
             if (enExportaciones) return item.href === "/exportaciones";
