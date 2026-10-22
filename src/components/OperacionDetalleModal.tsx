@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, useTransition } fro
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ESTADOS, explicarPropuestaDias, fechaCorta, type EstadoHito } from "@/lib/track";
+import { NAVIERAS_CON_AGENTE, coincideRazonSocial, navieraRastreo } from "@/lib/navieras";
 import {
   ETAPAS_CARGOLINK,
   ETAPA_POR_HITO,
@@ -492,6 +493,8 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                   key={`naviera-${idBooking}`}
                   idBooking={idBooking}
                   carrier={datos.buque_carrier ?? null}
+                  mbl={(op.mbl as string | null) ?? null}
+                  contenedores={(op.contenedores as string | null) ?? null}
                   eta={(op.eta as string | null) ?? null}
                   ata={(op.ata as string | null) ?? null}
                 />
@@ -2132,9 +2135,6 @@ export function ResumenComercialSeccion({ idBooking }: { idBooking: number }) {
   );
 }
 
-// Navieras con agente de rastreo en la Mac (buque_carrier de Cargolink).
-const NAVIERAS_CON_AGENTE: Record<string, string> = { "157": "MSC", "1497": "Maersk", "1419": "Yang Ming" };
-
 type TrackingNaviera = {
   naviera: string;
   referencia: string | null;
@@ -2165,8 +2165,25 @@ async function leerTrackingNaviera(idBooking: number) {
 
 // Lo que dice la naviera (agentes de las 2 PM). Si no hay información, se
 // pide a la Mac al abrir el detalle y se espera la respuesta (~1 min).
-function NavieraSeccion({ idBooking, carrier, eta, ata }: { idBooking: number; carrier: string | null; eta: string | null; ata: string | null }) {
-  const naviera = carrier ? NAVIERAS_CON_AGENTE[carrier] : undefined;
+function NavieraSeccion({
+  idBooking,
+  carrier,
+  mbl,
+  contenedores,
+  eta,
+  ata,
+}: {
+  idBooking: number;
+  carrier: string | null;
+  mbl: string | null;
+  contenedores: string | null;
+  eta: string | null;
+  ata: string | null;
+}) {
+  // La naviera la decide el MBL/contenedor; la de Cargolink solo si no la delatan.
+  const detectada = navieraRastreo(mbl, contenedores, carrier);
+  const naviera = detectada.naviera && NAVIERAS_CON_AGENTE.includes(detectada.naviera) ? detectada.naviera : undefined;
+  const [razonSocial, setRazonSocial] = useState<string | null>(null);
   const [t, setT] = useState<TrackingNaviera | null>(null);
   const [sol, setSol] = useState<SolicitudTracking | null>(null);
   const [leido, setLeido] = useState(false);
@@ -2190,12 +2207,31 @@ function NavieraSeccion({ idBooking, carrier, eta, ata }: { idBooking: number; c
   }, [idBooking]);
 
   useEffect(() => {
+    if (!carrier) return;
+    createClient()
+      .from("proveedores_cargolink")
+      .select("razonsocial")
+      .eq("id_proveedor", carrier)
+      .maybeSingle()
+      .then(({ data }) => setRazonSocial((data?.razonsocial as string | undefined) ?? null));
+  }, [carrier]);
+  // Cargolink tiene capturada otra naviera que la del MBL/contenedor.
+  const navieraMal =
+    detectada.porReferencia && razonSocial && !coincideRazonSocial(detectada.porReferencia, razonSocial) ? (
+      <p role="alert" className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+        ⚠ En Cargolink la naviera es <strong>{razonSocial}</strong>, pero el MBL o contenedor ({mbl || contenedores}) es de{" "}
+        <strong>{detectada.porReferencia}</strong>. Corrige la naviera en Cargolink.
+      </p>
+    ) : null;
+
+  useEffect(() => {
     if (!naviera) return;
     leer().then((x) => {
       const { tracking, solicitud } = aplicar(x);
       // Sin información de la naviera: se consulta mientras se ve el detalle.
       const pendiente = solicitud?.estado === "pendiente" || solicitud?.estado === "en_proceso";
-      if (!tracking && !pendiente && !autoPedido.current) {
+      const deOtraNaviera = tracking && tracking.naviera.toUpperCase() !== naviera.toUpperCase();
+      if ((!tracking || deOtraNaviera) && !pendiente && !autoPedido.current) {
         autoPedido.current = true;
         pedir();
       }
@@ -2211,9 +2247,12 @@ function NavieraSeccion({ idBooking, carrier, eta, ata }: { idBooking: number; c
   if (!naviera)
     return (
       <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50">Información de la naviera</h3>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Todavía no hay agente de rastreo para esta naviera. Hoy se consultan {Object.values(NAVIERAS_CON_AGENTE).join(", ")}.
+        <h3 className="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
+          Información de la naviera{detectada.naviera ? ` (${detectada.naviera})` : ""}
+        </h3>
+        {navieraMal}
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Todavía no hay agente de rastreo para {detectada.naviera ?? "esta naviera"}. Hoy se consultan {NAVIERAS_CON_AGENTE.join(", ")}.
         </p>
       </section>
     );
@@ -2253,6 +2292,7 @@ function NavieraSeccion({ idBooking, carrier, eta, ata }: { idBooking: number; c
         </button>
       </div>
 
+      {navieraMal}
       {esperando && (
         <p role="status" className="mb-3 flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
           <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin" aria-hidden="true">
