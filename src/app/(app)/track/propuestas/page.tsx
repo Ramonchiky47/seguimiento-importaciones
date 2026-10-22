@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { PropuestasPorConfirmar, type Propuesta } from "@/components/PropuestasPorConfirmar";
+import { VaciosPorConfirmar, type VacioPendiente } from "@/components/VaciosPorConfirmar";
 import {
   EJECUTIVO_TODOS,
   ESTATUS_OPCIONES,
@@ -27,7 +28,7 @@ export default async function PropuestasPage({
   const estatusSel = estatusBooking(estatus, ESTATUS_TRACK);
   const atdSel = periodoAtd(atd);
   const supabase = await createClient();
-  const [{ data, error }, { data: puedeEditar }, { data: ejecutivosData }] = await Promise.all([
+  const [{ data, error }, { data: puedeEditar }, { data: ejecutivosData }, { data: vaciosData }] = await Promise.all([
     supabase.rpc("track_propuestas", {
       p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
       p_estatus: estatusSel.codigos,
@@ -35,6 +36,11 @@ export default async function PropuestasPage({
     }),
     supabase.rpc("puedo_editar_cargolink"),
     supabase.rpc("operaciones_maritima_ejecutivos", { p_anio: null, p_types: null, p_q: null, p_tarjeta: null, p_hoy: null }),
+    supabase.rpc("track_vacios", {
+      p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
+      p_estatus: estatusSel.codigos,
+      p_atd: atdSel.codigos,
+    }),
   ]);
   const availableEjecutivos = Array.from(
     new Set([SIN_EJECUTIVO, ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((x) => x.ejecutivo), ...ejecutivoRaw]),
@@ -57,6 +63,7 @@ export default async function PropuestasPage({
         <TrackEjecutivoFilter options={availableEjecutivos} filtro={ejecutivoRaw} hrefTodos={hrefTodos} />
       </div>
       {error && <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">Error al cargar: {error.message}</p>}
+      <VaciosPorConfirmar vacios={(vaciosData ?? []) as VacioPendiente[]} puedeEditar={puedeEditar === true} />
       <PropuestasPorConfirmar propuestas={(data ?? []) as Propuesta[]} puedeEditar={puedeEditar === true} />
     </main>
   );

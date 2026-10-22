@@ -54,8 +54,11 @@ export function BookingGuiado({
   puedeEditar,
   mismoBuque,
   propuestaDias,
+  vacio,
 }: {
   propuestaDias: { dias: number; explicacion: string } | null;
+  // Regreso de vacío estimado: solo aviso, nunca se guarda.
+  vacio: { estimado: string; base: string; riesgo: string; tardes: number; n: number } | null;
   idBooking: number;
   op: Record<string, unknown>;
   hitos: HitoTrack[];
@@ -271,6 +274,19 @@ export function BookingGuiado({
             <span className="text-xs font-bold tracking-wide">DÍAS LIBRES DE DEMORA</span>
             <span className="text-base font-bold">{reloj.titulo}</span>
             <span className="text-sm">{reloj.texto}</span>
+            {vacio && (
+              <span className="mt-1 text-sm">
+                <strong>Regreso estimado: {fechaCortaTN(vacio.estimado)}</strong> (aviso, no se guarda) · según {vacio.base}.
+                {vacio.riesgo === "alto" && (
+                  <span className="mt-1 block rounded-md bg-red-700 px-2 py-1 text-xs font-bold text-white">
+                    Riesgo alto de demora{vacio.n ? `: ${vacio.tardes} de ${vacio.n} regresos de este cliente fueron tarde` : ""}
+                  </span>
+                )}
+                <Link href="/track/propuestas#vacios" className="mt-1 block text-xs font-semibold underline">
+                  Capturar fecha real de regreso →
+                </Link>
+              </span>
+            )}
           </div>
         </div>
       </section>

@@ -150,6 +150,12 @@ export default async function TableroPage({
   ]);
   const niveles = ((miDiaData as { conteos?: Record<string, number> } | null)?.conteos ?? {}) as Record<string, number>;
   const totalPropuestas = ((propuestasData ?? []) as unknown[]).length;
+  const { data: vaciosData } = await supabase.rpc("track_vacios", {
+    p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
+    p_estatus: estatusSel.codigos,
+    p_atd: atdSel.codigos,
+  });
+  const vaciosAtencion = ((vaciosData ?? []) as { estado: string }[]).filter((v) => v.estado !== "en_tiempo").length;
   const r = (data ?? null) as Tablero | null;
   const c = (conteosData ?? null) as ConteosTrack | null;
   const availableEjecutivos = Array.from(
@@ -197,6 +203,7 @@ export default async function TableroPage({
             { key: "en_demora", label: "En demora", valor: c.en_demora, nota: "Días libres agotados", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques?etapa=En%20demora") },
             { key: "por_vencer", label: "Por vencer demoras", valor: c.por_vencer, nota: "Le quedan 1 a 4 días libres", tono: TONO_TARJETA.ambar, href: conFiltros("/track/embarques?ver=por_vencer") },
             { key: "sin_dias", label: "Sin días libres (ya arribó)", valor: c.sin_dias_arribo ?? 0, nota: "Arribó y no se capturaron", tono: TONO_TARJETA.rojo, href: conFiltros("/track/embarques?ver=sin_dias_arribo") },
+            { key: "vacios", label: "Vacíos por regresar", valor: vaciosAtencion, nota: "En demora, por vencer o ya deberían haber regresado", tono: TONO_TARJETA.rojo, href: conFiltros("/track/propuestas#vacios") },
           ],
         },
         {

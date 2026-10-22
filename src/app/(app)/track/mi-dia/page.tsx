@@ -121,6 +121,12 @@ export default async function MiDiaPage({
     p_atd: atdSel.codigos,
   });
   const totalPropuestas = ((propuestasData ?? []) as unknown[]).length;
+  const { data: vaciosData } = await supabase.rpc("track_vacios", {
+    p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
+    p_estatus: estatusSel.codigos,
+    p_atd: atdSel.codigos,
+  });
+  const vaciosAtencion = ((vaciosData ?? []) as { estado: string }[]).filter((v) => v.estado !== "en_tiempo").length;
   const viajesPendientes = ((viajesData ?? []) as { distintas: boolean; faltan: number }[]).filter((v) => v.distintas || v.faltan > 0).length;
 
   // Por zarpar sin nada vencido: sin ATD ni ETA todavía no generan
@@ -225,6 +231,7 @@ export default async function MiDiaPage({
         { key: "en_demora", label: "En demora", valor: c?.en_demora ?? 0, nota: "Días libres agotados", tono: TONO_TARJETA.rojo, href: embarquesHref("/track/embarques?etapa=En%20demora") },
         { key: "por_vencer", label: "Por vencer demoras", valor: c?.por_vencer ?? 0, nota: "Le quedan 1 a 4 días libres", tono: TONO_TARJETA.ambar, href: embarquesHref("/track/embarques?ver=por_vencer") },
         { key: "sin_dias", label: "Sin días libres (ya arribó)", valor: c?.sin_dias_arribo ?? 0, nota: "Arribó y no se capturaron", tono: TONO_TARJETA.rojo, href: embarquesHref("/track/embarques?ver=sin_dias_arribo") },
+        { key: "vacios", label: "Vacíos por regresar", valor: vaciosAtencion, nota: "En demora, por vencer o ya deberían haber regresado", tono: TONO_TARJETA.rojo, href: embarquesHref("/track/propuestas#vacios") },
       ],
     },
     {

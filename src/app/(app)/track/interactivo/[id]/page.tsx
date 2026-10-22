@@ -60,8 +60,15 @@ export default async function TrackInteractivoBooking({ params }: { params: Prom
     String(idBooking)
   ];
 
+  // Regreso de vacío estimado (solo aviso) y riesgo por historial del cliente.
+  const { data: vaciosData } = op.ata && !op.regreso_vacio ? await supabase.rpc("track_vacios", {}) : { data: [] };
+  const vacio = ((vaciosData ?? []) as { id_booking: number; estimado: string; base: string; riesgo: string; tardes: number; n: number }[]).find(
+    (v) => v.id_booking === idBooking,
+  );
+
   return (
     <BookingGuiado
+      vacio={vacio ? { estimado: vacio.estimado, base: vacio.base, riesgo: vacio.riesgo, tardes: vacio.tardes, n: vacio.n } : null}
       propuestaDias={pd ? { dias: pd.dias, explicacion: explicarPropuestaDias(pd) } : null}
       key={idBooking}
       idBooking={idBooking}
