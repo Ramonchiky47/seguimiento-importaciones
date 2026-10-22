@@ -7,6 +7,7 @@ import {
   DocumentosCargolink,
   EditorEtapa,
   EditorTransbordo,
+  NavieraSeccion,
   NotArriboDialog,
   ResumenComercialSeccion,
   type Operacion,
@@ -212,6 +213,17 @@ export function BookingGuiado({
               {faltan.filter((t) => t.estado === "falta").length} faltan · {faltan.filter((t) => t.estado === "alerta").length} por revisar
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              const s = document.getElementById("naviera");
+              s?.scrollIntoView({ behavior: "smooth", block: "start" });
+              s?.focus({ preventScroll: true });
+            }}
+            className="min-h-11 rounded-lg border border-white/40 px-4 text-sm font-bold text-white hover:bg-white/10"
+          >
+            Estatus de la naviera
+          </button>
           <button type="button" onClick={() => setPdf(true)} className="min-h-11 rounded-lg bg-white px-4 text-sm font-bold text-[#16232f]">
             PDF NOT arribo
           </button>
@@ -441,6 +453,18 @@ export function BookingGuiado({
               {faltan.length === 0 && <li className="text-sm text-green-800 dark:text-green-300">Nada pendiente.</li>}
             </ul>
           </section>
+
+          {/* Estatus según la naviera (agentes de la Mac); acceso desde el encabezado. */}
+          <div id="naviera" tabIndex={-1} className="scroll-mt-20 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+            <NavieraSeccion
+              idBooking={idBooking}
+              carrier={datos.buque_carrier ?? null}
+              mbl={(op.mbl as string | null) ?? null}
+              contenedores={(op.contenedores as string | null) ?? null}
+              eta={(op.eta as string | null) ?? null}
+              ata={(op.ata as string | null) ?? null}
+            />
+          </div>
 
           <section aria-label="Documentos" className="rounded-2xl bg-white px-5 py-4 shadow-sm dark:bg-slate-900">
             <DocumentosCargolink idBooking={idBooking} noBooking={String(op.no_booking ?? "")} puedeSubir={puedeEditar} />

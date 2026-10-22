@@ -70,3 +70,8 @@ export function coincideRazonSocial(naviera: string, razonSocial: string | null 
   const re = RAZON_SOCIAL[naviera];
   return !re || !razonSocial || re.test(razonSocial);
 }
+
+// Como la guardan los agentes ("YANG MING") -> como se muestra ("Yang Ming").
+export function nombreNaviera(n: string): string {
+  return NAVIERAS_CON_AGENTE.find((x) => x.toUpperCase() === n.toUpperCase()) ?? n;
+}

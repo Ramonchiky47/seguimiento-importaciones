@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, useTransition } fro
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ESTADOS, explicarPropuestaDias, fechaCorta, type EstadoHito } from "@/lib/track";
-import { NAVIERAS_CON_AGENTE, coincideRazonSocial, navieraRastreo } from "@/lib/navieras";
+import { NAVIERAS_CON_AGENTE, coincideRazonSocial, navieraRastreo, nombreNaviera } from "@/lib/navieras";
 import {
   ETAPAS_CARGOLINK,
   ETAPA_POR_HITO,
@@ -2165,7 +2165,7 @@ async function leerTrackingNaviera(idBooking: number) {
 
 // Lo que dice la naviera (agentes de las 2 PM). Si no hay información, se
 // pide a la Mac al abrir el detalle y se espera la respuesta (~1 min).
-function NavieraSeccion({
+export function NavieraSeccion({
   idBooking,
   carrier,
   mbl,
@@ -2182,7 +2182,8 @@ function NavieraSeccion({
 }) {
   // La naviera la decide el MBL/contenedor; la de Cargolink solo si no la delatan.
   const detectada = navieraRastreo(mbl, contenedores, carrier);
-  const naviera = detectada.naviera && NAVIERAS_CON_AGENTE.includes(detectada.naviera) ? detectada.naviera : undefined;
+  // Reconocida y sin agente (ZIM, PIL, …): no se consulta. Si no se reconoce, se prueban todos los agentes.
+  const sinAgente = Boolean(detectada.naviera && !NAVIERAS_CON_AGENTE.includes(detectada.naviera));
   const [razonSocial, setRazonSocial] = useState<string | null>(null);
   const [t, setT] = useState<TrackingNaviera | null>(null);
   const [sol, setSol] = useState<SolicitudTracking | null>(null);
@@ -2216,27 +2217,28 @@ function NavieraSeccion({
       .then(({ data }) => setRazonSocial((data?.razonsocial as string | undefined) ?? null));
   }, [carrier]);
   // Cargolink tiene capturada otra naviera que la del MBL/contenedor.
+  // La real: la que encontró el embarque o, si aún no hay datos, la de la referencia.
+  const navieraReal = t?.ok ? nombreNaviera(t.naviera) : detectada.porReferencia;
   const navieraMal =
-    detectada.porReferencia && razonSocial && !coincideRazonSocial(detectada.porReferencia, razonSocial) ? (
+    navieraReal && razonSocial && !coincideRazonSocial(navieraReal, razonSocial) ? (
       <p role="alert" className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
         ⚠ En Cargolink la naviera es <strong>{razonSocial}</strong>, pero el MBL o contenedor ({mbl || contenedores}) es de{" "}
-        <strong>{detectada.porReferencia}</strong>. Corrige la naviera en Cargolink.
+        <strong>{navieraReal}</strong>. Corrige la naviera en Cargolink.
       </p>
     ) : null;
 
   useEffect(() => {
-    if (!naviera) return;
+    if (sinAgente) return;
     leer().then((x) => {
       const { tracking, solicitud } = aplicar(x);
       // Sin información de la naviera: se consulta mientras se ve el detalle.
       const pendiente = solicitud?.estado === "pendiente" || solicitud?.estado === "en_proceso";
-      const deOtraNaviera = tracking && tracking.naviera.toUpperCase() !== naviera.toUpperCase();
-      if ((!tracking || deOtraNaviera) && !pendiente && !autoPedido.current) {
+      if (!tracking && !pendiente && !autoPedido.current) {
         autoPedido.current = true;
         pedir();
       }
     });
-  }, [naviera, leer, aplicar, pedir]);
+  }, [sinAgente, leer, aplicar, pedir]);
 
   useEffect(() => {
     if (!esperando) return;
@@ -2244,7 +2246,9 @@ function NavieraSeccion({
     return () => clearInterval(intervalo);
   }, [esperando, leer, aplicar]);
 
-  if (!naviera)
+  // La que encontró el embarque (puede ser otra si la de la referencia no lo tenía).
+  const naviera = t?.ok ? nombreNaviera(t.naviera) : (detectada.naviera ?? "la naviera");
+  if (sinAgente)
     return (
       <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <h3 className="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
@@ -2274,7 +2278,7 @@ function NavieraSeccion({
     <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50">
-          Información de la naviera ({naviera})
+          Información de la naviera{t?.ok || detectada.naviera ? ` (${naviera})` : ""}
           {t && (
             <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
               Consultado el {new Date(t.consultado_at).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}
@@ -2288,7 +2292,7 @@ function NavieraSeccion({
           onClick={pedir}
           className="min-h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
         >
-          {esperando ? "Consultando…" : `Actualizar desde ${naviera}`}
+          {esperando ? "Consultando…" : `Actualizar desde ${t?.ok || detectada.naviera ? naviera : "las navieras"}`}
         </button>
       </div>
 
