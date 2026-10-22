@@ -10,7 +10,6 @@ const TABS = [
   { href: "/track/viajes", label: "Por viaje" },
   { href: "/track/bitacora", label: "Bitácora" },
   { href: "/track/cambios-cargolink", label: "Cambios en Cargolink" },
-  { href: "/track/clientes", label: "Clientes asignados" },
 ];
 
 export function TrackTabs({ asignaEjecutivos = false }: { asignaEjecutivos?: boolean }) {
