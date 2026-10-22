@@ -112,6 +112,12 @@ export default async function MiDiaPage({
     p_q: busqueda || null,
   });
   const c = (conteosData ?? null) as ConteosTrack | null;
+  const { data: viajesData } = await supabase.rpc("track_viajes", {
+    p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
+    p_estatus: estatusSel.codigos,
+    p_atd: atdSel.codigos,
+  });
+  const viajesPendientes = ((viajesData ?? []) as { distintas: boolean; faltan: number }[]).filter((v) => v.distintas || v.faltan > 0).length;
 
   // Por zarpar sin nada vencido: sin ATD ni ETA todavía no generan
   // compromisos, así que no salen arriba; se listan al final.
@@ -264,6 +270,21 @@ export default async function MiDiaPage({
           </div>
         ))}
       </div>
+
+      {viajesPendientes > 0 && (
+        <Link
+          href={embarquesHref("/track/viajes")}
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200"
+        >
+          <span>
+            <strong>
+              {viajesPendientes} {viajesPendientes === 1 ? "viaje" : "viajes"}
+            </strong>{" "}
+            con ATD, ETA o ATA por capturar o distintas entre bookings del mismo buque.
+          </span>
+          <span className="font-semibold">Capturar por viaje →</span>
+        </Link>
+      )}
 
       {error && (
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">

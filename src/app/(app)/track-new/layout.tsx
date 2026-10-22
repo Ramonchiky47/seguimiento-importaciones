@@ -13,6 +13,7 @@ export default async function TrackNewLayout({ children }: { children: React.Rea
 
   const enlaces = [
     { href: "/track-new", label: "Bandeja" },
+    { href: "/track/viajes", label: "Por viaje" },
     { href: "/track/tablero", label: "Tablero" },
     { href: "/track/bitacora", label: "Bitácora" },
     { href: "/track/cambios-cargolink", label: "Cambios en Cargolink" },

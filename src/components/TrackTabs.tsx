@@ -7,6 +7,7 @@ const TABS = [
   { href: "/track/mi-dia", label: "Mi día" },
   { href: "/track/tablero", label: "Tablero" },
   { href: "/track/embarques", label: "Embarques" },
+  { href: "/track/viajes", label: "Por viaje" },
   { href: "/track/bitacora", label: "Bitácora" },
   { href: "/track/cambios-cargolink", label: "Cambios en Cargolink" },
   { href: "/track/clientes", label: "Clientes asignados" },

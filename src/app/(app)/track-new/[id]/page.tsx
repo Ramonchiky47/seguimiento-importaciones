@@ -22,13 +22,15 @@ export default async function TrackNewBooking({ params }: { params: Promise<{ id
   ]);
   if (!op) notFound();
 
-  // Otros bookings vigentes en el mismo buque (para capturar en conjunto).
-  const buque = ((op.datos ?? {}) as Record<string, string>).buque;
-  const { data: mismoBuque } = buque
+  // Otros bookings vigentes del mismo buque Y mismo viaje: el nombre del buque solo se repite en viajes
+  // de otros meses.
+  const { buque, no_viaje: viaje } = (op.datos ?? {}) as Record<string, string>;
+  const { data: mismoBuque } = buque && viaje
     ? await supabase
         .from("operaciones_maritima_vista")
         .select("id_booking, no_booking, cliente, ejecutivo")
         .eq("datos->>buque", buque)
+        .eq("datos->>no_viaje", viaje)
         .eq("status_booking", "1")
         .neq("id_booking", idBooking)
         .order("no_booking")

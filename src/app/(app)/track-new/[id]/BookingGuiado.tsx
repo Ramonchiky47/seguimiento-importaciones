@@ -431,9 +431,15 @@ export function BookingGuiado({
           </svg>
           <div className="flex min-w-0 flex-[999_1_420px] flex-col gap-2">
             <h3 id="buque-titulo" className="text-lg font-extrabold">
-              {mismoBuque.length === 1 ? "Otro booking viene" : `Otros ${mismoBuque.length} bookings vienen`} en el mismo buque ({datos.buque})
+              {mismoBuque.length === 1 ? "Otro booking viene" : `Otros ${mismoBuque.length} bookings vienen`} en el mismo buque y viaje ({datos.buque} · {datos.no_viaje})
             </h3>
-            <span className="text-sm text-slate-300">Suelen compartir ATD, ETA y ATA: revísalos juntos.</span>
+            <span className="text-sm text-slate-300">
+              Comparten ATD, ETA y ATA:{" "}
+              <Link href="/track/viajes" className="font-semibold text-white underline">
+                captúralos juntos en Por viaje
+              </Link>
+              .
+            </span>
             <div className="flex flex-wrap gap-2">
               {mismoBuque.map((b) => (
                 <Link
