@@ -15,6 +15,10 @@ export type Propuesta = {
   valor: string;
   explicacion: string;
   confianza: "alta" | "media" | "baja";
+  naviera?: string | null;
+  ruta?: string | null;
+  // Lo que suele dar la naviera (solo días libres).
+  naviera_dias?: string | null;
 };
 
 const TIPOS: { tipo: Propuesta["tipo"]; titulo: string; accion: string; ayuda: string }[] = [
@@ -169,6 +173,14 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                         {p.cliente ?? "—"} · {p.ejecutivo ?? "Sin ejecutivo"}
                       </span>
                     </span>
+                    <span className="flex w-60 min-w-0 flex-col">
+                      <span className="truncate text-xs font-semibold text-slate-800 dark:text-slate-200" title={p.naviera ?? undefined}>
+                        {p.naviera ?? "Naviera sin capturar"}
+                      </span>
+                      <span className="truncate text-[11px] text-slate-500" title={p.ruta ?? undefined}>
+                        {p.ruta ?? "—"}
+                      </span>
+                    </span>
                     <span className="w-44">
                       {p.tipo === "transbordo" ? (
                         <span className="font-semibold">No aplica</span>
@@ -188,7 +200,14 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                       )}
                     </span>
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${CONFIANZA[p.confianza].clase}`}>{CONFIANZA[p.confianza].label}</span>
-                    <span className="min-w-0 flex-1 text-xs text-slate-600 dark:text-slate-400">{p.explicacion}</span>
+                    <span className="min-w-0 flex-1 text-xs text-slate-600 dark:text-slate-400">
+                      {p.explicacion}
+                      {p.naviera_dias && (
+                        <span className="block text-slate-500">
+                          Esta naviera suele dar {p.naviera_dias}.
+                        </span>
+                      )}
+                    </span>
                     {r && <span className={`basis-full pl-8 text-xs ${r.ok ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>{r.ok ? "✓ Guardado en Cargolink" : r.mensaje}</span>}
                   </li>
                 );
