@@ -31,6 +31,7 @@ const VISTAS = [
   { key: "falta", label: "Con algo que falta" },
   { key: "alerta", label: "Por revisar" },
   { key: "aldia", label: "Al día" },
+  { key: "porzarpar", label: "Por zarpar" },
   { key: "todos", label: "Todos" },
 ] as const;
 
@@ -113,18 +114,24 @@ export default async function TrackInteractivoBandeja({
     const actual = FASES.find((f) => f.clave === faseActual(tareas))!;
     return { ...e, tareas, fases, faltan, revisar, siguiente: siguientePaso(tareas), actual, cambio: cambios.get(e.id_booking) };
   });
+  // Los que aún no zarpan tienen su propia bandeja y no cuentan en las
+  // demás (salvo Todos).
+  const enCurso = filas.filter((f) => f.etapa !== "Por zarpar");
   const cuenta = {
-    falta: filas.filter((f) => f.faltan > 0).length,
-    alerta: filas.filter((f) => f.faltan === 0 && (f.revisar > 0 || f.cambio)).length,
-    aldia: filas.filter((f) => f.faltan === 0 && f.revisar === 0 && !f.cambio).length,
+    falta: enCurso.filter((f) => f.faltan > 0).length,
+    alerta: enCurso.filter((f) => f.faltan === 0 && (f.revisar > 0 || f.cambio)).length,
+    aldia: enCurso.filter((f) => f.faltan === 0 && f.revisar === 0 && !f.cambio).length,
+    porzarpar: filas.length - enCurso.length,
     todos: filas.length,
   };
   const visibles = filas
     .filter((f) =>
-      vistaActiva === "falta" ? f.faltan > 0
+      vistaActiva === "todos" ? true
+      : vistaActiva === "porzarpar" ? f.etapa === "Por zarpar"
+      : f.etapa === "Por zarpar" ? false
+      : vistaActiva === "falta" ? f.faltan > 0
       : vistaActiva === "alerta" ? f.faltan === 0 && (f.revisar > 0 || Boolean(f.cambio))
-      : vistaActiva === "aldia" ? f.faltan === 0 && f.revisar === 0 && !f.cambio
-      : true,
+      : f.faltan === 0 && f.revisar === 0 && !f.cambio,
     )
     .sort((a, b) => b.faltan - a.faltan || (b.max_dias_atraso ?? 0) - (a.max_dias_atraso ?? 0));
 
@@ -163,6 +170,7 @@ export default async function TrackInteractivoBandeja({
     falta: "border-red-300 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200",
     alerta: "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200",
     aldia: "border-green-300 bg-green-50 text-green-900 dark:border-green-900 dark:bg-green-950 dark:text-green-200",
+    porzarpar: "border-slate-300 bg-slate-50 text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200",
     todos: "border-slate-300 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200",
   };
 
@@ -197,7 +205,7 @@ export default async function TrackInteractivoBandeja({
       </div>
 
       {/* Bandejas por lo que falta */}
-      <div role="group" aria-label="Qué mostrar" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div role="group" aria-label="Qué mostrar" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {VISTAS.map((v) => (
           <Link
             key={v.key}
