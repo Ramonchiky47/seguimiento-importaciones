@@ -5,8 +5,8 @@
 // Mismas reglas que ~/Agentes/operaciones_maritima/navieras.py.
 
 // buque_carrier de Cargolink -> naviera con agente de rastreo.
-const POR_CARRIER: Record<string, string> = { "157": "MSC", "1497": "Maersk", "1419": "Yang Ming", "2129": "ZIM", "1387": "ZIM" };
-export const NAVIERAS_CON_AGENTE = ["MSC", "Maersk", "Yang Ming", "ZIM"];
+const POR_CARRIER: Record<string, string> = { "157": "MSC", "1497": "Maersk", "1419": "Yang Ming", "2129": "ZIM", "1387": "ZIM", "271": "Evergreen", "1894": "Evergreen" };
+export const NAVIERAS_CON_AGENTE = ["MSC", "Maersk", "Yang Ming", "ZIM", "Evergreen"];
 
 // Prefijos de contenedores propios (los rentados, como TEMU o TGBU, no delatan naviera).
 const CONTENEDORES: [string, string[]][] = [
@@ -93,7 +93,9 @@ export function ligaRastreo(naviera: string | null, mbl: string | null | undefin
     case "Hapag-Lloyd":
       return `https://www.hapag-lloyd.com/solutions/tracking/#/${ref}`;
     case "ZIM":
-      return `https://www.zim.com/tools/track-a-shipment?consnumber=${ref}`;
+      return `https://www.zim.com/es/tools/track-a-shipment?consnumber=${ref}`;
+    case "Evergreen":
+      return "https://ct.shipmentlink.com/servlet/TDB1_CargoTracking.do";
     default:
       return null;
   }
