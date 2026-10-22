@@ -2163,8 +2163,8 @@ async function leerTrackingNaviera(idBooking: number) {
   return { tracking: (tr.data as TrackingNaviera | null) ?? null, solicitud: (so.data as SolicitudTracking | null) ?? null };
 }
 
-// Lo que dice la naviera (agentes de las 2 PM). Si no hay información, se
-// pide a la Mac al abrir el detalle y se espera la respuesta (~1 min).
+// Lo que dice la naviera: el último dato registrado (rastreo de las 2 PM o
+// consultas anteriores). Solo se consulta de nuevo con "Actualizar desde…".
 export function NavieraSeccion({
   idBooking,
   carrier,
@@ -2189,7 +2189,6 @@ export function NavieraSeccion({
   const [sol, setSol] = useState<SolicitudTracking | null>(null);
   const [leido, setLeido] = useState(false);
   const [errorPedir, setErrorPedir] = useState<string | null>(null);
-  const autoPedido = useRef(false);
   const esperando = sol?.estado === "pendiente" || sol?.estado === "en_proceso";
 
   const leer = useCallback(() => leerTrackingNaviera(idBooking), [idBooking]);
@@ -2229,16 +2228,9 @@ export function NavieraSeccion({
 
   useEffect(() => {
     if (sinAgente) return;
-    leer().then((x) => {
-      const { tracking, solicitud } = aplicar(x);
-      // Sin información de la naviera: se consulta mientras se ve el detalle.
-      const pendiente = solicitud?.estado === "pendiente" || solicitud?.estado === "en_proceso";
-      if (!tracking && !pendiente && !autoPedido.current) {
-        autoPedido.current = true;
-        pedir();
-      }
-    });
-  }, [sinAgente, leer, aplicar, pedir]);
+    // Solo el último dato registrado; a la naviera se consulta con el botón.
+    leer().then(aplicar);
+  }, [sinAgente, leer, aplicar]);
 
   useEffect(() => {
     if (!esperando) return;
@@ -2294,7 +2286,7 @@ export function NavieraSeccion({
           Información de la naviera{t?.ok || detectada.naviera ? ` (${naviera})` : ""}
           {t && (
             <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
-              Consultado el {new Date(t.consultado_at).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}
+              Último dato registrado: {new Date(t.consultado_at).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}
               {t.referencia ? ` · ${t.referencia}` : ""}
             </span>
           )}
@@ -2323,7 +2315,9 @@ export function NavieraSeccion({
       )}
       {sol?.estado === "error" && sol.mensaje && <p className="mb-3 text-xs text-red-700 dark:text-red-400">Última consulta: {sol.mensaje}</p>}
       {errorPedir && <p className="mb-3 text-xs text-red-700 dark:text-red-400">No se pudo pedir la consulta: {errorPedir}</p>}
-      {leido && !t && !esperando && !sol && <p className="text-sm text-slate-500">Sin información de la naviera todavía.</p>}
+      {leido && !t && !esperando && (
+        <p className="text-sm text-slate-500">Sin información registrada de la naviera. Usa “Actualizar desde…” para consultarla.</p>
+      )}
       {t && !t.ok && <p className="text-sm text-red-700 dark:text-red-400">{t.error ?? `${naviera} no regresó información.`}</p>}
 
       {t?.ok && (
