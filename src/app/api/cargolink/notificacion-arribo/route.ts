@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getMyPermissions } from "@/lib/permissions";
 import { loginCargolink } from "@/lib/cargolink";
 import { descargarNotificacionArribo } from "@/lib/operacionesMaritima";
+import { corregirAcentosPdf } from "@/lib/pdfAcentos";
 
 // PDF de notificación de arribo de Cargolink, para verlo en la app
 // (?id=<id_booking>&lang=ESP|ING) o descargarlo (&descargar=1).
@@ -32,7 +33,9 @@ export async function GET(request: Request) {
 
   try {
     const session = await loginCargolink();
-    const pdf = await descargarNotificacionArribo(session, idBooking, lang);
+    const original = await descargarNotificacionArribo(session, idBooking, lang);
+    // Corrige los acentos que Cargolink guarda como "?"; si falla, el original.
+    const pdf = await corregirAcentosPdf(original).catch(() => original);
     const nombre = `Notificacion_arribo_${String(op.no_booking).replace(/[^A-Za-z0-9-]/g, "")}_${lang}.pdf`;
     return new Response(pdf, {
       headers: {

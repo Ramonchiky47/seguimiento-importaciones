@@ -313,15 +313,31 @@ function sinAcentos(s: string): string {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+// Palabras que suelen capturarse sin acento y se corrigen completas (se
+// excluyen las que también existen sin acento, como "mas" o "periodo").
+const SIN_ACENTO_AMBIGUAS = new Set(["mas", "periodo", "valido"]);
+const CORRECCION_SIN_ACENTO = new Map(
+  PALABRAS_CON_ACENTO.filter((p) => !SIN_ACENTO_AMBIGUAS.has(sinAcentos(p).toLowerCase())).map((p) => [sinAcentos(p).toLowerCase(), p]),
+);
+
+function conMayusculas(original: string, palabra: string): string {
+  if (original === original.toUpperCase()) return palabra.toUpperCase();
+  return original[0] === original[0].toLowerCase() ? palabra.toLowerCase() : palabra;
+}
+
 export function repararAcentos(texto: string): string {
-  if (!texto.includes("?")) return texto;
-  return texto.replace(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]*\?[A-Za-zÁÉÍÓÚÜÑáéíóúüñ?]*/g, (token) => {
+  // Palabras completas escritas sin acento ("Credito" → "Crédito").
+  const conAcentos = texto.replace(/[A-Za-z]+/g, (w) => {
+    const p = CORRECCION_SIN_ACENTO.get(w.toLowerCase());
+    return p && sinAcentos(p) !== p ? conMayusculas(w, p) : w;
+  });
+  if (!conAcentos.includes("?")) return conAcentos;
+  return conAcentos.replace(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]*\?[A-Za-zÁÉÍÓÚÜÑáéíóúüñ?]*/g, (token) => {
     const patron = new RegExp(`^${token.split("?").map((t) => sinAcentos(t)).join(".")}$`, "i");
     const palabra = PALABRAS_CON_ACENTO.find((p) => patron.test(sinAcentos(p)) && p.length === token.length);
     if (!palabra) return token;
     // Respeta mayúscula inicial / todo en mayúsculas del original.
-    if (token === token.toUpperCase()) return palabra.toUpperCase();
-    return token[0] === token[0].toLowerCase() ? palabra.toLowerCase() : palabra;
+    return conMayusculas(token, palabra);
   });
 }
 
