@@ -254,6 +254,15 @@ export default async function MiDiaPage({
           <MultiSelectFilter paramName="estatus" label="Estatus" options={ESTATUS_OPCIONES} current={estatusSel.seleccion} />
           <TrackEjecutivoFilter options={availableEjecutivos} filtro={ejecutivoRaw} hrefTodos={hrefTodos} />
           <BuscadorTrack />
+          <Link
+            href={embarquesHref("/track/interactivo")}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-md bg-[#16232f] px-3 text-sm font-semibold text-white hover:bg-[#22364a] dark:bg-slate-100 dark:text-slate-900"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M4 12h3l2-5 4 10 2-5h5" />
+            </svg>
+            Vista interactiva
+          </Link>
         </div>
       </div>
 
@@ -337,6 +346,12 @@ export default async function MiDiaPage({
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     ETA {fechaCorta(f.eta)} · {f.hitos.length} {f.hitos.length === 1 ? "pendiente" : "pendientes"}
                   </p>
+                  <Link
+                    href={`/track/interactivo/${f.id_booking}`}
+                    className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline dark:text-blue-400"
+                  >
+                    Ver interactivo →
+                  </Link>
                 </div>
                 <ul className="min-w-0 space-y-1.5">
                   {f.hitos.map((h) => {

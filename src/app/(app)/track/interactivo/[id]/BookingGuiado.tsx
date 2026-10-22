@@ -159,9 +159,13 @@ export function BookingGuiado({
   return (
     <main className="mx-auto flex max-w-[1360px] flex-col gap-4 px-4 pb-12 pt-5 text-slate-900 dark:text-slate-100">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href="/track-new" className="inline-flex min-h-11 items-center rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-          ← Regresar a la bandeja
-        </Link>
+        <button
+          type="button"
+          onClick={() => (window.history.length > 1 ? router.back() : router.push("/track/interactivo"))}
+          className="inline-flex min-h-11 items-center rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+        >
+          ← Regresar
+        </button>
         <span
           role="status"
           className={`text-xs ${refresco.estado === "error" ? "text-red-700 dark:text-red-400" : refresco.estado === "ok" ? "text-green-700 dark:text-green-400" : "text-slate-500"}`}
@@ -444,7 +448,7 @@ export function BookingGuiado({
               {mismoBuque.map((b) => (
                 <Link
                   key={b.id_booking}
-                  href={`/track-new/${b.id_booking}`}
+                  href={`/track/interactivo/${b.id_booking}`}
                   title={`${b.cliente ?? ""} · ${b.ejecutivo ?? "Sin ejecutivo"}`}
                   className="rounded-md bg-white/10 px-2.5 py-1.5 font-mono text-sm font-semibold text-white hover:bg-white/20"
                 >

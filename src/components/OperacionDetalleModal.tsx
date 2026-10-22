@@ -394,6 +394,23 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
               )}
             </div>
             <div className="flex shrink-0 items-center gap-2">
+            {/* Mismo booking en la vista interactiva (recorrido por fases). */}
+            {idBooking !== null && (
+              <button
+                type="button"
+                onClick={() => {
+                  const id = idBooking;
+                  cerrar();
+                  router.push(`/track/interactivo/${id}`);
+                }}
+                className="flex min-h-10 items-center gap-1.5 rounded-md bg-[#16232f] px-3 text-sm font-semibold text-white hover:bg-[#22364a] dark:bg-slate-100 dark:text-slate-900"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M4 12h3l2-5 4 10 2-5h5" />
+                </svg>
+                Cambio interactivo
+              </button>
+            )}
             {op && (
               <details className="relative">
                 <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden">

@@ -1,4 +1,4 @@
-// Track New: el booking como recorrido por fases del forwarder de
+// Vista interactiva de Track: el booking como recorrido por fases del forwarder de
 // importación. Cada tarea sale de un hito de Track (track_hitos, con fecha
 // compromiso) o del estatus de su etapa en Cargolink (datos.his_mov_*), y se
 // edita con la misma etapa de ETAPAS_CARGOLINK que usa Track.
@@ -159,8 +159,11 @@ export function siguientePaso(tareas: Tarea[]): Tarea | null {
   return tareas.find((t) => t.estado === "falta") ?? tareas.find((t) => t.estado === "alerta") ?? null;
 }
 
-// Fase en la que va el booking (la primera que no está completa).
+// Fase en la que va el booking: la de su siguiente paso; si no hay nada
+// pendiente, la primera que no está completa.
 export function faseActual(tareas: Tarea[]): FaseClave {
+  const sig = siguientePaso(tareas);
+  if (sig) return sig.fase;
   for (const f of FASES) {
     const e = estadoFase(tareas.filter((t) => t.fase === f.clave));
     if (e !== "hecho") return f.clave;

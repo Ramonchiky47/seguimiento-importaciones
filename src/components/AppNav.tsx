@@ -9,7 +9,6 @@ const NAV_ITEMS = [
   { href: "/importaciones", label: "Importaciones" },
   { href: "/operaciones-maritima", label: "Operaciones Marítima" },
   { href: "/track", label: "Track" },
-  { href: "/track-new", label: "Track New" },
   { href: "/exportaciones", label: "Exportaciones" },
   { href: "/catalogos", label: "Catálogos" },
 ] as const;
@@ -77,8 +76,7 @@ export function AppNav({
                 item.href === "/dashboard" ||
                 item.href === "/importaciones" ||
                 item.href === "/operaciones-maritima" ||
-                item.href === "/track" ||
-                item.href === "/track-new"
+                item.href === "/track"
               );
             if (enExportaciones) return item.href === "/exportaciones";
             return item.href !== "/catalogos" || showCatalogos;
