@@ -11,7 +11,7 @@ export type Propuesta = {
   no_booking: string;
   cliente: string | null;
   ejecutivo: string | null;
-  tipo: "transbordo" | "eta" | "eta_finalizar" | "dias";
+  tipo: "transbordo" | "eta" | "eta_finalizar" | "dias" | "eta_naviera" | "eta_naviera_info";
   valor: string;
   explicacion: string;
   confianza: "alta" | "media" | "baja";
@@ -21,7 +21,15 @@ export type Propuesta = {
   naviera_dias?: string | null;
 };
 
-const TIPOS: { tipo: Propuesta["tipo"]; titulo: string; accion: string; ayuda: string }[] = [
+const TIPOS: { tipo: Propuesta["tipo"]; titulo: string; accion: string; ayuda: string; soloAviso?: boolean }[] = [
+  { tipo: "eta_naviera", titulo: "ETA según la naviera (MSC)", accion: "Guardar ETA de la naviera", ayuda: "El agente consultó msc.com a las 2 PM y la ETA no coincide con Cargolink." },
+  {
+    tipo: "eta_naviera_info",
+    titulo: "ETA de la naviera distinta · corregir en Cargolink",
+    accion: "",
+    ayuda: "MSC trae otra ETA, pero la etapa ETA ya está finalizada en Cargolink: la app no puede cambiarla. Corrígela en Cargolink.",
+    soloAviso: true,
+  },
   { tipo: "transbordo", titulo: "Transbordo → No aplica", accion: "Marcar No aplica", ayuda: "La naviera casi nunca transborda en esa ruta." },
   { tipo: "eta_finalizar", titulo: "Finalizar ETA", accion: "Finalizar con la ETA capturada", ayuda: "La ETA ya está capturada; falta finalizar la etapa en Cargolink." },
   { tipo: "eta", titulo: "ETA propuesta", accion: "Guardar ETA (queda en edición)", ayuda: "Zarpó sin ETA: ATD + tránsito típico de la naviera." },
@@ -40,7 +48,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
   const router = useRouter();
   // Por default solo las de confianza alta quedan marcadas.
   const [marcadas, setMarcadas] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(propuestas.map((p) => [clave(p), p.confianza === "alta"])),
+    Object.fromEntries(propuestas.map((p) => [clave(p), p.confianza === "alta" && p.tipo !== "eta_naviera_info"])),
   );
   const [valores, setValores] = useState<Record<string, string>>(() => Object.fromEntries(propuestas.map((p) => [clave(p), p.valor])));
   const [resultado, setResultado] = useState<Record<string, { ok: boolean; mensaje: string }>>({});
@@ -48,7 +56,10 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
   const [progreso, setProgreso] = useState<{ hechos: number; total: number } | null>(null);
 
   const pendientes = propuestas.filter((p) => !resultado[clave(p)]?.ok);
-  const seleccion = useMemo(() => pendientes.filter((p) => marcadas[clave(p)] && valores[clave(p)]), [pendientes, marcadas, valores]);
+  const seleccion = useMemo(
+    () => pendientes.filter((p) => p.tipo !== "eta_naviera_info" && marcadas[clave(p)] && valores[clave(p)]),
+    [pendientes, marcadas, valores],
+  );
 
   const confirmar = async () => {
     setRevisando(false);
@@ -57,7 +68,9 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
     for (const [i, p] of seleccion.entries()) {
       const v = valores[clave(p)];
       const r =
-        p.tipo === "transbordo"
+        p.tipo === "eta_naviera"
+          ? await guardarEtapaCargolink(p.id_booking, "eta", "EDICION", { buque_eta: v })
+          : p.tipo === "transbordo"
           ? await guardarTransbordosCargolink(p.id_booking, "NO_APLICA", [])
           : p.tipo === "eta"
             ? await guardarEtapaCargolink(p.id_booking, "eta", "EDICION", { buque_eta: v })
@@ -141,6 +154,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">{t.ayuda}</p>
               </div>
+              {!t.soloAviso && (
               <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                 <input
                   type="checkbox"
@@ -150,6 +164,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                 />
                 Seleccionar todas
               </label>
+              )}
             </div>
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
               {lista.map((p) => {
@@ -158,6 +173,9 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                 const hecho = r?.ok === true;
                 return (
                   <li key={k} className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-sm ${hecho ? "bg-green-50 dark:bg-green-950/40" : ""}`}>
+                    {t.soloAviso ? (
+                      <span aria-hidden="true" className="w-[13px]" />
+                    ) : (
                     <input
                       type="checkbox"
                       aria-label={`Confirmar ${p.no_booking}`}
@@ -165,6 +183,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                       checked={Boolean(marcadas[k]) && !hecho}
                       onChange={(e) => setMarcadas((m) => ({ ...m, [k]: e.target.checked }))}
                     />
+                    )}
                     <span className="flex w-56 min-w-0 flex-col">
                       <AbrirOperacionBoton idBooking={p.id_booking} className="text-left font-mono text-[13px] font-semibold text-blue-700 hover:underline dark:text-blue-400">
                         {p.no_booking}
@@ -184,6 +203,8 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                     <span className="w-44">
                       {p.tipo === "transbordo" ? (
                         <span className="font-semibold">No aplica</span>
+                      ) : t.soloAviso ? (
+                        <span className="font-semibold text-amber-900 dark:text-amber-200">MSC: {fechaCorta(p.valor)}</span>
                       ) : (
                         <input
                           type={p.tipo === "dias" ? "number" : "date"}
