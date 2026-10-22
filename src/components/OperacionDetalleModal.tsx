@@ -200,7 +200,7 @@ const ESTATUS_ETAPA: Record<string, { label: string; clase: string; tarjeta: str
 };
 const TARJETA_SIN_COMENZAR = "border-dashed border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900";
 
-type Operacion = Record<string, unknown> & { datos?: Record<string, string> };
+export type Operacion = Record<string, unknown> & { datos?: Record<string, string> };
 type Hito = {
   orden: number;
   hito: string;
@@ -687,7 +687,7 @@ export function FilaOperacion({
 // Formulario de una etapa: mismos campos y botones que su pantalla en
 // Cargolink. Finalizar y "No aplica" piden confirmación porque en Cargolink
 // ya no se pueden deshacer.
-function EditorEtapa({
+export function EditorEtapa({
   etapa,
   op,
   idBooking,
@@ -972,7 +972,7 @@ const FILA_VACIA: FilaTransbordoForm = {
   fecha_zarpe_real: "",
 };
 
-function EditorTransbordo({
+export function EditorTransbordo({
   etapa,
   noBooking,
   idBooking,
@@ -1298,7 +1298,7 @@ function EtapaDetalle({
 
 // Documentos del booking en Cargolink: cada tipo configurado (MANIFIESTO,
 // ACUSE, …) con su archivo; se sube a un tipo existente.
-function DocumentosCargolink({
+export function DocumentosCargolink({
   idBooking,
   noBooking,
   puedeSubir,
@@ -1434,7 +1434,7 @@ function DocumentosCargolink({
 
 // Acciones › PDF NOT arribo: elige idioma, ve el PDF de Cargolink y lo
 // descarga (ruta /api/cargolink/notificacion-arribo).
-function NotArriboDialog({
+export function NotArriboDialog({
   idBooking,
   noBooking,
   onCerrar,
@@ -1859,7 +1859,7 @@ function CampoInstrucciones({
 // Resumen comercial: conceptos, costos y ventas que capturó Comercial en
 // Cargolink, con aviso ⚠ si algo cambió desde la última revisión de
 // Operaciones (foto en resumen_comercial_base).
-function ResumenComercialSeccion({ idBooking }: { idBooking: number }) {
+export function ResumenComercialSeccion({ idBooking }: { idBooking: number }) {
   const [r, setR] = useState<ResumenComercial | null>(null);
   const [abierto, setAbierto] = useState(false);
   const [pending, startTransition] = useTransition();

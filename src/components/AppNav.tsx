@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { href: "/importaciones", label: "Importaciones" },
   { href: "/operaciones-maritima", label: "Operaciones Marítima" },
   { href: "/track", label: "Track" },
+  { href: "/track-new", label: "Track New" },
   { href: "/exportaciones", label: "Exportaciones" },
   { href: "/catalogos", label: "Catálogos" },
 ] as const;
@@ -31,7 +32,9 @@ export function AppNav({
     pathname.startsWith("/importaciones/") ||
     pathname === "/operaciones-maritima" ||
     pathname === "/track" ||
-    pathname.startsWith("/track/");
+    pathname.startsWith("/track/") ||
+    pathname === "/track-new" ||
+    pathname.startsWith("/track-new/");
   const enExportaciones = pathname === "/exportaciones" || pathname.startsWith("/exportaciones/");
 
   return (
@@ -74,7 +77,8 @@ export function AppNav({
                 item.href === "/dashboard" ||
                 item.href === "/importaciones" ||
                 item.href === "/operaciones-maritima" ||
-                item.href === "/track"
+                item.href === "/track" ||
+                item.href === "/track-new"
               );
             if (enExportaciones) return item.href === "/exportaciones";
             return item.href !== "/catalogos" || showCatalogos;
