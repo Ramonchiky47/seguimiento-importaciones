@@ -12,6 +12,7 @@ import {
   ResumenComercialSeccion,
   type Operacion,
 } from "@/components/OperacionDetalleModal";
+import { EstatusEmbarquePdfDialog } from "@/components/EstatusEmbarquePdfDialog";
 import { refrescarOperacionDesdeCargolink } from "@/app/(app)/operaciones-maritima/actions";
 import { ETAPAS_CARGOLINK } from "@/lib/etapasCargolink";
 import {
@@ -56,7 +57,10 @@ export function BookingGuiado({
   mismoBuque,
   propuestaDias,
   vacio,
+  conNaviera,
 }: {
+  // Hay información de la naviera: habilita el PDF de estatus para el cliente.
+  conNaviera: boolean;
   propuestaDias: { dias: number; explicacion: string } | null;
   // Regreso de vacío estimado: solo aviso, nunca se guarda.
   vacio: { estimado: string; base: string; riesgo: string; tardes: number; n: number } | null;
@@ -75,6 +79,7 @@ export function BookingGuiado({
   const [editando, setEditando] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [pdf, setPdf] = useState(false);
+  const [pdfEstatus, setPdfEstatus] = useState(false);
   const [refresco, setRefresco] = useState<{ estado: "cargando" | "ok" | "error"; mensaje: string }>({
     estado: "cargando",
     mensaje: "Actualizando desde Cargolink…",
@@ -224,11 +229,21 @@ export function BookingGuiado({
           >
             Estatus de la naviera
           </button>
+          <button
+            type="button"
+            disabled={!conNaviera}
+            onClick={() => setPdfEstatus(true)}
+            title={conNaviera ? "PDF de AV2 Logistics para compartir con el cliente" : "Disponible cuando el booking tenga información de la naviera"}
+            className="min-h-11 rounded-lg border border-white/40 px-4 text-sm font-bold text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            PDF estatus para cliente
+          </button>
           <button type="button" onClick={() => setPdf(true)} className="min-h-11 rounded-lg bg-white px-4 text-sm font-bold text-[#16232f]">
             PDF NOT arribo
           </button>
         </div>
       </header>
+      {pdfEstatus && <EstatusEmbarquePdfDialog idBooking={idBooking} noBooking={String(op.no_booking ?? "")} onCerrar={() => setPdfEstatus(false)} />}
       {pdf && <NotArriboDialog idBooking={idBooking} noBooking={String(op.no_booking ?? "")} onCerrar={() => setPdf(false)} />}
 
       {aviso && (

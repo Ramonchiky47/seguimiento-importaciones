@@ -12,7 +12,7 @@ export default async function TrackInteractivoBooking({ params }: { params: Prom
   if (!Number.isInteger(idBooking) || idBooking <= 0) notFound();
   const supabase = await createClient();
 
-  const [{ data: op }, { data: hitos }, { data: puedeEditar }] = await Promise.all([
+  const [{ data: op }, { data: hitos }, { data: puedeEditar }, { data: naviera }] = await Promise.all([
     supabase.from("operaciones_maritima_vista").select("*").eq("id_booking", idBooking).maybeSingle(),
     supabase
       .from("track_hitos")
@@ -20,6 +20,8 @@ export default async function TrackInteractivoBooking({ params }: { params: Prom
       .eq("id_booking", idBooking)
       .order("posicion"),
     supabase.rpc("puedo_editar_cargolink"),
+    // El PDF de estatus para el cliente solo se ofrece si ya hay información de la naviera.
+    supabase.from("tracking_naviera").select("ok").eq("id_booking", idBooking).eq("ok", true).maybeSingle(),
   ]);
   if (!op) notFound();
 
@@ -76,6 +78,7 @@ export default async function TrackInteractivoBooking({ params }: { params: Prom
       hitos={(hitos ?? []) as HitoTrack[]}
       puedeEditar={puedeEditar === true}
       mismoBuque={viaje_}
+      conNaviera={Boolean(naviera)}
     />
   );
 }

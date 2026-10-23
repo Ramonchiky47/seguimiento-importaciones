@@ -135,3 +135,13 @@ export function detalleNaviera(naviera: string, respuesta: unknown): DetalleNavi
       return null;
   }
 }
+
+// Zarpe real según la naviera: el primer evento ya ocurrido de carga o salida del buque.
+export function zarpeSegunNaviera(eventos: EventoNaviera[]): string | null {
+  return (
+    eventos
+      .filter((e) => e.real && e.fecha && /load|depart|zarpe|sail|cargado|on board/i.test(e.evento) && !/empty|vac/i.test(e.evento))
+      .map((e) => e.fecha as string)
+      .sort()[0] ?? null
+  );
+}
