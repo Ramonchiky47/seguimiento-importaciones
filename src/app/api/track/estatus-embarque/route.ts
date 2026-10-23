@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getMyPermissions } from "@/lib/permissions";
-import { detalleNaviera, zarpeSegunNaviera } from "@/lib/detalleNaviera";
+import { arriboSinConfirmar, detalleNaviera, zarpeSegunNaviera } from "@/lib/detalleNaviera";
 import { nombreNaviera } from "@/lib/navieras";
 import { repararAcentos } from "@/lib/etapasCargolink";
 import { pdfEstatusEmbarque } from "@/lib/pdfEstatusEmbarque";
@@ -69,9 +69,10 @@ export async function GET(request: Request) {
       // Si Cargolink aún no tiene el ATD, el zarpe real que reporta la naviera.
       atd: f(datos.fecha_atd) ?? zarpeSegunNaviera(detalle?.eventos ?? []),
       etd: f(datos.fecha_estimada),
-      eta: f(op.eta),
+      // Si la naviera dice que aún no arriba, manda su ETA y la ATA de Cargolink no cuenta.
+      eta: arriboSinConfirmar(f(op.ata), t) ? f(t.eta_naviera) : f(op.eta),
       etaNaviera: f(t.eta_naviera),
-      ata: f(op.ata) ?? f(t.ata_naviera),
+      ata: (arriboSinConfirmar(f(op.ata), t) ? null : f(op.ata)) ?? f(t.ata_naviera),
       transbordos: ((t.transbordos ?? []) as { lugar: string; fecha: string | null }[]).filter((x) => x?.lugar),
       revalidacion: f(op.revalidacion),
       diasLibres: Number(op.dias_libres_demora) || null,

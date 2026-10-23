@@ -7,6 +7,7 @@ import { ESTADOS, explicarPropuestaDias, fechaCorta, type EstadoHito } from "@/l
 import { NavieraDialog } from "@/components/NavieraDialog";
 import { ResumenComercialDialog } from "@/components/ResumenComercialDialog";
 import { NAVIERAS_CON_AGENTE, coincideRazonSocial, ligaRastreo, navieraRastreo, nombreNaviera } from "@/lib/navieras";
+import type { ResumenNaviera } from "@/lib/detalleNaviera";
 import {
   ETAPAS_CARGOLINK,
   ETAPA_POR_HITO,
@@ -2205,7 +2206,10 @@ export function NavieraSeccion({
   noBooking,
   origen,
   destino,
+  onActualizada,
 }: {
+  // Avisa lo último que respondió la naviera (al abrir y al terminar una consulta).
+  onActualizada?: (n: ResumenNaviera) => void;
   idBooking: number;
   carrier: string | null;
   mbl: string | null;
@@ -2233,8 +2237,9 @@ export function NavieraSeccion({
     setT(x.tracking);
     setSol(x.solicitud);
     setLeido(true);
+    if (x.tracking?.ok) onActualizada?.(x.tracking);
     return x;
-  }, []);
+  }, [onActualizada]);
 
   const pedir = useCallback(async () => {
     setErrorPedir(null);

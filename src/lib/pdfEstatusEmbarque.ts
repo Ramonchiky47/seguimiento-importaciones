@@ -102,6 +102,55 @@ export function texto(page: PDFPage, s: string, x: number, y: number, font: PDFF
   page.drawText(t, { x: centro ? x - w / 2 : x, y, size, font, color });
 }
 
+// Tramos del viaje según la naviera: eventos seguidos con el mismo buque.
+export type Tramo = { buque: string; desde: string | null; salida: string | null; hasta: string | null; llegada: string | null; real: boolean };
+export function tramosDelViaje(eventos: EventoNaviera[], destino: string | null): Tramo[] {
+  const grupos: EventoNaviera[][] = [];
+  for (const e of eventos.filter((x) => x.buque && x.fecha)) {
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo[0].buque === e.buque) ultimo.push(e);
+    else grupos.push([e]);
+  }
+  return grupos.map((g, i) => {
+    const sale = g.find((e) => /load|depart|sail|cargado|zarpe/i.test(e.evento)) ?? g[0];
+    const llega = [...g].reverse().find((e) => /discharg|unload|arriv|descarg|arribo/i.test(e.evento)) ?? null;
+    return {
+      buque: g[0].buque as string,
+      desde: sale.lugar,
+      salida: sale.fecha,
+      hasta: llega?.lugar ?? grupos[i + 1]?.[0].lugar ?? destino,
+      llegada: llega?.fecha ?? null,
+      real: Boolean(llega?.real),
+    };
+  });
+}
+
+
+// Tabla de tramos (un renglón por buque); regresa la nueva "y".
+export function tablaTramos(page: PDFPage, tramos: Tramo[], y: number, f: PDFFont, fb: PDFFont, margen: number, ancho: number): number {
+  const cols: [string, number][] = [["TRAMO", 0], ["BUQUE", 42], ["DESDE", 200], ["SALIDA", 300], ["HASTA", 362], ["LLEGADA", 462]];
+  page.drawRectangle({ x: margen, y: y - 3, width: ancho, height: 14, color: rgb(0.45, 0.47, 0.5) });
+  for (const [t, x] of cols) texto(page, t, margen + x + 4, y + 1, fb, 7.5, rgb(1, 1, 1));
+  y -= 15;
+  if (!tramos.length) {
+    texto(page, "La naviera no detalla los buques de cada tramo.", margen + 4, y, f, 8.5, GRIS);
+    return y - 15;
+  }
+  tramos.forEach((t, i) => {
+    texto(page, String(i + 1), margen + 4, y, fb, 8.5);
+    texto(page, t.buque, margen + 46, y, f, 8.5, NEGRO, false, 152);
+    texto(page, t.desde ?? "—", margen + 204, y, f, 8.5, NEGRO, false, 94);
+    texto(page, corta(t.salida), margen + 304, y, f, 8.5);
+    texto(page, t.hasta ?? "—", margen + 366, y, f, 8.5, NEGRO, false, 94);
+    texto(page, t.llegada ? corta(t.llegada) : "En curso", margen + 466, y, f, 8.5);
+    const estado = t.llegada ? (t.real ? "Realizado" : "Estimado") : "";
+    texto(page, estado, margen + ancho - 4 - fb.widthOfTextAtSize(estado, 7.5), y, fb, 7.5, t.real ? rgb(0.08, 0.5, 0.24) : rgb(0.7, 0.42, 0.04));
+    page.drawLine({ start: { x: margen, y: y - 4 }, end: { x: margen + ancho, y: y - 4 }, thickness: 0.4, color: rgb(0.85, 0.87, 0.9) });
+    y -= 13;
+  });
+  return y - 2;
+}
+
 // Diagrama: banda azul clara, línea de la ruta (recorrido continuo, pendiente
 // punteado), puntos de origen / transbordos / destino y el buque donde va.
 export function diagrama(page: PDFPage, d: DatosEstatus, y: number, f: PDFFont, fb: PDFFont, ancho: number, margen: number) {
@@ -209,6 +258,14 @@ export async function pdfEstatusEmbarque(d: DatosEstatus): Promise<Uint8Array> {
   // Diagrama de la ruta.
   diagrama(page, d, 540, f, fb, W, M);
 
+  // Con transbordo: cada tramo con su buque, según la naviera.
+  let y = 452;
+  const tramos = tramosDelViaje(d.eventos, d.puertoDescarga ?? d.destino);
+  if (d.transbordos.length || tramos.length > 1) {
+    texto(page, `Tramos del viaje${d.transbordos.length ? ` (transbordo en ${d.transbordos.map((t) => t.lugar).join(", ")})` : ""}`, M, y, fb, 12, ROJO);
+    y = tablaTramos(page, tramos, y - 16, f, fb, M, W) - 12;
+  }
+
   // Datos del embarque en dos columnas (como la notificación de arribo).
   const filas: [string, string | null][] = [
     ["Booking:", d.noBooking],
@@ -234,7 +291,6 @@ export async function pdfEstatusEmbarque(d: DatosEstatus): Promise<Uint8Array> {
     ["Días libres de demora:", d.diasLibres ? `${d.diasLibres} días${d.ultimoDiaLibre ? ` · último día libre ${fecha(d.ultimoDiaLibre)}` : ""}` : null],
     ["Regreso de vacío:", d.regresoVacio ? fecha(d.regresoVacio) : null],
   ];
-  let y = 452;
   texto(page, "Datos del embarque", M, y, fb, 12, ROJO);
   y -= 16;
   // Dos columnas, para que siempre quepan los movimientos del contenedor.

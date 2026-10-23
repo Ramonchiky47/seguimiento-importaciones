@@ -1,11 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { getMyPermissions } from "@/lib/permissions";
-import { detalleNaviera, zarpeSegunNaviera } from "@/lib/detalleNaviera";
+import { arriboSinConfirmar, detalleNaviera, zarpeSegunNaviera } from "@/lib/detalleNaviera";
 import { nombreNaviera } from "@/lib/navieras";
 import { repararAcentos } from "@/lib/etapasCargolink";
 import { calcularTareas, type HitoTrack } from "@/lib/trackNew";
 import { resumenComercialCargolink } from "@/app/(app)/operaciones-maritima/actions";
-import { pdfPulsoOperacion, type PagoConcepto } from "@/lib/pdfPulsoOperacion";
+import { pdfPulsoOperacion, type ConceptoOriginal, type PagoConcepto } from "@/lib/pdfPulsoOperacion";
 
 // PDF "Pulso de la operación" (?id=<id_booking>, &descargar=1 para descargarlo):
 // resumen ejecutivo interno para Dirección con naviera, Comercial y Operaciones.
@@ -35,6 +35,7 @@ export async function GET(request: Request) {
   const myPermissions = await getMyPermissions();
   if (!myPermissions.es_admin && !myPermissions.puede_operaciones) return new Response("Sin permiso de operaciones.", { status: 403 });
 
+  // resumenComercialCargolink actualiza la referencia: la captura de origen se lee después.
   const [{ data: op }, { data: t }, { data: hitos }, comercial] = await Promise.all([
     supabase.from("operaciones_maritima_vista").select("*").eq("id_booking", idBooking).maybeSingle(),
     supabase
@@ -50,6 +51,9 @@ export async function GET(request: Request) {
     resumenComercialCargolink(idBooking),
   ]);
   if (!op) return new Response("Operación no encontrada.", { status: 404 });
+  const { data: base } = comercial.cambios.length
+    ? await supabase.from("resumen_comercial_base").select("firma, tomada_at, revisado_por").eq("id_booking", idBooking).maybeSingle()
+    : { data: null };
 
   const datos = (op.datos ?? {}) as Record<string, unknown>;
   const s = (v: unknown) => {
@@ -72,9 +76,10 @@ export async function GET(request: Request) {
     ? await supabase.from("proveedores_cargolink").select("razonsocial").eq("id_proveedor", String(datos.buque_carrier)).maybeSingle()
     : { data: null };
 
-  // Una ATA a futuro en Cargolink no es arribo.
+  // Una ATA a futuro en Cargolink no es arribo, ni la que contradice a la naviera.
   const ataCargolink = f(op.ata);
-  const ata = (ataCargolink && ataCargolink <= hoy ? ataCargolink : null) ?? f(naviera?.ata_naviera);
+  const sinConfirmar = arriboSinConfirmar(ataCargolink, naviera);
+  const ata = (ataCargolink && ataCargolink <= hoy && !sinConfirmar ? ataCargolink : null) ?? f(naviera?.ata_naviera);
   const atdNaviera = zarpeSegunNaviera(detalle?.eventos ?? []);
   const atd = f(op.etd_atd) ?? f(datos.fecha_atd) ?? atdNaviera;
   const arribo = Boolean(ata);
@@ -134,7 +139,7 @@ export async function GET(request: Request) {
       equipos,
       embalaje: embalajeEsEquipo ? { cantidad: null, tipo: null } : { cantidad: n(datos.totalEmbalaje), tipo: tipoEmbalaje },
       atdNaviera,
-      ataFutura: ataCargolink && ataCargolink > hoy ? ataCargolink : null,
+      ataFutura: ataCargolink && (ataCargolink > hoy || sinConfirmar) ? ataCargolink : null,
       seguro: {
         contratado: Boolean(op.seguro),
         etapa: etapa("seguro"),
@@ -165,6 +170,16 @@ export async function GET(request: Request) {
         profit: comercial.totales.profit,
         cambios: comercial.cambios.map((c) => c.texto),
         avisoCargolink: comercial.avisoCargolink,
+        original: base
+          ? {
+              conceptos: (((base.firma as { conceptos?: ConceptoOriginal[] } | null)?.conceptos ?? []) as ConceptoOriginal[]).map((c) => ({
+                ...c,
+                proveedor: c.proveedor || null,
+              })),
+              tomadaAt: s(base.tomada_at)?.slice(0, 10) ?? null,
+              revisadoPor: s(base.revisado_por),
+            }
+          : null,
       },
       facturacion: {
         etapa: etapa("facturacion"),

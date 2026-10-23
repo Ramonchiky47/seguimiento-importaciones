@@ -145,3 +145,18 @@ export function zarpeSegunNaviera(eventos: EventoNaviera[]): string | null {
       .sort()[0] ?? null
   );
 }
+
+// Lo que el detalle usa de tracking_naviera (solo si la naviera respondió).
+export type ResumenNaviera = {
+  naviera: string;
+  eta_naviera: string | null;
+  ata_naviera: string | null;
+  transbordos: { lugar: string; fecha: string | null }[] | null;
+};
+
+// Cargolink tiene ATA pero la naviera dice que aún no arriba (ETA posterior):
+// el arribo no está confirmado y manda la naviera.
+export function arriboSinConfirmar(ataCargolink: string | null | undefined, n: Pick<ResumenNaviera, "eta_naviera" | "ata_naviera"> | null | undefined): boolean {
+  const ata = ataCargolink?.slice(0, 10);
+  return Boolean(ata && n && !n.ata_naviera && n.eta_naviera && n.eta_naviera.slice(0, 10) > ata);
+}

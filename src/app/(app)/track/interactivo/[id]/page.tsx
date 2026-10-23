@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { BookingGuiado } from "./BookingGuiado";
 import type { HitoTrack } from "@/lib/trackNew";
 import { explicarPropuestaDias } from "@/lib/track";
+import type { ResumenNaviera } from "@/lib/detalleNaviera";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,13 @@ export default async function TrackInteractivoBooking({ params }: { params: Prom
       .eq("id_booking", idBooking)
       .order("posicion"),
     supabase.rpc("puedo_editar_cargolink"),
-    // El PDF de estatus para el cliente solo se ofrece si ya hay información de la naviera.
-    supabase.from("tracking_naviera").select("ok").eq("id_booking", idBooking).eq("ok", true).maybeSingle(),
+    // Lo último que respondió la naviera: ruta, arribo y el PDF de estatus para el cliente.
+    supabase
+      .from("tracking_naviera")
+      .select("naviera, eta_naviera, ata_naviera, transbordos")
+      .eq("id_booking", idBooking)
+      .eq("ok", true)
+      .maybeSingle(),
   ]);
   if (!op) notFound();
 
@@ -78,7 +84,7 @@ export default async function TrackInteractivoBooking({ params }: { params: Prom
       hitos={(hitos ?? []) as HitoTrack[]}
       puedeEditar={puedeEditar === true}
       mismoBuque={viaje_}
-      conNaviera={Boolean(naviera)}
+      naviera={(naviera as ResumenNaviera | null) ?? null}
     />
   );
 }

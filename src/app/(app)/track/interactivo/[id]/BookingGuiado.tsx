@@ -15,6 +15,8 @@ import {
 import { EstatusEmbarquePdfDialog } from "@/components/EstatusEmbarquePdfDialog";
 import { refrescarOperacionDesdeCargolink } from "@/app/(app)/operaciones-maritima/actions";
 import { ETAPAS_CARGOLINK } from "@/lib/etapasCargolink";
+import { arriboSinConfirmar, type ResumenNaviera } from "@/lib/detalleNaviera";
+import { nombreNaviera } from "@/lib/navieras";
 import {
   ESTILO_TAREA,
   FASES,
@@ -57,10 +59,11 @@ export function BookingGuiado({
   mismoBuque,
   propuestaDias,
   vacio,
-  conNaviera,
+  naviera: navieraInicial,
 }: {
-  // Hay información de la naviera: habilita el PDF de estatus para el cliente.
-  conNaviera: boolean;
+  // Lo que respondió la naviera (null = sin información): habilita el PDF de
+  // estatus para el cliente y corrige la ruta. Se actualiza al consultar aquí.
+  naviera: ResumenNaviera | null;
   propuestaDias: { dias: number; explicacion: string } | null;
   // Regreso de vacío estimado: solo aviso, nunca se guarda.
   vacio: { estimado: string; base: string; riesgo: string; tardes: number; n: number } | null;
@@ -81,6 +84,8 @@ export function BookingGuiado({
   const [pdf, setPdf] = useState(false);
   const [pdfEstatus, setPdfEstatus] = useState(false);
   const [pdfPulso, setPdfPulso] = useState(false);
+  const [nav, setNav] = useState(navieraInicial);
+  const conNaviera = Boolean(nav);
   const [refresco, setRefresco] = useState<{ estado: "cargando" | "ok" | "error"; mensaje: string }>({
     estado: "cargando",
     mensaje: "Actualizando desde Cargolink…",
@@ -109,12 +114,17 @@ export function BookingGuiado({
   const hoy = hoyMx();
   const atd = (op.etd_atd as string | null) ?? null;
   const eta = (op.eta as string | null) ?? null;
-  const ata = (op.ata as string | null) ?? null;
+  // Si la naviera dice que aún no arriba, la ATA de Cargolink no cuenta.
+  const ataCargolink = (op.ata as string | null) ?? null;
+  const sinConfirmar = arriboSinConfirmar(ataCargolink, nav);
+  const ata = sinConfirmar ? null : ataCargolink ?? nav?.ata_naviera ?? null;
+  const etaRuta = sinConfirmar ? (nav?.eta_naviera ?? eta) : eta;
+  const transbordos = (nav?.transbordos ?? []).filter((x) => x?.lugar);
   const arribo = Boolean(ata && ata <= hoy);
   const zarpo = Boolean(atd && atd <= hoy);
-  const avance = arribo ? 1 : zarpo && eta && atd ? Math.min(0.95, Math.max(0.05, diasEntre(atd, hoy) / Math.max(1, diasEntre(atd, eta)))) : 0;
+  const avance = arribo ? 1 : zarpo && etaRuta && atd ? Math.min(0.95, Math.max(0.05, diasEntre(atd, hoy) / Math.max(1, diasEntre(atd, etaRuta)))) : 0;
   const xBuque = 60 + avance * 680;
-  const transito = atd && (ata ?? eta) ? diasEntre(atd, (ata ?? eta) as string) : null;
+  const transito = atd && (ata ?? etaRuta) ? diasEntre(atd, (ata ?? etaRuta) as string) : null;
 
   // Días libres.
   const dl = Number(op.dias_libres_demora) || 0;
@@ -280,6 +290,23 @@ export function BookingGuiado({
             <path d="M60 65 C 220 20, 420 110, 740 65" fill="none" stroke="#1d4ed8" strokeWidth="4" strokeLinecap="round" pathLength="1" strokeDasharray={`${avance} 1`} />
             <circle cx="60" cy="65" r="11" fill="#16232f" />
             <circle cx="60" cy="65" r="4" fill="#fff" />
+            {/* Transbordos según la naviera, repartidos sobre la curva. */}
+            {transbordos.map((t, i) => {
+              const u = (i + 1) / (transbordos.length + 1);
+              const v = 1 - u;
+              const x = v ** 3 * 60 + 3 * v * v * u * 220 + 3 * v * u * u * 420 + u ** 3 * 740;
+              const y = v ** 3 * 65 + 3 * v * v * u * 20 + 3 * v * u * u * 110 + u ** 3 * 65;
+              const paso = u <= avance;
+              return (
+                <g key={`${t.lugar}-${i}`}>
+                  <circle cx={x} cy={y} r="7" fill={paso ? "#1d4ed8" : "#fff"} stroke={paso ? "#1d4ed8" : "#94a3b8"} strokeWidth="3" />
+                  <text x={x} y="112" textAnchor="middle" fontSize="13" fontWeight="700" fill="currentColor">{t.lugar.slice(0, 18)}</text>
+                  <text x={x} y="128" textAnchor="middle" fontSize="12" fill="#64748b">
+                    Transbordo{t.fecha ? ` ${fechaCortaTN(t.fecha)}` : ""}
+                  </text>
+                </g>
+              );
+            })}
             <circle cx="740" cy="65" r="11" fill={arribo ? "#15803d" : "#94a3b8"} />
             {arribo && <path d="M735 65l4 4 7-8" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
             <g transform={`translate(${xBuque - 22} 34)`}>
@@ -291,12 +318,18 @@ export function BookingGuiado({
             <text x="60" y="128" textAnchor="middle" fontSize="12" fill="#64748b">{atd ? `ATD ${fechaCortaTN(atd)}` : "Sin ATD"}</text>
             <text x="740" y="112" textAnchor="middle" fontSize="15" fontWeight="700" fill="currentColor">{String(op.destino ?? "Destino").slice(0, 18)}</text>
             <text x="740" y="128" textAnchor="middle" fontSize="12" fill="#64748b">
-              {ata ? `ATA ${fechaCortaTN(ata)}` : eta ? `ETA ${fechaCortaTN(eta)}` : "Sin ETA"}
+              {ata ? `ATA ${fechaCortaTN(ata)}` : etaRuta ? `ETA ${sinConfirmar ? "naviera " : ""}${fechaCortaTN(etaRuta)}` : "Sin ETA"}
             </text>
             <text x="400" y="24" textAnchor="middle" fontSize="12" fontWeight="600" fill="#1d4ed8">
               {transito !== null ? `${transito} días de tránsito` : zarpo ? "En tránsito" : "Por zarpar"}
             </text>
           </svg>
+          {sinConfirmar && (
+            <p role="alert" className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+              ⚠ {nombreNaviera(nav?.naviera ?? "") || "La naviera"} aún no reporta el arribo (ETA {fechaCortaTN(nav?.eta_naviera)}), pero Cargolink
+              tiene ATA {fechaCortaTN(ataCargolink)}. Se muestra lo de la naviera; corrige la ATA en Cargolink.
+            </p>
+          )}
         </div>
         <div className={`flex flex-[1_1_260px] items-center gap-4 rounded-xl border px-4 py-3.5 ${cajaReloj}`}>
           <svg role="img" aria-label={reloj.titulo} width="76" height="76" viewBox="0 0 76 76" className="flex-none">
@@ -500,6 +533,7 @@ export function BookingGuiado({
               noBooking={String(op.no_booking ?? "")}
               origen={(op.origen as string | null) ?? null}
               destino={(op.destino as string | null) ?? null}
+              onActualizada={setNav}
             />
           </div>
 
