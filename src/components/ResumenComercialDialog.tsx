@@ -109,6 +109,18 @@ const SECCIONES: { titulo: string; campos: Campo[] }[] = [
   },
 ];
 
+// Cargolink: "Pagado / FFP: <factura del proveedor> / FS: <folio de la solicitud de pago>",
+// "Pago pend / …" o "Sin solicitud".
+function estadoPago(factura: string) {
+  const partes = (factura || "").split("/").map((x) => x.trim());
+  const estado = partes[0] ?? "";
+  const ffp = partes.find((x) => /^FFP:/i.test(x))?.replace(/^FFP:\s*/i, "") || null;
+  const fs = partes.find((x) => /^FS:/i.test(x))?.replace(/^FS:\s*/i, "") || null;
+  if (/pagad/i.test(estado)) return { clave: "pagado" as const, label: "Pagado", clase: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300", facturaProveedor: ffp, solicitud: fs };
+  if (/pend/i.test(estado) || fs) return { clave: "pendiente" as const, label: "Pago pendiente", clase: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200", facturaProveedor: ffp, solicitud: fs };
+  return { clave: "sin" as const, label: "Sin solicitud de pago", clase: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300", facturaProveedor: ffp, solicitud: fs };
+}
+
 const ORDEN_TIPOS = ["Marítimo", "Origen", "Destino", "Terrestre", "Aduana", "Seguro", "Aéreo", "Ferrocarril", "General"];
 
 const dinero = (n: number | null | undefined, m = "") =>
@@ -140,6 +152,8 @@ export function ResumenComercialDialog({
     ref.current?.showModal();
   }, []);
 
+  const conteo = { pagado: 0, pendiente: 0, sin: 0 };
+  for (const c of r.conceptos) conteo[estadoPago(c.factura).clave] += 1;
   const porTipo = ORDEN_TIPOS.map((t) => [t, r.conceptos.filter((c) => c.tipo === t)] as const).filter(([, cs]) => cs.length > 0);
   const otros = r.conceptos.filter((c) => !ORDEN_TIPOS.includes(c.tipo));
   if (otros.length) porTipo.push(["Otros", otros]);
@@ -159,7 +173,7 @@ export function ResumenComercialDialog({
       <div className="flex max-h-[90vh] flex-col">
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3 dark:border-slate-800">
           <div className="min-w-0">
-            <p className="text-xs text-slate-500 dark:text-slate-400">{noBooking} · datos del booking comercial en Cargolink</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{noBooking} · datos del booking comercial en Cargolink (sin venta)</p>
             <h3 id="resumen-comercial-titulo" className="text-base font-semibold text-slate-900 dark:text-slate-50">
               Resumen comercial
             </h3>
@@ -188,21 +202,17 @@ export function ResumenComercialDialog({
             </div>
           )}
 
-          {/* Totales arriba: lo primero que se revisa. */}
-          <div className="grid grid-cols-3 gap-2">
+          {/* Arriba: costo total y cómo van los pagos a proveedores. */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
-              ["Costo", r.totales.costo, "text-slate-900 dark:text-slate-50"],
-              ["Venta", r.totales.venta, "text-slate-900 dark:text-slate-50"],
-              ["Profit", r.totales.profit, (r.totales.profit ?? 0) < 0 ? "text-red-700 dark:text-red-400" : "text-green-800 dark:text-green-300"],
+              ["Costo total", dinero(r.totales.costo), "text-slate-900 dark:text-slate-50"],
+              ["Pagados", String(conteo.pagado), "text-green-800 dark:text-green-300"],
+              ["Pago pendiente", String(conteo.pendiente), "text-amber-800 dark:text-amber-300"],
+              ["Sin solicitud de pago", String(conteo.sin), "text-slate-700 dark:text-slate-200"],
             ].map(([label, v, clase]) => (
-              <div key={label as string} className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label as string}</p>
-                <p className={`text-lg font-extrabold tabular-nums ${clase as string}`}>
-                  {dinero(v as number | null)}
-                  {label === "Profit" && r.totales.venta ? (
-                    <span className="ml-1 text-sm font-semibold">({Math.round((100 * (r.totales.profit ?? 0)) / r.totales.venta)} %)</span>
-                  ) : null}
-                </p>
+              <div key={label} className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
+                <p className={`text-lg font-extrabold tabular-nums ${clase}`}>{v}</p>
               </div>
             ))}
           </div>
@@ -231,7 +241,7 @@ export function ResumenComercialDialog({
 
           <section aria-labelledby="conceptos-titulo" className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
             <h4 id="conceptos-titulo" className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
-              Conceptos y costos
+              Costos y pagos a proveedores
             </h4>
             {!r.ok && <p className="px-3 py-3 text-sm text-red-700 dark:text-red-400">No se pudo leer de Cargolink: {r.mensaje}</p>}
             {r.ok && r.conceptos.length === 0 && <p className="px-3 py-3 text-sm text-slate-500">Comercial no ha capturado conceptos.</p>}
@@ -244,18 +254,17 @@ export function ResumenComercialDialog({
                       <th scope="col" className="px-3 py-1.5 font-semibold">Proveedor</th>
                       <th scope="col" className="px-3 py-1.5 text-right font-semibold">Cant.</th>
                       <th scope="col" className="px-3 py-1.5 text-right font-semibold">Costo</th>
-                      <th scope="col" className="px-3 py-1.5 text-right font-semibold">IVA costo</th>
+                      <th scope="col" className="px-3 py-1.5 text-right font-semibold">IVA</th>
                       <th scope="col" className="px-3 py-1.5 text-right font-semibold">Total costo</th>
-                      <th scope="col" className="px-3 py-1.5 text-right font-semibold">Venta</th>
-                      <th scope="col" className="px-3 py-1.5 text-right font-semibold">IVA venta</th>
-                      <th scope="col" className="px-3 py-1.5 text-right font-semibold">Total venta</th>
-                      <th scope="col" className="px-3 py-1.5 font-semibold">Factura / pago</th>
+                      <th scope="col" className="px-3 py-1.5 font-semibold">Pago</th>
+                      <th scope="col" className="px-3 py-1.5 font-semibold">Factura del proveedor</th>
+                      <th scope="col" className="px-3 py-1.5 font-semibold">Solicitud de pago</th>
                     </tr>
                   </thead>
                   {porTipo.map(([tipo, cs]) => (
                     <tbody key={tipo} className="divide-y divide-slate-100 border-t border-slate-200 dark:divide-slate-800 dark:border-slate-800">
                       <tr className="bg-slate-50/70 dark:bg-slate-950/60">
-                        <th scope="rowgroup" colSpan={10} className="px-3 py-1 text-left text-[11px] font-bold uppercase text-slate-700 dark:text-slate-300">
+                        <th scope="rowgroup" colSpan={8} className="px-3 py-1 text-left text-[11px] font-bold uppercase text-slate-700 dark:text-slate-300">
                           {tipo}
                         </th>
                       </tr>
@@ -271,18 +280,23 @@ export function ResumenComercialDialog({
                             {dinero(c.costo, c.costoMoneda)}
                             {c.costoBase && <span className="block text-[10px] lowercase text-slate-500">{c.costoBase}</span>}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">{c.costoIva ? dinero(c.costoIva, c.costoMoneda) : "—"}</td>
-                          <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">{c.costoTotal ? dinero(c.costoTotal, c.costoMoneda) : "—"}</td>
-                          <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">
-                            <span className="font-semibold text-slate-900 dark:text-slate-100">{dinero(c.venta, c.ventaMoneda)}</span>
-                            {(c.ventaBase || c.pdd) && <span className="block text-[10px] lowercase text-slate-500">{[c.ventaBase, c.pdd].filter(Boolean).join(" · ")}</span>}
+                          {/* Cargolink manda el IVA como porcentaje. */}
+                          <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">{c.costoIva ? `${c.costoIva} %` : "—"}</td>
+                          <td className="whitespace-nowrap px-3 py-1.5 text-right font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                            {c.costoTotal ? dinero(c.costoTotal, c.costoMoneda) : dinero(c.costo * c.cantidad, c.costoMoneda)}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">{c.ventaIva ? dinero(c.ventaIva, c.ventaMoneda) : "—"}</td>
-                          <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">{c.ventaTotal ? dinero(c.ventaTotal, c.ventaMoneda) : "—"}</td>
-                          <td className="px-3 py-1.5 text-slate-600 dark:text-slate-300">
-                            {c.factura || "—"}
-                            {c.invoice && <span className="block text-[10px] text-slate-500">Invoice {c.invoice}</span>}
-                          </td>
+                          {(() => {
+                            const p = estadoPago(c.factura);
+                            return (
+                              <>
+                                <td className="px-3 py-1.5">
+                                  <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold ${p.clase}`}>{p.label}</span>
+                                </td>
+                                <td className="px-3 py-1.5 font-mono text-[11px] text-slate-700 dark:text-slate-300">{p.facturaProveedor ?? "—"}</td>
+                                <td className="px-3 py-1.5 font-mono text-[11px] text-slate-700 dark:text-slate-300">{p.solicitud ?? "—"}</td>
+                              </>
+                            );
+                          })()}
                         </tr>
                       ))}
                     </tbody>
