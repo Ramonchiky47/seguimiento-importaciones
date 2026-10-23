@@ -2163,7 +2163,7 @@ async function leerTrackingNaviera(idBooking: number) {
   return { tracking: (tr.data as TrackingNaviera | null) ?? null, solicitud: (so.data as SolicitudTracking | null) ?? null };
 }
 
-// Lo que dice la naviera: el último dato registrado (rastreo de las 2 PM o
+// Lo que dice la naviera: el último dato registrado (rastreo de las 7 PM o
 // consultas anteriores). Solo se consulta de nuevo con "Actualizar desde…".
 export function NavieraSeccion({
   idBooking,

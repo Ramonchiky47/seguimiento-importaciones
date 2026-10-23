@@ -5,8 +5,8 @@
 // Mismas reglas que ~/Agentes/operaciones_maritima/navieras.py.
 
 // buque_carrier de Cargolink -> naviera con agente de rastreo.
-const POR_CARRIER: Record<string, string> = { "157": "MSC", "1497": "Maersk", "1419": "Yang Ming", "2129": "ZIM", "1387": "ZIM", "271": "Evergreen", "1894": "Evergreen" };
-export const NAVIERAS_CON_AGENTE = ["MSC", "Maersk", "Yang Ming", "ZIM", "Evergreen"];
+const POR_CARRIER: Record<string, string> = { "157": "MSC", "1497": "Maersk", "1419": "Yang Ming", "2129": "ZIM", "1387": "ZIM", "271": "Evergreen", "1894": "Evergreen", "29": "CMA CGM", "5": "ONE", "4": "COSCO", "214": "Wan Hai" };
+export const NAVIERAS_CON_AGENTE = ["MSC", "Maersk", "Yang Ming", "ZIM", "Evergreen", "CMA CGM", "ONE", "COSCO"];
 
 // Prefijos de contenedores propios (los rentados, como TEMU o TGBU, no delatan naviera).
 const CONTENEDORES: [string, string[]][] = [
@@ -20,6 +20,7 @@ const CONTENEDORES: [string, string[]][] = [
   ["COSCO", ["CCLU", "CBHU", "CSNU", "OOLU"]],
   ["CMA CGM", ["CMAU", "CGMU", "APZU"]],
   ["ONE", ["ONEU", "NYKU", "KKFU", "MOLU"]],
+  ["Wan Hai", ["WHSU", "WHLU"]],
 ];
 const MBL_OTRAS: Record<string, string> = {
   ZIMU: "ZIM",
@@ -44,6 +45,7 @@ const RAZON_SOCIAL: Record<string, RegExp> = {
   COSCO: /COSCO|OOCL/i,
   "CMA CGM": /CMA|\bAPL\b/i,
   ONE: /OCEAN NETWORK|\bONE\b/i,
+  "Wan Hai": /WAN HAI/i,
 };
 
 export function navieraPorReferencia(mbl: string | null | undefined, contenedores: string | null | undefined): string | null {
@@ -96,6 +98,14 @@ export function ligaRastreo(naviera: string | null, mbl: string | null | undefin
       return `https://www.zim.com/es/tools/track-a-shipment?consnumber=${ref}`;
     case "Evergreen":
       return "https://ct.shipmentlink.com/servlet/TDB1_CargoTracking.do";
+    case "CMA CGM":
+      return "https://www.cma-cgm.com/ebusiness/tracking";
+    case "ONE":
+      return `https://www.one-line.com/one-ecom/manage-shipment/cargo-tracking${ref ? `?trakNoParam=${ref.replace(/^ONEY/, "")}&trakNoTpCdParam=${/^[A-Z]{4}\d{7}$/.test(ref) ? "C" : "B"}` : ""}`;
+    case "COSCO":
+      return `https://elines.coscoshipping.com/ebusiness/cargotracking${ref ? `?trackingType=${/^[A-Z]{4}\d{7}$/.test(ref) ? "CONTAINER" : "BILLOFLADING"}&number=${ref.replace(/^COSU/, "")}` : ""}`;
+    case "Wan Hai":
+      return "https://www.wanhai.com/views/cargo_track_v2/tracking_query.xhtml";
     default:
       return null;
   }

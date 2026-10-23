@@ -22,7 +22,7 @@ export type Propuesta = {
 };
 
 const TIPOS: { tipo: Propuesta["tipo"]; titulo: string; accion: string; ayuda: string; soloAviso?: boolean }[] = [
-  { tipo: "eta_naviera", titulo: "ETA según la naviera (MSC)", accion: "Guardar ETA de la naviera", ayuda: "El agente consultó msc.com a las 2 PM y la ETA no coincide con Cargolink." },
+  { tipo: "eta_naviera", titulo: "ETA según la naviera", accion: "Guardar ETA de la naviera", ayuda: "Los agentes consultan a las navieras a las 7 PM (o desde el detalle) y la ETA no coincide con Cargolink." },
   {
     tipo: "eta_naviera_info",
     titulo: "ETA de la naviera distinta · corregir en Cargolink",
