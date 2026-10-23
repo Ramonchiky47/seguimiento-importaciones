@@ -11,7 +11,7 @@ export type Propuesta = {
   no_booking: string;
   cliente: string | null;
   ejecutivo: string | null;
-  tipo: "transbordo" | "eta" | "eta_finalizar" | "dias" | "eta_naviera" | "eta_naviera_info";
+  tipo: "transbordo" | "eta" | "eta_finalizar" | "dias" | "eta_naviera" | "eta_naviera_info" | "ata_naviera" | "ata_naviera_info";
   valor: string;
   explicacion: string;
   confianza: "alta" | "media" | "baja";
@@ -22,12 +22,25 @@ export type Propuesta = {
 };
 
 const TIPOS: { tipo: Propuesta["tipo"]; titulo: string; accion: string; ayuda: string; soloAviso?: boolean }[] = [
+  {
+    tipo: "ata_naviera",
+    titulo: "ATA según la naviera",
+    accion: "Guardar ATA de la naviera",
+    ayuda: "La naviera ya reporta el arribo y Cargolink no lo tiene (o tiene otra fecha). Se guarda en la etapa ATA, en edición.",
+  },
+  {
+    tipo: "ata_naviera_info",
+    titulo: "ATA por corregir en Cargolink",
+    accion: "",
+    ayuda: "La naviera contradice la ATA de Cargolink (aún no arriba o arribó otro día) o la etapa ATA ya está finalizada: la app no puede borrarla ni cambiarla. Corrígela en Cargolink.",
+    soloAviso: true,
+  },
   { tipo: "eta_naviera", titulo: "ETA según la naviera", accion: "Guardar ETA de la naviera", ayuda: "Los agentes consultan a las navieras a las 7 PM (o desde el detalle) y la ETA no coincide con Cargolink." },
   {
     tipo: "eta_naviera_info",
     titulo: "ETA de la naviera distinta · corregir en Cargolink",
     accion: "",
-    ayuda: "MSC trae otra ETA, pero la etapa ETA ya está finalizada en Cargolink: la app no puede cambiarla. Corrígela en Cargolink.",
+    ayuda: "La naviera trae otra ETA, pero la etapa ETA ya está finalizada en Cargolink: la app no puede cambiarla. Corrígela en Cargolink.",
     soloAviso: true,
   },
   { tipo: "transbordo", titulo: "Transbordo → No aplica", accion: "Marcar No aplica", ayuda: "La naviera casi nunca transborda en esa ruta." },
@@ -43,12 +56,13 @@ const CONFIANZA: Record<Propuesta["confianza"], { label: string; clase: string }
 };
 
 const clave = (p: Propuesta) => `${p.tipo}:${p.id_booking}`;
+const soloAviso = (p: Propuesta) => Boolean(TIPOS.find((t) => t.tipo === p.tipo)?.soloAviso);
 
 export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas: Propuesta[]; puedeEditar: boolean }) {
   const router = useRouter();
   // Por default solo las de confianza alta quedan marcadas.
   const [marcadas, setMarcadas] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(propuestas.map((p) => [clave(p), p.confianza === "alta" && p.tipo !== "eta_naviera_info"])),
+    Object.fromEntries(propuestas.map((p) => [clave(p), p.confianza === "alta" && !soloAviso(p)])),
   );
   const [valores, setValores] = useState<Record<string, string>>(() => Object.fromEntries(propuestas.map((p) => [clave(p), p.valor])));
   const [resultado, setResultado] = useState<Record<string, { ok: boolean; mensaje: string }>>({});
@@ -57,7 +71,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
 
   const pendientes = propuestas.filter((p) => !resultado[clave(p)]?.ok);
   const seleccion = useMemo(
-    () => pendientes.filter((p) => p.tipo !== "eta_naviera_info" && marcadas[clave(p)] && valores[clave(p)]),
+    () => pendientes.filter((p) => !soloAviso(p) && marcadas[clave(p)] && valores[clave(p)]),
     [pendientes, marcadas, valores],
   );
 
@@ -70,6 +84,8 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
       const r =
         p.tipo === "eta_naviera"
           ? await guardarEtapaCargolink(p.id_booking, "eta", "EDICION", { buque_eta: v })
+          : p.tipo === "ata_naviera"
+          ? await guardarEtapaCargolink(p.id_booking, "ata", "EDICION", { fecha_ata: v })
           : p.tipo === "transbordo"
           ? await guardarTransbordosCargolink(p.id_booking, "NO_APLICA", [])
           : p.tipo === "eta"
