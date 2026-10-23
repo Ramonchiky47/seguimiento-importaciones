@@ -469,11 +469,11 @@ export function BookingGuiado({
             />
           </div>
 
+          {fase !== "origen" && <ResumenComercialSeccion idBooking={idBooking} datos={datos} noBooking={String(op.no_booking ?? "")} />}
+
           <section aria-label="Documentos" className="rounded-2xl bg-white px-5 py-4 shadow-sm dark:bg-slate-900">
             <DocumentosCargolink idBooking={idBooking} noBooking={String(op.no_booking ?? "")} puedeSubir={puedeEditar} />
           </section>
-
-          {fase !== "origen" && <ResumenComercialSeccion idBooking={idBooking} datos={datos} noBooking={String(op.no_booking ?? "")} />}
         </aside>
       </div>
 
