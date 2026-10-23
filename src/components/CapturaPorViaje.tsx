@@ -17,6 +17,8 @@ export type BookingViaje = {
   mov_atd: string | null;
   mov_eta: string | null;
   mov_ata: string | null;
+  // Directo o con transbordo: según la naviera; si no hay dato, según la etapa Transbordo de Cargolink.
+  ruta?: { tipo: "directo" | "transbordo" | "sin_dato"; lugares: string[]; fuente: "naviera" | "cargolink" | null };
 };
 export type Viaje = { buque: string; viaje: string; n: number; distintas: boolean; faltan: number; eta: string | null; bookings: BookingViaje[] };
 
@@ -176,6 +178,24 @@ function ViajeTarjeta({ v, puedeEditar }: { v: Viaje; puedeEditar: boolean }) {
                       <span className="block max-w-56 truncate text-xs text-slate-500">
                         {b.cliente ?? "—"} · {b.ejecutivo ?? "Sin ejecutivo"}
                       </span>
+                      {b.ruta && (
+                        <span
+                          title={b.ruta.fuente === "naviera" ? "Según la naviera" : b.ruta.fuente === "cargolink" ? "Según la etapa Transbordo en Cargolink" : undefined}
+                          className={`mt-1 inline-block max-w-56 truncate rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                            b.ruta.tipo === "transbordo"
+                              ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+                              : b.ruta.tipo === "directo"
+                                ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
+                                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                          }`}
+                        >
+                          {b.ruta.tipo === "transbordo"
+                            ? `Con transbordo${b.ruta.lugares.length ? `: ${b.ruta.lugares.join(", ")}` : ""}`
+                            : b.ruta.tipo === "directo"
+                              ? "Directo"
+                              : "Transbordo sin confirmar"}
+                        </span>
+                      )}
                     </td>
                     {CAMPOS.map((c) => {
                       const id = `${b.id_booking}:${c.key}`;

@@ -37,7 +37,31 @@ export default async function ViajesPage({
     supabase.rpc("puedo_editar_cargolink"),
     supabase.rpc("operaciones_maritima_ejecutivos", { p_anio: null, p_types: null, p_q: null, p_tarjeta: null, p_hoy: null }),
   ]);
-  const viajes = (data ?? []) as Viaje[];
+  // Directo o con transbordo por booking: primero lo que dice la naviera; si no
+  // hay, la etapa Transbordo de Cargolink (No aplica = directo).
+  const viajesBase = (data ?? []) as Viaje[];
+  const ids = viajesBase.flatMap((v) => v.bookings.map((b) => b.id_booking));
+  const [{ data: navData }, { data: opsData }] = ids.length
+    ? await Promise.all([
+        supabase.from("tracking_naviera").select("id_booking, transbordos").eq("ok", true).in("id_booking", ids),
+        supabase.from("operaciones_maritima").select("id_booking, mov_tb:datos->>his_mov_transbordo").in("id_booking", ids),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const nav = new Map(((navData ?? []) as { id_booking: number; transbordos: { lugar: string }[] | null }[]).map((x) => [x.id_booking, x.transbordos ?? []]));
+  const mov = new Map(((opsData ?? []) as { id_booking: number; mov_tb: string | null }[]).map((x) => [x.id_booking, x.mov_tb ?? ""]));
+  const viajes: Viaje[] = viajesBase.map((v) => ({
+    ...v,
+    bookings: v.bookings.map((b) => {
+      const t = nav.get(b.id_booking);
+      if (t) {
+        const lugares = t.map((x) => x.lugar).filter(Boolean);
+        return { ...b, ruta: { tipo: lugares.length ? "transbordo" : "directo", lugares, fuente: "naviera" as const } };
+      }
+      const m = mov.get(b.id_booking) ?? "";
+      const tipo = m === "NO_APLICA" ? "directo" : m === "FINALIZADO" || m === "EDICION" ? "transbordo" : "sin_dato";
+      return { ...b, ruta: { tipo, lugares: [], fuente: tipo === "sin_dato" ? null : ("cargolink" as const) } };
+    }),
+  }));
   const availableEjecutivos = Array.from(
     new Set([SIN_EJECUTIVO, ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((x) => x.ejecutivo), ...ejecutivoRaw]),
   ).sort((a, b) => (a === SIN_EJECUTIVO ? -1 : b === SIN_EJECUTIVO ? 1 : a.localeCompare(b, "es")));
