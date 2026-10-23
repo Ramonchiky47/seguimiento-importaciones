@@ -570,9 +570,15 @@ export function BookingGuiado({
                 <>
                   <span className="text-sm text-slate-300">
                     Comparten ATD, ETA y ATA:{" "}
-                    <Link href="/track/viajes" className="font-semibold text-white underline">
+                    <a
+                      href={`/track/viajes?${new URLSearchParams({ buque: datos.buque ?? "", viaje: datos.no_viaje ?? "" }).toString()}`}
+                      target="_blank"
+                      rel="noopener"
+                      className="font-semibold text-white underline"
+                    >
                       captúralos juntos en Por viaje
-                    </Link>
+                      <span className="sr-only"> (abre en otra ventana)</span>
+                    </a>
                     .
                   </span>
                   <div className="flex flex-wrap gap-2">

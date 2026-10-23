@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
@@ -21,10 +22,12 @@ export const dynamic = "force-dynamic";
 export default async function ViajesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[] }>;
+  searchParams: Promise<{ ejecutivo?: string | string[]; estatus?: string | string[]; atd?: string | string[]; buque?: string; viaje?: string }>;
 }) {
-  const { ejecutivo, estatus, atd } = await searchParams;
-  const { filtro: ejecutivoRaw } = ejecutivosTrack(ejecutivo);
+  const { ejecutivo, estatus, atd, buque, viaje } = await searchParams;
+  // ?buque=&viaje= (desde el detalle de un booking): solo ese viaje, de todos los ejecutivos.
+  const soloViaje = buque && viaje ? { buque: buque.trim().toUpperCase(), viaje: viaje.trim().toUpperCase() } : null;
+  const { filtro: ejecutivoRaw } = ejecutivosTrack(soloViaje ? undefined : ejecutivo);
   const estatusSel = estatusBooking(estatus, ESTATUS_TRACK);
   const atdSel = periodoAtd(atd);
   const supabase = await createClient();
@@ -39,7 +42,9 @@ export default async function ViajesPage({
   ]);
   // Directo o con transbordo por booking: primero lo que dice la naviera; si no
   // hay, la etapa Transbordo de Cargolink (No aplica = directo).
-  const viajesBase = (data ?? []) as Viaje[];
+  const viajesBase = ((data ?? []) as Viaje[]).filter(
+    (v) => !soloViaje || (v.buque.trim().toUpperCase() === soloViaje.buque && v.viaje.trim().toUpperCase() === soloViaje.viaje),
+  );
   const ids = viajesBase.flatMap((v) => v.bookings.map((b) => b.id_booking));
   const [{ data: navData }, { data: opsData }] = ids.length
     ? await Promise.all([
@@ -77,11 +82,27 @@ export default async function ViajesPage({
         Bookings que vienen en el mismo buque y viaje comparten ATD, ETA y ATA. Revisa la propuesta, marca qué cambiar y
         confirma: nada se escribe en Cargolink antes de confirmar.
       </p>
-      <div className="flex flex-wrap items-center gap-3">
-        <MultiSelectFilter paramName="atd" label="ATD real" options={PERIODO_ATD_OPCIONES} current={atdSel.seleccion} />
-        <MultiSelectFilter paramName="estatus" label="Estatus" options={ESTATUS_OPCIONES} current={estatusSel.seleccion} />
-        <TrackEjecutivoFilter options={availableEjecutivos} filtro={ejecutivoRaw} hrefTodos={hrefTodos} />
-      </div>
+      {soloViaje ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">
+            Viaje {soloViaje.buque} · {soloViaje.viaje}
+          </h2>
+          <Link href="/track/viajes" className="text-sm font-semibold text-blue-700 underline dark:text-blue-400">
+            Ver todos los viajes
+          </Link>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          <MultiSelectFilter paramName="atd" label="ATD real" options={PERIODO_ATD_OPCIONES} current={atdSel.seleccion} />
+          <MultiSelectFilter paramName="estatus" label="Estatus" options={ESTATUS_OPCIONES} current={estatusSel.seleccion} />
+          <TrackEjecutivoFilter options={availableEjecutivos} filtro={ejecutivoRaw} hrefTodos={hrefTodos} />
+        </div>
+      )}
+      {soloViaje && !error && viajes.length === 0 && (
+        <p className="rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+          Este viaje ya no tiene bookings de Track por capturar.
+        </p>
+      )}
       {error && <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">Error al cargar: {error.message}</p>}
       <CapturaPorViaje viajes={viajes} puedeEditar={puedeEditar === true} />
     </main>
