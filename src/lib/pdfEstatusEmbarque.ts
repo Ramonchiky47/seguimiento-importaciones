@@ -51,18 +51,18 @@ const NARANJA = rgb(0.78, 0.35, 0.15);
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const MESES_LARGO = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
-function fecha(iso: string | null | undefined): string {
+export function fecha(iso: string | null | undefined): string {
   const m = (iso ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m ? `${Number(m[3])} ${MESES[Number(m[2]) - 1]} ${m[1]}` : "—";
 }
-const corta = (iso: string | null | undefined) => {
+export const corta = (iso: string | null | undefined) => {
   const m = (iso ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m ? `${Number(m[3])} ${MESES[Number(m[2]) - 1]}` : "—";
 };
-const dias = (a: string, b: string) => Math.round((Date.parse(b.slice(0, 10)) - Date.parse(a.slice(0, 10))) / 86400000);
+export const dias = (a: string, b: string) => Math.round((Date.parse(b.slice(0, 10)) - Date.parse(a.slice(0, 10))) / 86400000);
 
 // Helvetica estándar solo admite WinAnsi (español incluido): el resto se quita.
-const limpio = (s: string | null | undefined) =>
+export const limpio = (s: string | null | undefined) =>
   (s ?? "")
     .replace(/[→➔]/g, "-")
     .replace(/[“”]/g, '"')
@@ -89,13 +89,13 @@ const TRADUCCION: [RegExp, string][] = [
   [/(import|full).*(gate[- ]?out|out for delivery|delivered|released)|import to consignee|delivered/i, "Salida a entrega"],
   [/empty.*(return|gate[- ]?in)|empty returned|gate[- ]?in of empty/i, "Contenedor vacío devuelto"],
 ];
-function enEspanol(evento: string): string {
+export function enEspanol(evento: string): string {
   const e = evento.trim();
   for (const [re, es] of TRADUCCION) if (re.test(e)) return es;
   return e.charAt(0).toUpperCase() + e.slice(1).toLowerCase();
 }
 
-function texto(page: PDFPage, s: string, x: number, y: number, font: PDFFont, size: number, color = NEGRO, centro = false, maxW?: number) {
+export function texto(page: PDFPage, s: string, x: number, y: number, font: PDFFont, size: number, color = NEGRO, centro = false, maxW?: number) {
   let t = limpio(s);
   if (maxW) while (t.length > 3 && font.widthOfTextAtSize(t, size) > maxW) t = `${t.replace(/\.\.\.$/, "").slice(0, -1)}...`;
   const w = font.widthOfTextAtSize(t, size);
@@ -104,7 +104,7 @@ function texto(page: PDFPage, s: string, x: number, y: number, font: PDFFont, si
 
 // Diagrama: banda azul clara, línea de la ruta (recorrido continuo, pendiente
 // punteado), puntos de origen / transbordos / destino y el buque donde va.
-function diagrama(page: PDFPage, d: DatosEstatus, y: number, f: PDFFont, fb: PDFFont, ancho: number, margen: number) {
+export function diagrama(page: PDFPage, d: DatosEstatus, y: number, f: PDFFont, fb: PDFFont, ancho: number, margen: number) {
   const x0 = margen + 40;
   const x1 = margen + ancho - 40;
   const banda = { x: margen, y: y - 30, w: ancho, h: 46 };

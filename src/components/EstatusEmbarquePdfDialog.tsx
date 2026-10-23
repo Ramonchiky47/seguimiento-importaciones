@@ -4,12 +4,27 @@ import { useEffect, useRef } from "react";
 
 // Visor del PDF "Estatus de embarque" (AV2 Logistics → cliente), con descarga.
 // La app no lo envía: el ejecutivo lo descarga y lo comparte con su cliente.
-export function EstatusEmbarquePdfDialog({ idBooking, noBooking, onCerrar }: { idBooking: number; noBooking: string; onCerrar: () => void }) {
+// También muestra el "Pulso de la operación" (api, titulo y nota).
+export function EstatusEmbarquePdfDialog({
+  idBooking,
+  noBooking,
+  onCerrar,
+  api = "/api/track/estatus-embarque",
+  titulo = "Estatus de embarque",
+  nota = "para compartir con el cliente",
+}: {
+  idBooking: number;
+  noBooking: string;
+  onCerrar: () => void;
+  api?: string;
+  titulo?: string;
+  nota?: string;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     ref.current?.showModal();
   }, []);
-  const url = (descargar = false) => `/api/track/estatus-embarque?id=${idBooking}${descargar ? "&descargar=1" : ""}`;
+  const url = (descargar = false) => `${api}?id=${idBooking}${descargar ? "&descargar=1" : ""}`;
 
   return (
     <dialog
@@ -25,9 +40,9 @@ export function EstatusEmbarquePdfDialog({ idBooking, noBooking, onCerrar }: { i
     >
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3 dark:border-slate-800">
         <div className="min-w-0">
-          <p className="text-xs text-slate-500 dark:text-slate-400">{noBooking} · para compartir con el cliente</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{noBooking} · {nota}</p>
           <h3 id="estatus-pdf-titulo" className="text-base font-semibold text-slate-900 dark:text-slate-50">
-            Estatus de embarque (PDF)
+            {titulo} (PDF)
           </h3>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -52,7 +67,7 @@ export function EstatusEmbarquePdfDialog({ idBooking, noBooking, onCerrar }: { i
           </button>
         </div>
       </div>
-      <iframe src={url()} title={`Estatus de embarque ${noBooking}`} className="min-h-0 w-full flex-1 bg-slate-100 dark:bg-slate-950" />
+      <iframe src={url()} title={`${titulo} ${noBooking}`} className="min-h-0 w-full flex-1 bg-slate-100 dark:bg-slate-950" />
     </dialog>
   );
 }

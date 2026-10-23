@@ -80,6 +80,7 @@ export function BookingGuiado({
   const [aviso, setAviso] = useState<string | null>(null);
   const [pdf, setPdf] = useState(false);
   const [pdfEstatus, setPdfEstatus] = useState(false);
+  const [pdfPulso, setPdfPulso] = useState(false);
   const [refresco, setRefresco] = useState<{ estado: "cargando" | "ok" | "error"; mensaje: string }>({
     estado: "cargando",
     mensaje: "Actualizando desde Cargolink…",
@@ -238,12 +239,30 @@ export function BookingGuiado({
           >
             PDF estatus para cliente
           </button>
+          <button
+            type="button"
+            onClick={() => setPdfPulso(true)}
+            title="Resumen ejecutivo interno: naviera, Comercial y Operaciones"
+            className="min-h-11 rounded-lg border border-white/40 px-4 text-sm font-bold text-white hover:bg-white/10"
+          >
+            Pulso de la operación
+          </button>
           <button type="button" onClick={() => setPdf(true)} className="min-h-11 rounded-lg bg-white px-4 text-sm font-bold text-[#16232f]">
             PDF NOT arribo
           </button>
         </div>
       </header>
       {pdfEstatus && <EstatusEmbarquePdfDialog idBooking={idBooking} noBooking={String(op.no_booking ?? "")} onCerrar={() => setPdfEstatus(false)} />}
+      {pdfPulso && (
+        <EstatusEmbarquePdfDialog
+          idBooking={idBooking}
+          noBooking={String(op.no_booking ?? "")}
+          api="/api/track/pulso-operacion"
+          titulo="Pulso de la operación"
+          nota="resumen ejecutivo para Dirección · uso interno"
+          onCerrar={() => setPdfPulso(false)}
+        />
+      )}
       {pdf && <NotArriboDialog idBooking={idBooking} noBooking={String(op.no_booking ?? "")} onCerrar={() => setPdf(false)} />}
 
       {aviso && (
