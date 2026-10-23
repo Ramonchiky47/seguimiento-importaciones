@@ -2,7 +2,7 @@
 // forma común para la ventana "Información de la naviera": puerto de carga,
 // puerto de descarga, buque y eventos con fecha, lugar y si ya ocurrieron.
 // MSC, Maersk, Yang Ming y ZIM guardan su respuesta original; los agentes que
-// leen la página (Evergreen, CMA, ONE, COSCO, Wan Hai) guardan respuesta.detalle.
+// leen la página (Evergreen, CMA, ONE, COSCO, Wan Hai, Hapag) guardan respuesta.detalle.
 
 export type EventoNaviera = { fecha: string | null; evento: string; lugar: string | null; real: boolean; buque?: string | null };
 export type DetalleNaviera = { pol: string | null; pod: string | null; buque: string | null; eventos: EventoNaviera[] };
@@ -119,7 +119,13 @@ export function detalleNaviera(naviera: string, respuesta: unknown): DetalleNavi
       pol: txt(d.pol) || null,
       pod: txt(d.pod) || null,
       buque: txt(d.buque) || null,
-      eventos: arr(d.eventos).map((e) => ({ fecha: fecha(e.fecha), evento: txt(e.evento), lugar: txt(e.lugar) || null, real: Boolean(e.real) })),
+      eventos: arr(d.eventos).map((e) => ({
+        fecha: fecha(e.fecha),
+        evento: txt(e.evento),
+        lugar: txt(e.lugar) || null,
+        real: Boolean(e.real),
+        buque: txt(e.buque) || null,
+      })),
     };
   }
   switch (naviera.toUpperCase()) {
