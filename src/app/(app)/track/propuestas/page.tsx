@@ -29,7 +29,7 @@ export default async function PropuestasPage({
   const atdSel = periodoAtd(atd);
   const supabase = await createClient();
   const [{ data, error }, { data: puedeEditar }, { data: ejecutivosData }, { data: vaciosData }] = await Promise.all([
-    supabase.rpc("track_propuestas", {
+    supabase.rpc("track_propuestas_v2", {
       p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
       p_estatus: estatusSel.codigos,
       p_atd: atdSel.codigos,

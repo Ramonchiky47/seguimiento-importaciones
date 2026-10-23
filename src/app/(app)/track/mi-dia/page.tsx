@@ -93,41 +93,11 @@ export default async function MiDiaPage({
   const from = (currentPage - 1) * PAGE_SIZE;
 
 
-  const { data, error } = await supabase.rpc("track_mi_dia_q", {
+  const filtrosTrack = {
     p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
     p_estatus: estatusSel.codigos,
     p_atd: atdSel.codigos,
-    p_q: busqueda || null,
-    p_nivel: nivelActivo,
-    p_limit: PAGE_SIZE,
-    p_offset: from,
-  });
-  const resultado = (data ?? { conteos: {}, total: 0, filas: [] }) as MiDia;
-  const { data: conteosData } = await supabase.rpc("track_conteos_q", {
-    p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
-    p_estatus: estatusSel.codigos,
-    p_atd: atdSel.codigos,
-    p_q: busqueda || null,
-  });
-  const c = (conteosData ?? null) as ConteosTrack | null;
-  const { data: viajesData } = await supabase.rpc("track_viajes", {
-    p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
-    p_estatus: estatusSel.codigos,
-    p_atd: atdSel.codigos,
-  });
-  const { data: propuestasData } = await supabase.rpc("track_propuestas", {
-    p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
-    p_estatus: estatusSel.codigos,
-    p_atd: atdSel.codigos,
-  });
-  const totalPropuestas = ((propuestasData ?? []) as unknown[]).length;
-  const { data: vaciosData } = await supabase.rpc("track_vacios", {
-    p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
-    p_estatus: estatusSel.codigos,
-    p_atd: atdSel.codigos,
-  });
-  const vaciosAtencion = ((vaciosData ?? []) as { estado: string }[]).filter((v) => v.estado !== "en_tiempo").length;
-  const viajesPendientes = ((viajesData ?? []) as { distintas: boolean; faltan: number }[]).filter((v) => v.distintas || v.faltan > 0).length;
+  };
 
   // Por zarpar sin nada vencido: sin ATD ni ETA todavía no generan
   // compromisos, así que no salen arriba; se listan al final.
@@ -151,9 +121,30 @@ export default async function MiDiaPage({
       `no_booking.ilike.%${busqueda}%,cliente.ilike.%${busqueda}%,ejecutivo.ilike.%${busqueda}%`,
     );
   }
-  const { data: porZarparData, count: porZarparCount } = await porZarparQuery
-    .order("fecha", { ascending: true, nullsFirst: false })
-    .limit(200);
+
+  // Todas las consultas a la vez: la página tarda lo que la más lenta, no la suma.
+  const [
+    { data, error },
+    { data: conteosData },
+    { data: viajesData },
+    { data: propuestasData },
+    { data: vaciosData },
+    { data: porZarparData, count: porZarparCount },
+    { data: ejecutivosData },
+  ] = await Promise.all([
+    supabase.rpc("track_mi_dia_q", { ...filtrosTrack, p_q: busqueda || null, p_nivel: nivelActivo, p_limit: PAGE_SIZE, p_offset: from }),
+    supabase.rpc("track_conteos_q", { ...filtrosTrack, p_q: busqueda || null }),
+    supabase.rpc("track_viajes", filtrosTrack),
+    supabase.rpc("track_propuestas_v2", filtrosTrack),
+    supabase.rpc("track_vacios", filtrosTrack),
+    porZarparQuery.order("fecha", { ascending: true, nullsFirst: false }).limit(200),
+    supabase.rpc("operaciones_maritima_ejecutivos", { p_anio: null, p_types: null, p_q: null, p_tarjeta: null, p_hoy: null }),
+  ]);
+  const resultado = (data ?? { conteos: {}, total: 0, filas: [] }) as MiDia;
+  const c = (conteosData ?? null) as ConteosTrack | null;
+  const totalPropuestas = ((propuestasData ?? []) as unknown[]).length;
+  const vaciosAtencion = ((vaciosData ?? []) as { estado: string }[]).filter((v) => v.estado !== "en_tiempo").length;
+  const viajesPendientes = ((viajesData ?? []) as { distintas: boolean; faltan: number }[]).filter((v) => v.distintas || v.faltan > 0).length;
   const porZarpar = (porZarparData ?? []) as {
     id_booking: number;
     no_booking: string;
@@ -168,13 +159,6 @@ export default async function MiDiaPage({
   const totalCount = resultado.total;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
-  const { data: ejecutivosData } = await supabase.rpc("operaciones_maritima_ejecutivos", {
-    p_anio: null,
-    p_types: null,
-    p_q: null,
-    p_tarjeta: null,
-    p_hoy: null,
-  });
   const availableEjecutivos = Array.from(
     new Set([SIN_EJECUTIVO, ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((r) => r.ejecutivo), ...ejecutivoRaw]),
   ).sort((a, b) => (a === SIN_EJECUTIVO ? -1 : b === SIN_EJECUTIVO ? 1 : a.localeCompare(b, "es")));

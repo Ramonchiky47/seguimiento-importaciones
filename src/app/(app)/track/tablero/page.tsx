@@ -110,51 +110,30 @@ export default async function TableroPage({
   const estatusSel = estatusBooking(estatus, ESTATUS_TRACK);
   const atdSel = periodoAtd(atd);
 
-  const [{ data, error }, { data: ejecutivosData }, { data: conteosData }] = await Promise.all([
-    supabase.rpc("track_tablero", {
-      p_dias: Number(periodoActivo),
-      p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
-      p_estatus: estatusSel.codigos,
-      p_atd: atdSel.codigos,
-    }),
-    supabase.rpc("operaciones_maritima_ejecutivos", {
-      p_anio: null,
-      p_types: null,
-      p_q: null,
-      p_tarjeta: null,
-      p_hoy: null,
-    }),
-    supabase.rpc("track_conteos_q", {
-      p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
-      p_estatus: estatusSel.codigos,
-      p_atd: atdSel.codigos,
-      p_q: null,
-    }),
-  ]);
-  // Mismos conteos de compromisos que Mi día y propuestas por confirmar.
-  const [{ data: miDiaData }, { data: propuestasData }] = await Promise.all([
-    supabase.rpc("track_mi_dia_q", {
-      p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
-      p_estatus: estatusSel.codigos,
-      p_atd: atdSel.codigos,
-      p_q: null,
-      p_nivel: "pendientes",
-      p_limit: 0,
-      p_offset: 0,
-    }),
-    supabase.rpc("track_propuestas", {
-      p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
-      p_estatus: estatusSel.codigos,
-      p_atd: atdSel.codigos,
-    }),
-  ]);
-  const niveles = ((miDiaData as { conteos?: Record<string, number> } | null)?.conteos ?? {}) as Record<string, number>;
-  const totalPropuestas = ((propuestasData ?? []) as unknown[]).length;
-  const { data: vaciosData } = await supabase.rpc("track_vacios", {
+  const filtrosTrack = {
     p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
     p_estatus: estatusSel.codigos,
     p_atd: atdSel.codigos,
-  });
+  };
+  // Todas las consultas a la vez: la página tarda lo que la más lenta, no la suma.
+  // Mi día y propuestas dan los mismos conteos de compromisos que sus pantallas.
+  const [
+    { data, error },
+    { data: ejecutivosData },
+    { data: conteosData },
+    { data: miDiaData },
+    { data: propuestasData },
+    { data: vaciosData },
+  ] = await Promise.all([
+    supabase.rpc("track_tablero_v2", { p_dias: Number(periodoActivo), ...filtrosTrack }),
+    supabase.rpc("operaciones_maritima_ejecutivos", { p_anio: null, p_types: null, p_q: null, p_tarjeta: null, p_hoy: null }),
+    supabase.rpc("track_conteos_q", { ...filtrosTrack, p_q: null }),
+    supabase.rpc("track_mi_dia_q", { ...filtrosTrack, p_q: null, p_nivel: "pendientes", p_limit: 0, p_offset: 0 }),
+    supabase.rpc("track_propuestas_v2", filtrosTrack),
+    supabase.rpc("track_vacios", filtrosTrack),
+  ]);
+  const niveles = ((miDiaData as { conteos?: Record<string, number> } | null)?.conteos ?? {}) as Record<string, number>;
+  const totalPropuestas = ((propuestasData ?? []) as unknown[]).length;
   const vaciosAtencion = ((vaciosData ?? []) as { estado: string }[]).filter((v) => v.estado !== "en_tiempo").length;
   const r = (data ?? null) as Tablero | null;
   const c = (conteosData ?? null) as ConteosTrack | null;
