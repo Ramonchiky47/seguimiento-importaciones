@@ -37,7 +37,7 @@ export default async function TrackInteractivoBooking({ params }: { params: Prom
         .order("no_booking")
         .limit(20)
     : { data: [] };
-  // Los que también salen en Por viaje (Track: ejecutivos de la prueba, ATD
+  // Los que también salen en Por viaje (Track: ATD
   // desde el corte); el resto se muestra aparte con el motivo.
   const idsViaje = ((mismoBuque ?? []) as { id_booking: number }[]).map((b) => b.id_booking);
   const { data: enTrack } = idsViaje.length
@@ -47,7 +47,7 @@ export default async function TrackInteractivoBooking({ params }: { params: Prom
   const viaje_ = ((mismoBuque ?? []) as { id_booking: number; no_booking: string; cliente: string | null; ejecutivo: string | null }[]).map((b) => ({
     ...b,
     motivo: !periodo.has(b.id_booking)
-      ? `${b.ejecutivo ?? "Sin ejecutivo"} no está en la prueba de Track`
+      ? "No está en Track"
       : periodo.get(b.id_booking) !== "desde"
         ? "ATD antes del corte del 15 sep"
         : null,
