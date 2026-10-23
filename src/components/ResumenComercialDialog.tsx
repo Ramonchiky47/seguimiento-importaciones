@@ -205,7 +205,7 @@ export function ResumenComercialDialog({
           {/* Arriba: costo total y cómo van los pagos a proveedores. */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
-              ["Costo total", dinero(r.totales.costo), "text-slate-900 dark:text-slate-50"],
+              ["Costo sin IVA", dinero(r.totales.costo, r.totales.moneda ?? ""), "text-slate-900 dark:text-slate-50"],
               ["Pagados", String(conteo.pagado), "text-green-800 dark:text-green-300"],
               ["Pago pendiente", String(conteo.pendiente), "text-amber-800 dark:text-amber-300"],
               ["Sin solicitud de pago", String(conteo.sin), "text-slate-700 dark:text-slate-200"],

@@ -165,9 +165,11 @@ export async function GET(request: Request) {
           ventaMoneda: c.ventaMoneda,
           ...pago(c.factura),
         })),
+        // Sin lectura de Cargolink: el profit del llenado del booking de la última sincronización.
         venta: comercial.totales.venta,
         costo: comercial.totales.costo,
-        profit: comercial.totales.profit,
+        profit: comercial.ok ? comercial.totales.profit : n(datos.profit_estimado),
+        moneda: comercial.totales.moneda,
         cambios: comercial.cambios.map((c) => c.texto),
         avisoCargolink: comercial.avisoCargolink,
         original: base

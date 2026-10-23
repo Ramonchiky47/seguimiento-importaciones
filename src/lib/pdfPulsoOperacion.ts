@@ -25,21 +25,6 @@ export type ConceptoOriginal = Pick<ConceptoPulso, "tipo" | "concepto" | "provee
   cantidad: number;
 };
 
-// Venta, costo, profit y margen por moneda (Cargolink no convierte entre monedas).
-export function totalesPorMoneda(conceptos: ConceptoOriginal[]) {
-  const t = new Map<string, { venta: number; costo: number }>();
-  const de = (m: string) => t.get(m || "—") ?? t.set(m || "—", { venta: 0, costo: 0 }).get(m || "—")!;
-  for (const c of conceptos) {
-    de(c.ventaMoneda).venta += c.venta * (c.cantidad || 1);
-    de(c.costoMoneda).costo += c.costo * (c.cantidad || 1);
-  }
-  return [...t.entries()]
-    .map(([moneda, x]) => ({ moneda, ...x, profit: x.venta - x.costo, margen: x.venta ? Math.round((1000 * (x.venta - x.costo)) / x.venta) / 10 : null }))
-    .sort((a, b) => b.venta - a.venta);
-}
-const textoTotales = (tt: ReturnType<typeof totalesPorMoneda>) =>
-  tt.map((x) => `${dinero(x.profit, x.moneda)}${x.margen !== null ? ` (${x.margen} %)` : ""}`).join(" + ");
-
 export type DatosPulso = {
   // Datos del embarque y de la ruta (los mismos del PDF para el cliente).
   ruta: DatosEstatus;
@@ -73,13 +58,15 @@ export type DatosPulso = {
     ok: boolean;
     mensaje: string;
     conceptos: ConceptoPulso[];
+    // Como en el llenado del booking: sin impuestos; costo = venta − profit.
     venta: number | null;
     costo: number | null;
     profit: number | null;
+    moneda: string | null;
     cambios: string[];
     avisoCargolink: boolean;
     // Lo que Comercial capturó de origen (la revisión de Operaciones), si
-    // después cambió: con eso se conoce el profit aunque hayan quitado la venta.
+    // después cambió. Cargolink guarda ahí precios unitarios.
     original: { conceptos: ConceptoOriginal[]; tomadaAt: string | null; revisadoPor: string | null } | null;
   };
   facturacion: {
@@ -161,16 +148,15 @@ export function puntosDeAtencion(d: DatosPulso): { nivel: Nivel; texto: string }
   const c = d.comercial;
   if (!c.ok) p.push({ nivel: "ambar", texto: `No se pudo leer el resumen comercial de Cargolink: ${c.mensaje}` });
   else {
-    const orig = c.original?.conceptos.length ? totalesPorMoneda(c.original.conceptos) : null;
-    if (c.conceptos.length === 0 && orig) {
-      p.push({ nivel: "rojo", texto: `Comercial quitó los conceptos del booking; en la captura de origen${c.original?.tomadaAt ? ` (${fecha(c.original.tomadaAt)})` : ""} el profit era ${textoTotales(orig)}.` });
+    const nOrig = c.original?.conceptos.length ?? 0;
+    if (c.conceptos.length === 0 && nOrig) {
+      p.push({ nivel: "rojo", texto: `Comercial quitó los conceptos del booking (en la captura de origen${c.original?.tomadaAt ? ` del ${fecha(c.original.tomadaAt)}` : ""} había ${nOrig}).` });
     } else if (c.conceptos.length === 0) p.push({ nivel: "rojo", texto: "Comercial no ha capturado conceptos de costo y venta." });
-    else if (orig && !c.venta) p.push({ nivel: "rojo", texto: `El booking ya no tiene venta; en la captura de origen el profit era ${textoTotales(orig)}.` });
     const pend = c.conceptos.filter((x) => x.pago === "pendiente");
     if (pend.length) p.push({ nivel: "ambar", texto: `${pend.length} pago(s) a proveedores solicitado(s) y pendiente(s): ${pend.map((x) => x.concepto).join(", ")}.` });
     const sin = c.conceptos.filter((x) => x.pago === "sin" && x.costo > 0);
     if (sin.length) p.push({ nivel: "info", texto: `${sin.length} costo(s) sin solicitud de pago aún: ${sin.map((x) => x.concepto).join(", ")}.` });
-    if ((c.profit ?? 0) < 0) p.push({ nivel: "rojo", texto: `Profit negativo: ${dinero(c.profit)}.` });
+    if ((c.profit ?? 0) < 0) p.push({ nivel: "rojo", texto: `Profit negativo: ${dinero(c.profit, c.moneda ?? "")}.` });
     if (c.cambios.length) p.push({ nivel: "rojo", texto: `Comercial cambió el booking después de la revisión de Operaciones (${c.cambios.length} cambio(s)).` });
     if (c.avisoCargolink) p.push({ nivel: "ambar", texto: "Cargolink avisa un cambio de servicio sin revisar." });
   }
@@ -329,9 +315,6 @@ export async function pdfPulsoOperacion(d: DatosPulso): Promise<Uint8Array> {
   const pendientes = d.tareas.filter((t) => t.estado === "falta" || t.estado === "alerta").length;
   const c = d.comercial;
   const margen = c.ok && c.venta ? Math.round((1000 * (c.profit ?? 0)) / c.venta) / 10 : null;
-  const original = c.original?.conceptos.length ? totalesPorMoneda(c.original.conceptos) : null;
-  // Sin venta actual: el profit de la captura de origen.
-  const profitOrigen = c.ok && !c.venta && original?.length ? original[0] : null;
   const tiposEquipo = [...new Set(d.equipos.map((e) => e.tipo).filter(Boolean))].join(", ");
   const kpis: { t: string; v: string; s: string; color?: RGB }[] = [
     {
@@ -345,19 +328,12 @@ export async function pdfPulsoOperacion(d: DatosPulso): Promise<Uint8Array> {
       s: r.atd ? `Zarpó ${corta(r.atd)}` : salida ? `Zarpe est. ${corta(salida)}` : "Sin zarpe",
     },
     { t: "CONTENEDORES", v: String(d.equipos.length || "—"), s: tiposEquipo || "—" },
-    profitOrigen
-      ? {
-          t: "PROFIT DE ORIGEN",
-          v: dinero(profitOrigen.profit, profitOrigen.moneda),
-          s: `${profitOrigen.margen ?? 0} % margen · hoy sin venta`.slice(0, 30),
-          color: profitOrigen.profit < 0 ? ROJO_ALERTA : AMBAR,
-        }
-      : {
-          t: "PROFIT",
-          v: c.ok ? dinero(c.profit) : "—",
-          s: margen !== null ? `${margen} % margen` : c.ok ? "Sin venta" : "Sin datos",
-          color: (c.profit ?? 0) < 0 ? ROJO_ALERTA : VERDE,
-        },
+    {
+      t: "PROFIT",
+      v: c.profit !== null ? dinero(c.profit, c.moneda ?? "") : "—",
+      s: margen !== null ? `${margen} % de margen` : c.ok ? "Sin venta" : "Del booking (sin Cargolink)",
+      color: (c.profit ?? 0) < 0 ? ROJO_ALERTA : VERDE,
+    },
     {
       t: "PENDIENTES OPERATIVOS",
       v: String(pendientes),
@@ -490,9 +466,9 @@ export async function pdfPulsoOperacion(d: DatosPulso): Promise<Uint8Array> {
     const sin = c.conceptos.filter((x) => x.pago === "sin").length;
     l.espacio(40);
     const tot: [string, string, RGB][] = [
-      ["VENTA", dinero(c.venta), NEGRO],
-      ["COSTO", dinero(c.costo), NEGRO],
-      ["PROFIT", `${dinero(c.profit)}${margen !== null ? ` (${margen} %)` : ""}`, (c.profit ?? 0) < 0 ? ROJO_ALERTA : VERDE],
+      ["VENTA SIN IVA", dinero(c.venta, c.moneda ?? ""), NEGRO],
+      ["COSTO SIN IVA", dinero(c.costo, c.moneda ?? ""), NEGRO],
+      ["PROFIT", `${dinero(c.profit, c.moneda ?? "")}${margen !== null ? ` (${margen} %)` : ""}`, (c.profit ?? 0) < 0 ? ROJO_ALERTA : VERDE],
       ["PAGOS A PROVEEDORES", `${pagados} pagados · ${pend} pend. · ${sin} sin sol.`, pend ? AMBAR : NEGRO],
     ];
     const tw = (W - 3 * 8) / 4;
@@ -504,37 +480,13 @@ export async function pdfPulsoOperacion(d: DatosPulso): Promise<Uint8Array> {
     });
     l.y -= 40;
     if (c.conceptos.length) tablaComercial(l, c);
-    if (original?.length && c.original) {
-      l.espacio(60);
+    // Sin conceptos actuales: cómo los capturó Comercial de origen.
+    if (!c.conceptos.length && c.original?.conceptos.length) {
+      l.espacio(50);
       const quien = [c.original.tomadaAt ? fecha(c.original.tomadaAt) : null, c.original.revisadoPor].filter(Boolean).join(" · ");
-      texto(l.page, `Captura de origen de Comercial${quien ? ` (${quien})` : ""}`, M, l.y, l.fb, 9.5, NEGRO);
+      texto(l.page, `Captura de origen de Comercial${quien ? ` (${quien})` : ""} · precios unitarios`, M, l.y, l.fb, 9.5, NEGRO);
       l.y -= 14;
-      for (const x of original) {
-        l.espacio(13);
-        texto(
-          l.page,
-          `${x.moneda}: venta ${dinero(x.venta)} · costo ${dinero(x.costo)} · profit ${dinero(x.profit)}${x.margen !== null ? ` · margen ${x.margen} %` : ""}`,
-          M + 6,
-          l.y,
-          l.f,
-          9,
-          x.profit < 0 ? ROJO_ALERTA : NEGRO,
-        );
-        l.y -= 13;
-      }
-      if (c.venta) {
-        texto(l.page, `Hoy en Cargolink: profit ${dinero(c.profit)}${margen !== null ? ` · margen ${margen} %` : ""}.`, M + 6, l.y, l.f, 9, GRIS);
-        l.y -= 13;
-      }
-      // Sin conceptos actuales: el detalle como se capturó.
-      if (!c.conceptos.length) {
-        l.y -= 4;
-        tablaComercial(l, {
-          ...c,
-          conceptos: c.original.conceptos.map((x) => ({ ...x, costo: x.costo * (x.cantidad || 1), venta: x.venta * (x.cantidad || 1), pago: "sin" as const, solicitud: null })),
-        }, false);
-      }
-      l.y -= 4;
+      tablaComercial(l, { conceptos: c.original.conceptos.map((x) => ({ ...x, pago: "sin" as const, solicitud: null })) }, false);
     }
     for (const cambio of c.cambios) {
       const lineas = renglones(`Cambio de Comercial sin revisar: ${cambio}`, f, 8.5, W - 14);
@@ -542,7 +494,7 @@ export async function pdfPulsoOperacion(d: DatosPulso): Promise<Uint8Array> {
       lineas.forEach((ln, i) => texto(l.page, ln, M + 6, l.y - i * 11, f, 8.5, ROJO_ALERTA));
       l.y -= lineas.length * 11 + 2;
     }
-    texto(l.page, "Totales según Cargolink.", M, l.y, f, 7.5, GRIS);
+    texto(l.page, "Totales como en el llenado del booking en Cargolink (sin impuestos). Conceptos a precio unitario.", M, l.y, f, 7.5, GRIS);
     l.y -= 14;
   }
 

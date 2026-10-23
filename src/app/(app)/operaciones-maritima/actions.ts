@@ -861,7 +861,9 @@ export type ResumenComercial = {
   ok: boolean;
   mensaje: string;
   conceptos: ConceptoComercial[];
-  totales: { venta: number | null; costo: number | null; profit: number | null };
+  // Como en el llenado del booking (sin impuestos): profit = profit_estimado,
+  // venta sin IVA y costo = venta − profit, en la moneda principal.
+  totales: { venta: number | null; costo: number | null; profit: number | null; moneda: string | null };
   datos: { label: string; valor: string }[];
   firma: FirmaComercial | null;
   cambios: CambioComercial[];
@@ -928,12 +930,23 @@ function compararFirmas(base: FirmaComercial, actual: FirmaComercial): CambioCom
   return cambios;
 }
 
+// La moneda con más venta manda; las otras se convierten con el tipo de cambio del booking.
+function totalesSinIva(ventaPorMoneda: Map<string, number>, tc: number, profit: number | null): ResumenComercial["totales"] {
+  const [moneda] = [...ventaPorMoneda.entries()].sort((a, b) => b[1] - a[1])[0] ?? [null];
+  let venta = 0;
+  for (const [m, v] of ventaPorMoneda) {
+    venta += m === moneda || !tc ? v : moneda === "USD" && m === "MXN" ? v / tc : moneda === "MXN" && m === "USD" ? v * tc : v;
+  }
+  venta = Math.round(venta * 100) / 100;
+  return { venta, costo: profit === null ? null : Math.round((venta - profit) * 100) / 100, profit, moneda };
+}
+
 export async function resumenComercialCargolink(idBooking: number): Promise<ResumenComercial> {
   const vacio: ResumenComercial = {
     ok: false,
     mensaje: "",
     conceptos: [],
-    totales: { venta: null, costo: null, profit: null },
+    totales: { venta: null, costo: null, profit: null, moneda: null },
     datos: [],
     firma: null,
     cambios: [],
@@ -954,9 +967,20 @@ export async function resumenComercialCargolink(idBooking: number): Promise<Resu
   try {
     const session = await loginCargolink();
     const r = await leerCargosBooking(session, idBooking);
+    // Sin los bloques de cargos es una mala lectura, no que Comercial quitó todo
+    // (si no, se marcarían cambios falsos contra la revisión).
+    if (!Object.keys(TIPOS_CARGO).some((k) => Array.isArray(r[k]))) {
+      throw new Error("Cargolink no devolvió los cargos del booking; intenta de nuevo.");
+    }
     const conceptos: ConceptoComercial[] = [];
+    // Venta sin IVA por moneda: v_total ya trae la cantidad y el IVA.
+    const ventaPorMoneda = new Map<string, number>();
+    let tc = 0;
     for (const [clave, tipo] of Object.entries(TIPOS_CARGO)) {
       for (const x of (Array.isArray(r[clave]) ? r[clave] : []) as Record<string, unknown>[]) {
+        const m = txt(x.v_moneda) || "USD";
+        ventaPorMoneda.set(m, (ventaPorMoneda.get(m) ?? 0) + num(x.v_total) / (1 + num(x.v_iva) / 100));
+        tc ||= num(x.tipo_cambio);
         conceptos.push({
           id: txt(x.id_booking_cargo),
           tipo,
@@ -1009,11 +1033,7 @@ export async function resumenComercialCargolink(idBooking: number): Promise<Resu
       ok: true,
       mensaje: error ? `No se pudo comparar contra la revisión anterior: ${error.message}` : "",
       conceptos,
-      totales: {
-        venta: r.total_venta === undefined ? null : num(r.total_venta),
-        costo: r.total_costo === undefined ? null : num(r.total_costo),
-        profit: r.profit_estimado === undefined ? null : num(r.profit_estimado),
-      },
+      totales: totalesSinIva(ventaPorMoneda, tc, r.profit_estimado === undefined ? null : num(r.profit_estimado)),
       datos,
       firma,
       cambios: b ? compararFirmas(b.firma, firma) : [],

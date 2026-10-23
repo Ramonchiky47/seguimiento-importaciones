@@ -2135,17 +2135,17 @@ export function ResumenComercialSeccion({
               {r.conceptos.length > 0 && (
                 <div className="flex flex-wrap justify-end gap-2 text-xs">
                   {[
-                    ["Costo", r.totales.costo, "text-slate-900 dark:text-slate-100"],
-                    ["Venta", r.totales.venta, "text-slate-900 dark:text-slate-100"],
+                    ["Costo sin IVA", r.totales.costo, "text-slate-900 dark:text-slate-100"],
+                    ["Venta sin IVA", r.totales.venta, "text-slate-900 dark:text-slate-100"],
                     ["Profit", r.totales.profit, (r.totales.profit ?? 0) < 0 ? "text-red-700 dark:text-red-400" : "text-green-800 dark:text-green-300"],
                   ].map(([label, valor, clase]) => (
                     <div key={label as string} className="rounded-md border border-slate-200 px-3 py-1.5 text-right dark:border-slate-700">
                       <p className="text-[10px] uppercase tracking-wide text-slate-500">{label as string}</p>
                       <p className={`text-sm font-bold tabular-nums ${clase as string}`}>
-                        {dinero(valor as number | null)}
+                        {dinero(valor as number | null, r.totales.moneda ?? "")}
                         {label === "Profit" && r.totales.venta ? (
                           <span className="ml-1 text-[11px] font-semibold">
-                            ({Math.round((100 * (r.totales.profit ?? 0)) / r.totales.venta)} %)
+                            ({Math.round((1000 * (r.totales.profit ?? 0)) / r.totales.venta) / 10} %)
                           </span>
                         ) : null}
                       </p>
@@ -2154,7 +2154,7 @@ export function ResumenComercialSeccion({
                 </div>
               )}
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Totales según Cargolink. Referencia para avisar cambios:{" "}
+                Totales como en el llenado del booking (sin impuestos). Referencia para avisar cambios:{" "}
                 {r.revisadoAt ? new Date(r.revisadoAt).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "—"}
                 {r.revisadoPor ? ` (${r.revisadoPor})` : ""}.
               </p>
