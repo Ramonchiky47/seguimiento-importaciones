@@ -841,6 +841,13 @@ export type ConceptoComercial = {
   pdd: string;
   observaciones: string;
   factura: string;
+  // Detalle para la ventana del resumen comercial.
+  costoIva: number;
+  costoTotal: number;
+  ventaIva: number;
+  ventaTotal: number;
+  invoice: string;
+  solicitado: string;
 };
 
 type FirmaComercial = {
@@ -965,6 +972,12 @@ export async function resumenComercialCargolink(idBooking: number): Promise<Resu
           pdd: txt(x.v_pdd),
           observaciones: [txt(x.v_observaciones), txt(x.c_observaciones)].filter(Boolean).join(" · "),
           factura: txt(x.no_facturas),
+          costoIva: num(x.c_iva),
+          costoTotal: num(x.c_total),
+          ventaIva: num(x.v_iva),
+          ventaTotal: num(x.v_total),
+          invoice: [txt(x.serieInvoice), txt(x.invoice)].filter(Boolean).join("-"),
+          solicitado: txt(x.solicitado),
         });
       }
     }

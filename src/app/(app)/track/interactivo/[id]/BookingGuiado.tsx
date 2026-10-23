@@ -418,7 +418,7 @@ export function BookingGuiado({
               );
             })}
           </ul>
-          {fase === "origen" && <ResumenComercialSeccion idBooking={idBooking} />}
+          {fase === "origen" && <ResumenComercialSeccion idBooking={idBooking} datos={datos} noBooking={String(op.no_booking ?? "")} />}
         </section>
 
         {/* Columna derecha */}
@@ -463,6 +463,9 @@ export function BookingGuiado({
               contenedores={(op.contenedores as string | null) ?? null}
               eta={(op.eta as string | null) ?? null}
               ata={(op.ata as string | null) ?? null}
+              noBooking={String(op.no_booking ?? "")}
+              origen={(op.origen as string | null) ?? null}
+              destino={(op.destino as string | null) ?? null}
             />
           </div>
 
@@ -470,7 +473,7 @@ export function BookingGuiado({
             <DocumentosCargolink idBooking={idBooking} noBooking={String(op.no_booking ?? "")} puedeSubir={puedeEditar} />
           </section>
 
-          {fase !== "origen" && <ResumenComercialSeccion idBooking={idBooking} />}
+          {fase !== "origen" && <ResumenComercialSeccion idBooking={idBooking} datos={datos} noBooking={String(op.no_booking ?? "")} />}
         </aside>
       </div>
 

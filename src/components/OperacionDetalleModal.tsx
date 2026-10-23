@@ -4,6 +4,8 @@ import { Fragment, useCallback, useEffect, useRef, useState, useTransition } fro
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ESTADOS, explicarPropuestaDias, fechaCorta, type EstadoHito } from "@/lib/track";
+import { NavieraDialog } from "@/components/NavieraDialog";
+import { ResumenComercialDialog } from "@/components/ResumenComercialDialog";
 import { NAVIERAS_CON_AGENTE, coincideRazonSocial, ligaRastreo, navieraRastreo, nombreNaviera } from "@/lib/navieras";
 import {
   ETAPAS_CARGOLINK,
@@ -497,9 +499,12 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                   contenedores={(op.contenedores as string | null) ?? null}
                   eta={(op.eta as string | null) ?? null}
                   ata={(op.ata as string | null) ?? null}
+                  noBooking={texto(op.no_booking)}
+                  origen={(op.origen as string | null) ?? null}
+                  destino={(op.destino as string | null) ?? null}
                 />
 
-                <ResumenComercialSeccion key={idBooking} idBooking={idBooking} />
+                <ResumenComercialSeccion key={idBooking} idBooking={idBooking} datos={datos} noBooking={texto(op.no_booking)} />
 
                 <section className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
                   <h3 className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 dark:border-slate-800 dark:text-slate-50">
@@ -1930,9 +1935,19 @@ function CampoInstrucciones({
 // Resumen comercial: conceptos, costos y ventas que capturó Comercial en
 // Cargolink, con aviso ⚠ si algo cambió desde la última revisión de
 // Operaciones (foto en resumen_comercial_base).
-export function ResumenComercialSeccion({ idBooking }: { idBooking: number }) {
+export function ResumenComercialSeccion({
+  idBooking,
+  datos,
+  noBooking,
+}: {
+  idBooking: number;
+  // Booking comercial completo (operaciones_maritima.datos) para la ventana "Ver completo".
+  datos?: Record<string, unknown>;
+  noBooking?: string;
+}) {
   const [r, setR] = useState<ResumenComercial | null>(null);
   const [abierto, setAbierto] = useState(false);
+  const [completo, setCompleto] = useState(false);
   const [pending, startTransition] = useTransition();
   useEffect(() => {
     let vigente = true;
@@ -1954,11 +1969,15 @@ export function ResumenComercialSeccion({ idBooking }: { idBooking: number }) {
 
   return (
     <section className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      {completo && r && datos && (
+        <ResumenComercialDialog noBooking={noBooking ?? ""} datos={datos} r={r} onCerrar={() => setCompleto(false)} />
+      )}
+      <div className="flex items-center gap-2 pr-3">
       <button
         type="button"
         onClick={() => setAbierto((v) => !v)}
         aria-expanded={abierto}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3 text-left"
       >
         <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
           Resumen comercial (conceptos y costos)
@@ -1978,6 +1997,17 @@ export function ResumenComercialSeccion({ idBooking }: { idBooking: number }) {
           <path d="m6 9 6 6 6-6" />
         </svg>
       </button>
+      {datos && (
+        <button
+          type="button"
+          disabled={!r}
+          onClick={() => setCompleto(true)}
+          className="min-h-10 shrink-0 rounded-md bg-[#16232f] px-3 text-sm font-semibold text-white hover:bg-[#22364a] disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
+        >
+          Ver completo
+        </button>
+      )}
+      </div>
 
       {abierto && r && (
         <div className="space-y-3 border-t border-slate-200 p-4 dark:border-slate-800">
@@ -2172,6 +2202,9 @@ export function NavieraSeccion({
   contenedores,
   eta,
   ata,
+  noBooking,
+  origen,
+  destino,
 }: {
   idBooking: number;
   carrier: string | null;
@@ -2179,7 +2212,11 @@ export function NavieraSeccion({
   contenedores: string | null;
   eta: string | null;
   ata: string | null;
+  noBooking?: string;
+  origen?: string | null;
+  destino?: string | null;
 }) {
+  const [verCompleta, setVerCompleta] = useState(false);
   // La naviera la decide el MBL/contenedor; la de Cargolink solo si no la delatan.
   const detectada = navieraRastreo(mbl, contenedores, carrier);
   // Reconocida y sin agente (ZIM, PIL, …): no se consulta. Si no se reconoce, se prueban todos los agentes.
@@ -2292,6 +2329,15 @@ export function NavieraSeccion({
           )}
         </h3>
         <span className="flex flex-wrap items-center gap-2">
+          {t?.ok && (
+            <button
+              type="button"
+              onClick={() => setVerCompleta(true)}
+              className="min-h-10 rounded-md bg-[#16232f] px-3 text-sm font-semibold text-white hover:bg-[#22364a] dark:bg-slate-100 dark:text-slate-900"
+            >
+              Ver información completa
+            </button>
+          )}
           {verEnSitio}
           <button
             type="button"
@@ -2304,6 +2350,20 @@ export function NavieraSeccion({
         </span>
       </div>
 
+      {verCompleta && t?.ok && (
+        <NavieraDialog
+          idBooking={idBooking}
+          noBooking={noBooking ?? ""}
+          nombre={naviera}
+          tracking={t}
+          eta={eta}
+          ata={ata}
+          origen={origen ?? null}
+          destino={destino ?? null}
+          liga={liga}
+          onCerrar={() => setVerCompleta(false)}
+        />
+      )}
       {navieraMal}
       {esperando && (
         <p role="status" className="mb-3 flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
