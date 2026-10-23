@@ -2307,6 +2307,8 @@ export function NavieraSeccion({
         {verEnSitio && <div className="mt-1">{verEnSitio}</div>}
       </section>
     );
+  // TS Lines: datos del itinerario del buque, no del contenedor.
+  const porItinerario = Boolean(t?.ok && t.naviera.toUpperCase() === "TS LINES");
   const difEta = t?.ok && t.eta_naviera && eta ? Math.round((Date.parse(t.eta_naviera) - Date.parse(eta.slice(0, 10))) / 86400000) : null;
   const difAta = t?.ok && t.ata_naviera && ata ? Math.round((Date.parse(t.ata_naviera) - Date.parse(ata.slice(0, 10))) / 86400000) : null;
   const dif = (d: number | null, base: string | null) =>
@@ -2406,7 +2408,9 @@ export function NavieraSeccion({
             <dd className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {t.transbordos && t.transbordos.length > 0
                 ? t.transbordos.map((x) => `${x.lugar}${x.fecha ? ` (${fechaCorta(x.fecha)})` : ""}`).join(", ")
-                : "Directo"}
+                : porItinerario
+                  ? "No lo informa"
+                  : "Directo"}
             </dd>
           </div>
           <div className="col-span-2 min-w-0 sm:col-span-3 lg:col-span-4">
@@ -2417,6 +2421,17 @@ export function NavieraSeccion({
             </dd>
           </div>
         </dl>
+      )}
+      {t?.ok && !t.eta_naviera && (
+        <p role="note" className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+          {naviera} no da ETA para este embarque: usa la ETA de Operaciones (Cargolink).
+        </p>
+      )}
+      {porItinerario && (
+        <p role="note" className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+          {naviera} pide captcha en su rastreo: estos datos salen de su consulta de D/O y del itinerario del buque (llegadas y zarpes por
+          puerto). No incluye eventos del contenedor ni transbordos.
+        </p>
       )}
       {t?.ok && (difEta || difAta) ? (
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">

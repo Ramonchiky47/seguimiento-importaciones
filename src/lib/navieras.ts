@@ -6,7 +6,7 @@
 
 // buque_carrier de Cargolink -> naviera con agente de rastreo.
 const POR_CARRIER: Record<string, string> = { "157": "MSC", "1497": "Maersk", "1419": "Yang Ming", "2129": "ZIM", "1387": "ZIM", "271": "Evergreen", "1894": "Evergreen", "29": "CMA CGM", "5": "ONE", "4": "COSCO", "214": "Wan Hai", "31": "Hapag-Lloyd" };
-export const NAVIERAS_CON_AGENTE = ["MSC", "Maersk", "Yang Ming", "ZIM", "Evergreen", "CMA CGM", "ONE", "COSCO", "Wan Hai", "Hapag-Lloyd"];
+export const NAVIERAS_CON_AGENTE = ["MSC", "Maersk", "Yang Ming", "ZIM", "Evergreen", "CMA CGM", "ONE", "COSCO", "Wan Hai", "Hapag-Lloyd", "TS Lines"];
 
 // Prefijos de contenedores propios (los rentados, como TEMU o TGBU, no delatan naviera).
 const CONTENEDORES: [string, string[]][] = [
@@ -46,6 +46,7 @@ const RAZON_SOCIAL: Record<string, RegExp> = {
   "CMA CGM": /CMA|\bAPL\b/i,
   ONE: /OCEAN NETWORK|\bONE\b/i,
   "Wan Hai": /WAN HAI/i,
+  "TS Lines": /T\.? ?S\.? LINES/i,
 };
 
 export function navieraPorReferencia(mbl: string | null | undefined, contenedores: string | null | undefined): string | null {
@@ -92,6 +93,8 @@ export function ligaRastreo(naviera: string | null, mbl: string | null | undefin
       return ref ? `https://www.maersk.com/tracking/${ref}` : "https://www.maersk.com/tracking/";
     case "Yang Ming":
       return "https://www.yangming.com/en/esolution/cargo_tracking";
+    case "TS Lines":
+      return "https://www.tslines.com/en/importservice/do_query";
     case "Hapag-Lloyd":
       return `https://www.hapag-lloyd.com/solutions/tracking/#/${ref}`;
     case "ZIM":
