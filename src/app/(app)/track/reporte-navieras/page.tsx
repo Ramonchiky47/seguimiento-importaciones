@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { fechaCorta } from "@/lib/track";
 import { nombreNaviera } from "@/lib/navieras";
+import { ReconsultarNavieras } from "@/components/ReconsultarNavieras";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,21 @@ function BookingCelda({ f }: { f: Fila }) {
   );
 }
 
-function Seccion({ titulo, ayuda, n, tono, children }: { titulo: string; ayuda: string; n: number; tono: string; children: React.ReactNode }) {
+function Seccion({
+  titulo,
+  ayuda,
+  n,
+  tono,
+  accion,
+  children,
+}: {
+  titulo: string;
+  ayuda: string;
+  n: number;
+  tono: string;
+  accion?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
@@ -50,6 +65,7 @@ function Seccion({ titulo, ayuda, n, tono, children }: { titulo: string; ayuda: 
           {titulo} <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${tono}`}>{n}</span>
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">{ayuda}</p>
+        {n > 0 && accion}
       </div>
       {n === 0 ? <p className="px-4 py-4 text-sm text-slate-500">Nada en esta corrida.</p> : <div className="overflow-x-auto">{children}</div>}
     </section>
@@ -74,6 +90,10 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
     ? await supabase.from("rastreo_procesos").select("reporte").eq("id", elegida.id).maybeSingle()
     : { data: null };
   const r = (data?.reporte ?? null) as Reporte | null;
+  // Problemas de página agrupados por naviera.
+  const pagina = [...(r?.pagina ?? [])].sort(
+    (a, b) => (a.naviera ?? "").localeCompare(b.naviera ?? "") || a.no_booking.localeCompare(b.no_booking),
+  );
 
   return (
     <main className="mx-auto max-w-7xl space-y-4 px-6 py-6">
@@ -156,8 +176,9 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
           <Seccion
             titulo="Problemas de la página de la naviera"
             ayuda="La página pidió verificación, no respondió o falló: se vuelve a intentar en la siguiente corrida."
-            n={r.pagina.length}
+            n={pagina.length}
             tono="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+            accion={<ReconsultarNavieras key={elegida.id} ids={pagina.map((f) => f.id_booking)} />}
           >
             <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-800">
               <thead className="bg-slate-50 dark:bg-slate-800/50">
@@ -168,7 +189,7 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {r.pagina.map((f) => (
+                {pagina.map((f) => (
                   <tr key={f.id_booking} className="align-top">
                     <BookingCelda f={f} />
                     <td className="px-3 py-2">{nombreNaviera(f.naviera ?? "")}</td>
