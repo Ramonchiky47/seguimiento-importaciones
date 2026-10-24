@@ -94,6 +94,31 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
   const pagina = [...(r?.pagina ?? [])].sort(
     (a, b) => (a.naviera ?? "").localeCompare(b.naviera ?? "") || a.no_booking.localeCompare(b.no_booking),
   );
+  // Cómo están ahora (el reporte es la foto de la corrida): consulta en curso o dato nuevo.
+  const idsPagina = pagina.map((f) => f.id_booking);
+  const [{ data: navAhora }, { data: solAhora }] = idsPagina.length
+    ? await Promise.all([
+        supabase.from("tracking_naviera").select("id_booking, ok, eta_naviera, ata_naviera, error, consultado_at").in("id_booking", idsPagina),
+        supabase.from("tracking_solicitudes").select("id_booking, estado").in("id_booking", idsPagina),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const nav = new Map(
+    ((navAhora ?? []) as { id_booking: number; ok: boolean; eta_naviera: string | null; ata_naviera: string | null; error: string | null; consultado_at: string }[]).map(
+      (x) => [x.id_booking, x],
+    ),
+  );
+  const sol = new Map(((solAhora ?? []) as { id_booking: number; estado: string }[]).map((x) => [x.id_booking, x.estado]));
+  const enCurso = idsPagina.some((i) => ["pendiente", "en_proceso"].includes(sol.get(i) ?? ""));
+  const ahora = (id: number) => {
+    const t = nav.get(id);
+    if (["pendiente", "en_proceso"].includes(sol.get(id) ?? "")) return { texto: "En consulta…", clase: "text-amber-700 dark:text-amber-400" };
+    if (t && elegida && t.consultado_at > (elegida.fin ?? elegida.inicio)) {
+      return t.ok
+        ? { texto: `✓ Actualizado ${hora(t.consultado_at)} · ${t.ata_naviera ? `ATA ${fechaCorta(t.ata_naviera)}` : `ETA ${fechaCorta(t.eta_naviera)}`}`, clase: "text-green-700 dark:text-green-400" }
+        : { texto: `Sigue sin dato: ${t.error ?? ""}`, clase: "text-red-700 dark:text-red-400" };
+    }
+    return { texto: "Sin consultar desde el reporte", clase: "text-slate-500" };
+  };
 
   return (
     <main className="mx-auto max-w-7xl space-y-4 px-6 py-6">
@@ -178,7 +203,7 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
             ayuda="La página pidió verificación, no respondió o falló: se vuelve a intentar en la siguiente corrida."
             n={pagina.length}
             tono="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
-            accion={<ReconsultarNavieras key={elegida.id} ids={pagina.map((f) => f.id_booking)} />}
+            accion={<ReconsultarNavieras key={elegida.id} ids={idsPagina} enCurso={enCurso} />}
           >
             <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-800">
               <thead className="bg-slate-50 dark:bg-slate-800/50">
@@ -186,6 +211,7 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
                   <th scope="col" className={TH}>Booking · cliente · ejecutivo</th>
                   <th scope="col" className={TH}>Naviera</th>
                   <th scope="col" className={TH}>Qué pasó</th>
+                  <th scope="col" className={TH}>Ahora</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -194,6 +220,7 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
                     <BookingCelda f={f} />
                     <td className="px-3 py-2">{nombreNaviera(f.naviera ?? "")}</td>
                     <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{f.detalle}</td>
+                    <td className={`px-3 py-2 text-sm font-semibold ${ahora(f.id_booking).clase}`}>{ahora(f.id_booking).texto}</td>
                   </tr>
                 ))}
               </tbody>

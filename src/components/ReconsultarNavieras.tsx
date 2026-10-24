@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 // Vuelve a consultar a la naviera solo los bookings indicados (cola
@@ -8,8 +9,10 @@ import { createClient } from "@/lib/supabase/client";
 // de respaldo) y muestra cómo van.
 type Estado = "pendiente" | "en_proceso" | "hecho" | "error";
 
-export function ReconsultarNavieras({ ids }: { ids: number[] }) {
-  const [enviado, setEnviado] = useState(false);
+// enCurso: ya hay consultas pendientes (p. ej. al recargar la página).
+export function ReconsultarNavieras({ ids, enCurso = false }: { ids: number[]; enCurso?: boolean }) {
+  const router = useRouter();
+  const [enviado, setEnviado] = useState(enCurso);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [estados, setEstados] = useState<Record<number, Estado>>({});
@@ -25,11 +28,13 @@ export function ReconsultarNavieras({ ids }: { ids: number[] }) {
     const leer = async () => {
       const { data } = await createClient().from("tracking_solicitudes").select("id_booking, estado").in("id_booking", ids);
       setEstados(Object.fromEntries(((data ?? []) as { id_booking: number; estado: Estado }[]).map((x) => [x.id_booking, x.estado])));
+      // La columna "Ahora" de la tabla se lee en el servidor.
+      router.refresh();
     };
     leer();
     const t = setInterval(leer, 5000);
     return () => clearInterval(t);
-  }, [enviado, terminado, ids]);
+  }, [enviado, terminado, ids, router]);
 
   const enviar = async () => {
     setEnviando(true);
