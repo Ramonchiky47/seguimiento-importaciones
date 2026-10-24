@@ -22,11 +22,14 @@ export function ReconsultarNavieras({ ids, enCurso = false }: { ids: number[]; e
     { pendiente: 0, en_proceso: 0, hecho: 0, error: 0 },
   );
   const terminado = enviado && conteo.hecho + conteo.error === ids.length;
+  // Cada refresh del servidor trae un arreglo nuevo: el efecto depende de su contenido.
+  const claveIds = ids.join(",");
 
   useEffect(() => {
     if (!enviado || terminado) return;
+    const lista = claveIds.split(",").map(Number);
     const leer = async () => {
-      const { data } = await createClient().from("tracking_solicitudes").select("id_booking, estado").in("id_booking", ids);
+      const { data } = await createClient().from("tracking_solicitudes").select("id_booking, estado").in("id_booking", lista);
       setEstados(Object.fromEntries(((data ?? []) as { id_booking: number; estado: Estado }[]).map((x) => [x.id_booking, x.estado])));
       // La columna "Ahora" de la tabla se lee en el servidor.
       router.refresh();
@@ -34,7 +37,7 @@ export function ReconsultarNavieras({ ids, enCurso = false }: { ids: number[]; e
     leer();
     const t = setInterval(leer, 5000);
     return () => clearInterval(t);
-  }, [enviado, terminado, ids, router]);
+  }, [enviado, terminado, claveIds, router]);
 
   const enviar = async () => {
     setEnviando(true);
