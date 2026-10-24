@@ -7,8 +7,15 @@ import type { ResumenNaviera } from "@/lib/detalleNaviera";
 
 export const dynamic = "force-dynamic";
 
-export default async function TrackInteractivoBooking({ params }: { params: Promise<{ id: string }> }) {
+export default async function TrackInteractivoBooking({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ editar?: string }>;
+}) {
   const { id } = await params;
+  const { editar } = await searchParams;
   const idBooking = Number(id);
   if (!Number.isInteger(idBooking) || idBooking <= 0) notFound();
   const supabase = await createClient();
@@ -85,6 +92,7 @@ export default async function TrackInteractivoBooking({ params }: { params: Prom
       puedeEditar={puedeEditar === true}
       mismoBuque={viaje_}
       naviera={(naviera as ResumenNaviera | null) ?? null}
+      editarInicial={editar ?? null}
     />
   );
 }

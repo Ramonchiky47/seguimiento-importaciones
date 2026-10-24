@@ -60,7 +60,10 @@ export function BookingGuiado({
   propuestaDias,
   vacio,
   naviera: navieraInicial,
+  editarInicial = null,
 }: {
+  // ?editar=<tarea> (p. ej. desde el correo de bookings sin zarpar): abre esa captura.
+  editarInicial?: string | null;
   // Lo que respondió la naviera (null = sin información): habilita el PDF de
   // estatus para el cliente y corrige la ruta. Se actualiza al consultar aquí.
   naviera: ResumenNaviera | null;
@@ -78,8 +81,14 @@ export function BookingGuiado({
   const datos = (op.datos ?? {}) as Record<string, string>;
   const tareas = calcularTareas(op, hitos, propuestaDias);
   const sig = siguientePaso(tareas);
-  const [fase, setFase] = useState<FaseClave>(sig?.fase ?? faseActual(tareas));
-  const [editando, setEditando] = useState<string | null>(null);
+  const tareaInicial = editarInicial ? tareas.find((t) => t.id === editarInicial) : undefined;
+  const [fase, setFase] = useState<FaseClave>(tareaInicial?.fase ?? sig?.fase ?? faseActual(tareas));
+  const [editando, setEditando] = useState<string | null>(() => {
+    // Mismo criterio que editorDe: con permiso, etapa con editor y sin finalizar.
+    const etapa = tareaInicial?.editar ? ETAPAS_CARGOLINK[tareaInicial.editar] : undefined;
+    const mov = etapa ? datos[etapa.mov] : undefined;
+    return puedeEditar && etapa && mov !== "FINALIZADO" && mov !== "NO_APLICA" ? tareaInicial!.id : null;
+  });
   const [aviso, setAviso] = useState<string | null>(null);
   const [pdf, setPdf] = useState(false);
   const [pdfEstatus, setPdfEstatus] = useState(false);
@@ -91,6 +100,11 @@ export function BookingGuiado({
     mensaje: "Actualizando desde Cargolink…",
   });
   const refrescado = useRef(false);
+
+  // Abierto desde un enlace con ?editar=: baja hasta esa captura.
+  useEffect(() => {
+    if (editarInicial) document.getElementById(`tarea-${editarInicial}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [editarInicial]);
 
   // Al abrir: relee el booking de Cargolink y, si cambió, vuelve a pintar.
   useEffect(() => {
@@ -461,7 +475,7 @@ export function BookingGuiado({
               const editable = Boolean(editorDe(t));
               const abierto = editando === t.id;
               return (
-                <li key={t.id} className={`flex flex-col gap-3 rounded-xl border px-3.5 py-3 ${ESTILO_TAREA[t.estado].caja}`}>
+                <li key={t.id} id={`tarea-${t.id}`} className={`flex scroll-mt-20 flex-col gap-3 rounded-xl border px-3.5 py-3 ${ESTILO_TAREA[t.estado].caja}`}>
                   <div className="flex flex-wrap items-center gap-3.5">
                     <IconoEstado estado={t.estado} />
                     <span className="flex min-w-0 flex-[999_1_260px] flex-col gap-0.5">
