@@ -6,8 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 
 // Vuelve a consultar a la naviera solo los bookings indicados (cola
 // tracking_solicitudes: la Mac la atiende cada minuto, con todas las navieras
-// de respaldo) y muestra cómo van.
+// de respaldo) y muestra el avance.
 type Estado = "pendiente" | "en_proceso" | "hecho" | "error";
+type Lectura = { listos: number; conDato: number; terminado: boolean };
 
 // enCurso: ya hay consultas pendientes (p. ej. al recargar la página).
 export function ReconsultarNavieras({ ids, enCurso = false }: { ids: number[]; enCurso?: boolean }) {
@@ -15,29 +16,38 @@ export function ReconsultarNavieras({ ids, enCurso = false }: { ids: number[]; e
   const [enviado, setEnviado] = useState(enCurso);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [estados, setEstados] = useState<Record<number, Estado>>({});
-
-  const conteo = Object.values(estados).reduce<Record<Estado, number>>(
-    (a, e) => ({ ...a, [e]: a[e] + 1 }),
-    { pendiente: 0, en_proceso: 0, hecho: 0, error: 0 },
-  );
-  const terminado = enviado && conteo.hecho + conteo.error === ids.length;
+  const [lectura, setLectura] = useState<Lectura>({ listos: 0, conDato: 0, terminado: false });
   // Cada refresh del servidor trae un arreglo nuevo: el efecto depende de su contenido.
   const claveIds = ids.join(",");
+  const pct = ids.length ? Math.round((100 * lectura.listos) / ids.length) : 0;
 
   useEffect(() => {
-    if (!enviado || terminado) return;
+    if (!enviado || lectura.terminado) return;
     const lista = claveIds.split(",").map(Number);
     const leer = async () => {
-      const { data } = await createClient().from("tracking_solicitudes").select("id_booking, estado").in("id_booking", lista);
-      setEstados(Object.fromEntries(((data ?? []) as { id_booking: number; estado: Estado }[]).map((x) => [x.id_booking, x.estado])));
+      const supabase = createClient();
+      const [{ data: sol }, { data: nav }] = await Promise.all([
+        supabase.from("tracking_solicitudes").select("id_booking, estado, solicitado_at").in("id_booking", lista),
+        supabase.from("tracking_naviera").select("id_booking, ok, consultado_at").in("id_booking", lista),
+      ]);
+      const navPor = new Map(((nav ?? []) as { id_booking: number; ok: boolean; consultado_at: string }[]).map((x) => [x.id_booking, x]));
+      const solicitudes = (sol ?? []) as { id_booking: number; estado: Estado; solicitado_at: string }[];
+      // La Mac da por atendidas todas al final: cada booking cuenta como listo
+      // en cuanto su naviera se consultó después de pedirlo.
+      const listo = (s: (typeof solicitudes)[number]) =>
+        s.estado === "hecho" || s.estado === "error" || (navPor.get(s.id_booking)?.consultado_at ?? "") > s.solicitado_at;
+      setLectura({
+        listos: solicitudes.filter(listo).length,
+        conDato: solicitudes.filter((s) => listo(s) && navPor.get(s.id_booking)?.ok).length,
+        terminado: solicitudes.length > 0 && solicitudes.every((s) => s.estado === "hecho" || s.estado === "error"),
+      });
       // La columna "Ahora" de la tabla se lee en el servidor.
       router.refresh();
     };
     leer();
     const t = setInterval(leer, 5000);
     return () => clearInterval(t);
-  }, [enviado, terminado, claveIds, router]);
+  }, [enviado, lectura.terminado, claveIds, router]);
 
   const enviar = async () => {
     setEnviando(true);
@@ -50,24 +60,48 @@ export function ReconsultarNavieras({ ids, enCurso = false }: { ids: number[]; e
         break;
       }
     }
+    setLectura({ listos: 0, conDato: 0, terminado: false });
     setEnviando(false);
     setEnviado(true);
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-3">
       {enviado && (
-        <span role="status" className="text-xs text-slate-600 dark:text-slate-400">
-          {terminado
-            ? `Listo: ${conteo.hecho} con información, ${conteo.error} siguen sin dato (abre cada booking para ver el detalle).`
-            : `Consultando… ${conteo.hecho + conteo.error} de ${ids.length} (la Mac los atiende en 1 a 2 minutos; puedes seguir trabajando).`}
-        </span>
+        <div className="flex min-w-56 flex-col gap-1">
+          <div className="flex items-baseline justify-between gap-2 text-xs">
+            <span className="font-semibold text-slate-800 dark:text-slate-100">
+              {lectura.terminado ? "Consulta terminada" : "Consultando a las navieras"}
+            </span>
+            <span className="tabular-nums text-slate-600 dark:text-slate-300">
+              {pct} % · {lectura.listos} de {ids.length}
+            </span>
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Avance de la consulta"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pct}
+            className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+          >
+            <div
+              className={`h-full rounded-full transition-all ${lectura.terminado ? "bg-green-600" : "animate-pulse bg-[#c65a1f]"}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span role="status" className="text-[11px] text-slate-500 dark:text-slate-400">
+            {lectura.terminado
+              ? `${lectura.conDato} con información, ${ids.length - lectura.conDato} siguen sin dato.`
+              : "La Mac los atiende en 1 a 2 minutos; puedes seguir trabajando."}
+          </span>
+        </div>
       )}
       {error && <span className="text-xs text-red-700 dark:text-red-400">No se pudo pedir: {error}</span>}
       <button
         type="button"
         onClick={enviar}
-        disabled={enviando || (enviado && !terminado) || ids.length === 0}
+        disabled={enviando || (enviado && !lectura.terminado) || ids.length === 0}
         className="min-h-10 rounded-md bg-[#16232f] px-4 text-sm font-semibold text-white hover:bg-[#22364a] disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
       >
         {enviando ? "Enviando…" : `Volver a consultar estos ${ids.length}`}
