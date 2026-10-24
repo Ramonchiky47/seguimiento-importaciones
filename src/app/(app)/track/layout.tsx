@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getMyPermissions } from "@/lib/permissions";
 import { TrackTabs } from "@/components/TrackTabs";
+import { AvanceProcesos } from "@/components/AvanceProcesos";
 import { OperacionDetalleModal } from "@/components/OperacionDetalleModal";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,6 +33,7 @@ export default async function TrackLayout({ children }: { children: React.ReactN
               Viendo solo tus {clientesAsignados} {clientesAsignados === 1 ? "cliente asignado" : "clientes asignados"}
             </p>
           )}
+          <AvanceProcesos />
           <div className="mt-2">
             <TrackTabs asignaEjecutivos={asignaEjecutivos === true} />
           </div>

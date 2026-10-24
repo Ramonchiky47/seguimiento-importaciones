@@ -10,6 +10,7 @@ const TABS = [
   { href: "/track/embarques", label: "Embarques" },
   { href: "/track/viajes", label: "Por viaje" },
   { href: "/track/propuestas", label: "Propuestas" },
+  { href: "/track/reporte-navieras", label: "Reporte navieras" },
   { href: "/track/bitacora", label: "Bitácora" },
   { href: "/track/cambios-cargolink", label: "Cambios en Cargolink" },
 ];
