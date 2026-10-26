@@ -42,7 +42,8 @@ async function leer(): Promise<Proceso[]> {
   return r.map((x) => x.data as Proceso | null).filter((x): x is Proceso => Boolean(x));
 }
 
-function Medidor({ p, ahora }: { p: Proceso; ahora: number }) {
+function Medidor({ p, ahora, onPedido }: { p: Proceso; ahora: number; onPedido: () => void }) {
+  const [pedido, setPedido] = useState<{ cargando: boolean; texto: string | null }>({ cargando: false, texto: null });
   const detenido = p.estado === "corriendo" && ahora - Date.parse(p.actualizado_at) > SIN_SENAL_MIN * 60000;
   const pct = p.estado === "terminado" ? 100 : p.total ? Math.min(100, Math.round((100 * p.hechos) / p.total)) : 0;
   const color =
@@ -57,9 +58,36 @@ function Medidor({ p, ahora }: { p: Proceso; ahora: number }) {
         : `Terminó ${hora(p.fin ?? p.actualizado_at)}${p.mensaje ? ` · ${p.mensaje}` : ""}`;
   return (
     <div className="min-w-0 flex-1 basis-64">
-      <div className="flex items-baseline justify-between gap-2 text-xs">
+      <div className="flex items-center justify-between gap-2 text-xs">
         <span className="font-semibold text-slate-800 dark:text-slate-100">{NOMBRE[p.proceso]}</span>
-        <span className="tabular-nums text-slate-500 dark:text-slate-400">{pct} %</span>
+        <span className="flex items-center gap-2">
+          {(p.estado !== "corriendo" || detenido) && (
+            <button
+              type="button"
+              disabled={pedido.cargando}
+              onClick={async () => {
+                setPedido({ cargando: true, texto: null });
+                const { data, error } = await createClient().rpc("solicitar_proceso", { p_proceso: p.proceso });
+                const r = String(data ?? "");
+                setPedido({
+                  cargando: false,
+                  texto: error
+                    ? `No se pudo pedir: ${error.message}`
+                    : r === "corriendo"
+                      ? "Ya está corriendo."
+                      : r === "pendiente"
+                        ? "Ya estaba pedido: arranca en menos de 1 minuto."
+                        : "Pedido: la Mac lo arranca en menos de 1 minuto.",
+                });
+                if (!error) onPedido();
+              }}
+              className="rounded border border-slate-300 px-2 py-0.5 font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              {pedido.cargando ? "Pidiendo…" : "Correr ahora"}
+            </button>
+          )}
+          <span className="tabular-nums text-slate-500 dark:text-slate-400">{pct} %</span>
+        </span>
       </div>
       <div
         role="progressbar"
@@ -82,31 +110,43 @@ function Medidor({ p, ahora }: { p: Proceso; ahora: number }) {
           </>
         )}
       </p>
+      {pedido.texto && (
+        <p role="status" className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+          {pedido.texto}
+        </p>
+      )}
     </div>
   );
 }
 
 export function AvanceProcesos() {
   const [{ procesos, ahora }, setLectura] = useState<{ procesos: Proceso[]; ahora: number }>({ procesos: [], ahora: 0 });
+  // Tras "Correr ahora", se lee cada 5 s hasta que la corrida aparece.
+  const [rapido, setRapido] = useState(false);
   const corriendo = procesos.some((p) => p.estado === "corriendo");
 
   useEffect(() => {
     let vigente = true;
     // La hora de la lectura (no la del render) decide si un proceso se detuvo.
-    const refrescar = () => leer().then((x) => vigente && setLectura({ procesos: x, ahora: Date.now() }));
+    const refrescar = () =>
+      leer().then((x) => {
+        if (!vigente) return;
+        setLectura({ procesos: x, ahora: Date.now() });
+        if (x.some((p) => p.estado === "corriendo")) setRapido(false);
+      });
     refrescar();
-    const t = setInterval(refrescar, corriendo ? 5000 : 60000);
+    const t = setInterval(refrescar, corriendo || rapido ? 5000 : 60000);
     return () => {
       vigente = false;
       clearInterval(t);
     };
-  }, [corriendo]);
+  }, [corriendo, rapido]);
 
   if (!procesos.length) return null;
   return (
     <section aria-label="Avance de la actualización" className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
       {procesos.map((p) => (
-        <Medidor key={p.proceso} p={p} ahora={ahora} />
+        <Medidor key={p.proceso} p={p} ahora={ahora} onPedido={() => setRapido(true)} />
       ))}
     </section>
   );
