@@ -3,25 +3,28 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMyPermissions } from "@/lib/permissions";
-import { loginCargolink, type CargolinkBooking } from "@/lib/cargolink";
-import { ETAPAS_CARGOLINK } from "@/lib/etapasCargolink";
+import { loginCargolink } from "@/lib/cargolink";
 import {
   asignarEjecutivoEnCargolink,
   descargarOperacionesRecientes,
   eliminarTransbordoEnCargolink,
-  guardarEtapaEnCargolink,
-  guardarTransbordosEnCargolink,
   leerBookingMaritimo,
   leerCatalogosSeguro,
   leerCargosBooking,
-  leerOrigen,
   listarDocumentosBooking,
   subirDocumentoBooking,
   leerTransbordos,
   listarUsuariosCargolink,
   mapOperacionMaritima,
-  type FilaTransbordo,
 } from "@/lib/operacionesMaritima";
+import {
+  escritorUsuario,
+  filaParaForm,
+  guardarEtapaCon,
+  guardarTransbordosCon,
+  type FilaTransbordoForm,
+  type ResultadoEtapa,
+} from "@/lib/escrituraCargolink";
 
 // Deja margen dentro del maxDuration (300 s) de la página para el upsert.
 const PRESUPUESTO_DESCARGA_MS = 200_000;
@@ -64,7 +67,7 @@ export async function actualizarOperacionesMaritima(): Promise<ResultadoActualiz
   return { actualizadas: lista.length, total, completo };
 }
 
-export type ResultadoEtapa = { ok: boolean; mensaje: string };
+export type { ResultadoEtapa } from "@/lib/escrituraCargolink";
 
 // Escribe una etapa en Cargolink desde la ventana de indicadores. Devuelve el
 // resultado en vez de lanzar error para que el mensaje real llegue al usuario
@@ -82,155 +85,7 @@ export async function guardarEtapaCargolink(
   if (puedeEditar !== true) {
     return { ok: false, mensaje: "No tienes autorización para editar en Cargolink (piloto)." };
   }
-  const etapa = ETAPAS_CARGOLINK[etapaKey];
-  const accion = etapa?.acciones.find((a) => a.status === status);
-  if (!etapa || !accion) return { ok: false, mensaje: "Etapa o acción no válida." };
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: op } = await supabase
-    .from("operaciones_maritima")
-    .select("no_booking")
-    .eq("id_booking", idBooking)
-    .maybeSingle();
-  if (!op?.no_booking) return { ok: false, mensaje: "Operación no encontrada." };
-  const noBooking = op.no_booking as string;
-
-  // Nombre del usuario para la bitácora (operativo ligado a su cuenta).
-  const { data: operativo } = user
-    ? await supabase.from("catalogo_operativos").select("nombre_operativo").eq("user_id", user.id).maybeSingle()
-    : { data: null };
-  const usuarioNombre = (operativo?.nombre_operativo as string | undefined) ?? user?.email ?? null;
-
-  // Lo que tenía y lo que quedó en Cargolink (campos de la etapa + estatus).
-  const camposEtapa = (b: Record<string, unknown> | null) =>
-    b ? Object.fromEntries(etapa.campos.map((c) => [c.key, b[c.key] ?? null])) : null;
-  let valoresAntes: Record<string, unknown> | null = null;
-  let valoresDespues: Record<string, unknown> | null = null;
-  let estatusAntes: string | null = null;
-  let estatusDespues: string | null = null;
-
-  const bitacora = async (ok: boolean, mensaje: string, cambios: Record<string, string>) => {
-    await supabase.from("bitacora_cargolink").insert({
-      id_booking: idBooking,
-      no_booking: noBooking,
-      etapa: etapa.key,
-      accion: accion.status,
-      valores: cambios,
-      valores_antes: valoresAntes,
-      valores_despues: valoresDespues,
-      estatus_antes: estatusAntes,
-      estatus_despues: estatusDespues,
-      usuario_email: user?.email ?? null,
-      usuario_nombre: usuarioNombre,
-      ok,
-      mensaje,
-    });
-  };
-
-  // Solo los campos de la etapa; vacío = no se cambia.
-  const cambios: Record<string, string> = {};
-  for (const c of etapa.campos) {
-    const v = (valores[c.key] ?? "").trim();
-    if (v) {
-      if (c.tipo === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return { ok: false, mensaje: `${c.label}: fecha no válida.` };
-      if (c.tipo === "number" && !/^\d{1,3}$/.test(v)) return { ok: false, mensaje: `${c.label}: número no válido.` };
-      if (c.tipo === "decimal" && !/^\d{1,12}(\.\d{1,2})?$/.test(v)) return { ok: false, mensaje: `${c.label}: importe no válido.` };
-      if (c.tipo === "text" && v.length > 300) return { ok: false, mensaje: `${c.label}: máximo 300 caracteres.` };
-      if (c.tipo === "textarea" && v.length > 2000) return { ok: false, mensaje: `${c.label}: máximo 2,000 caracteres.` };
-      if (c.tipo === "select" && c.opciones && !c.opciones.some((o) => o.valor === v)) {
-        return { ok: false, mensaje: `${c.label}: opción no válida.` };
-      }
-      cambios[c.key] = v;
-    }
-  }
-
-  try {
-    const session = await loginCargolink();
-    const booking = await leerBookingMaritimo(session, noBooking);
-    if (!booking) return { ok: false, mensaje: `No se encontró ${noBooking} en Servicios marítimos de Cargolink.` };
-    // Origen: sus datos viven en el registro de origen (consultaOrigen).
-    const esOrigen = etapa.guardado === "origen";
-    const origen = esOrigen ? await leerOrigen(session, idBooking) : {};
-    valoresAntes = camposEtapa({ ...booking, ...origen });
-    estatusAntes = (booking[etapa.mov] as string | undefined) || "SIN_COMENZAR";
-    if (booking[etapa.mov] === "FINALIZADO") {
-      return { ok: false, mensaje: `${etapa.label} ya está finalizada en Cargolink; ahí tampoco se puede editar.` };
-    }
-    if (accion.resultado !== "NO_APLICA") {
-      for (const c of etapa.campos) {
-        const valorFinal = cambios[c.key] ?? (booking[c.key] as string | undefined) ?? "";
-        if (c.requerido && (!valorFinal || String(valorFinal).startsWith("0000"))) {
-          return { ok: false, mensaje: `Falta ${c.label} (Cargolink la pide como obligatoria).` };
-        }
-      }
-    }
-
-    const cambiosOrigen = Object.fromEntries(
-      Object.entries(cambios).filter(([k]) => etapa.campos.find((c) => c.key === k)?.fuente === "origen"),
-    );
-    const cambiosBooking = Object.fromEntries(Object.entries(cambios).filter(([k]) => !(k in cambiosOrigen)));
-    const payload = {
-      ...booking,
-      ...cambiosBooking,
-      ...(etapa.desdeEtapa ? { desdeEtapa: etapa.desdeEtapa } : {}),
-      // Nunca notificar al cliente desde la app.
-      emailCliente: "",
-      check_notificacion_arribo: false,
-      notificarCliente: false,
-      notificarCorresponsal: false,
-    };
-    // Origen manda {alta: origen, booking} como su pantalla en Cargolink.
-    const cuerpo = esOrigen ? ({ alta: { ...origen, ...cambiosOrigen }, booking: payload } as unknown as CargolinkBooking) : payload;
-    let respuesta = await guardarEtapaEnCargolink(session, etapa.fn, accion.status, cuerpo);
-    // Seguro: Cargolink guarda primero la etapa y luego los datos del seguro.
-    if (etapa.fn2 && respuesta.status_conexion === "OK") {
-      respuesta = await guardarEtapaEnCargolink(session, etapa.fn2, accion.status, payload);
-    }
-    if (respuesta.status_conexion !== "OK") {
-      const msg = `Cargolink no confirmó el guardado: ${JSON.stringify(respuesta).slice(0, 200)}`;
-      await bitacora(false, msg, cambios);
-      return { ok: false, mensaje: msg };
-    }
-
-    // Confirmar releyendo de Cargolink: estatus de la etapa y valores.
-    const despuesBooking = await leerBookingMaritimo(session, noBooking);
-    const despuesOrigen = esOrigen && despuesBooking ? await leerOrigen(session, idBooking) : {};
-    const despues = despuesBooking ? { ...despuesBooking, ...despuesOrigen } : null;
-    valoresDespues = camposEtapa(despues);
-    estatusDespues = despues ? ((despues[etapa.mov] as string | undefined) || "SIN_COMENZAR") : null;
-    if (!despues) {
-      await bitacora(false, "Guardado, pero no se pudo releer el booking.", cambios);
-      return { ok: false, mensaje: "Cargolink aceptó el guardado, pero no se pudo releer el booking para confirmarlo." };
-    }
-    const noCuadran = Object.entries(cambios).filter(
-      ([k, v]) => !etapa.campos.find((c) => c.key === k)?.sinVerificar && String(despues[k] ?? "").slice(0, v.length) !== v,
-    );
-    if (despues[etapa.mov] !== accion.resultado || noCuadran.length > 0) {
-      const msg = `Cargolink respondió OK pero quedó: etapa ${String(despues[etapa.mov] ?? "sin estatus")}${
-        noCuadran.length ? `, campos sin cambio: ${noCuadran.map(([k]) => k).join(", ")}` : ""
-      }.`;
-      await bitacora(false, msg, cambios);
-      return { ok: false, mensaje: msg };
-    }
-
-    const { error: errRefresco } = await supabase.rpc("refrescar_operacion_maritima", {
-      p_row: { ...mapOperacionMaritima(despuesBooking as CargolinkBooking), sincronizado_at: new Date().toISOString() },
-    });
-    const mensaje = `${etapa.label}: ${accion.label.toLowerCase()} en Cargolink.${
-      errRefresco ? " (La app se actualizará en la próxima carga.)" : ""
-    }`;
-    await bitacora(true, mensaje, cambios);
-    revalidatePath("/operaciones-maritima");
-    revalidatePath("/track/operaciones");
-    revalidatePath("/track", "layout");
-    return { ok: true, mensaje };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error al comunicarse con Cargolink.";
-    await bitacora(false, msg, cambios);
-    return { ok: false, mensaje: msg };
-  }
+  return guardarEtapaCon(await escritorUsuario(supabase), idBooking, etapaKey, status, valores);
 }
 
 // Al abrir la ventana de indicadores: relee ESE booking de Cargolink (solo
@@ -268,32 +123,7 @@ export async function refrescarOperacionDesdeCargolink(idBooking: number): Promi
 // ---- Transbordo: filas propias en Cargolink (consultaTransbordo /
 // registraTransitoTransbordo / eliminarTransbordo).
 
-export type FilaTransbordoForm = {
-  id_booking_transbordo?: string;
-  fecha_arribo: string;
-  punto: string;
-  fecha_arribo_real: string;
-  fecha_zarpe: string;
-  fecha_zarpe_real: string;
-};
-
-const CAMPOS_FECHA_TRANSBORDO = ["fecha_arribo", "fecha_arribo_real", "fecha_zarpe", "fecha_zarpe_real"] as const;
-
-function fechaCargolink(v: unknown): string {
-  const s = typeof v === "string" ? v.slice(0, 10) : "";
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) && !s.startsWith("0000") ? s : "";
-}
-
-function filaParaForm(f: FilaTransbordo): FilaTransbordoForm {
-  return {
-    id_booking_transbordo: f.id_booking_transbordo ? String(f.id_booking_transbordo) : undefined,
-    fecha_arribo: fechaCargolink(f.fecha_arribo),
-    punto: typeof f.punto === "string" ? f.punto : "",
-    fecha_arribo_real: fechaCargolink(f.fecha_arribo_real),
-    fecha_zarpe: fechaCargolink(f.fecha_zarpe),
-    fecha_zarpe_real: fechaCargolink(f.fecha_zarpe_real),
-  };
-}
+export type { FilaTransbordoForm } from "@/lib/escrituraCargolink";
 
 // Contexto común: permiso de editor, booking y bitácora.
 async function contextoTransbordo(idBooking: number) {
@@ -360,93 +190,9 @@ export async function guardarTransbordosCargolink(
   status: string,
   filasForm: FilaTransbordoForm[],
 ): Promise<ResultadoEtapa> {
-  const etapa = ETAPAS_CARGOLINK.transbordo;
-  const accion = etapa.acciones.find((a) => a.status === status);
-  if (!accion) return { ok: false, mensaje: "Acción no válida." };
-  const { supabase, puedeEditar, noBooking, bitacora } = await contextoTransbordo(idBooking);
+  const { supabase, puedeEditar } = await contextoTransbordo(idBooking);
   if (!puedeEditar) return { ok: false, mensaje: "No tienes autorización para editar en Cargolink (piloto)." };
-  if (!noBooking) return { ok: false, mensaje: "Operación no encontrada." };
-
-  // Validar: fechas YYYY-MM-DD y arribo estimado obligatorio (salvo No aplica).
-  const filas = filasForm.filter((f) => CAMPOS_FECHA_TRANSBORDO.some((k) => f[k]) || f.punto.trim() || f.id_booking_transbordo);
-  for (const [i, f] of filas.entries()) {
-    for (const k of CAMPOS_FECHA_TRANSBORDO) {
-      if (f[k] && !/^\d{4}-\d{2}-\d{2}$/.test(f[k])) return { ok: false, mensaje: `Fila ${i + 1}: fecha no válida.` };
-    }
-    if (accion.resultado !== "NO_APLICA" && !f.fecha_arribo) {
-      return { ok: false, mensaje: `Fila ${i + 1}: falta el arribo estimado a puerto transbordo (obligatorio en Cargolink).` };
-    }
-  }
-  if (accion.resultado !== "NO_APLICA" && filas.length === 0) {
-    return { ok: false, mensaje: "Agrega al menos un transbordo, o usa No aplica." };
-  }
-
-  try {
-    const session = await loginCargolink();
-    const [booking, existentes] = await Promise.all([
-      leerBookingMaritimo(session, noBooking),
-      leerTransbordos(session, idBooking),
-    ]);
-    if (!booking) return { ok: false, mensaje: `No se encontró ${noBooking} en Servicios marítimos de Cargolink.` };
-    const estatusAntes = (booking.his_mov_transbordo as string | undefined) || "SIN_COMENZAR";
-    if (estatusAntes === "FINALIZADO") {
-      return { ok: false, mensaje: "Transbordo ya está finalizado en Cargolink; ahí tampoco se puede editar." };
-    }
-
-    // Mismo formato que la pantalla de Cargolink: cada fecha como Date de
-    // medianoche local (CDMX) serializado, y las filas existentes con todos
-    // sus datos originales más los cambios.
-    const iso = (fecha: string) => `${fecha}T06:00:00.000Z`;
-    const porId = new Map(existentes.map((e) => [String(e.id_booking_transbordo), e]));
-    const payload: FilaTransbordo[] = filas.map((f) => {
-      const base: FilaTransbordo = f.id_booking_transbordo ? { ...(porId.get(f.id_booking_transbordo) ?? {}) } : {};
-      for (const k of CAMPOS_FECHA_TRANSBORDO) {
-        if (f[k]) base[k] = iso(f[k]);
-        else delete base[k];
-      }
-      base.punto = f.punto.trim();
-      return base;
-    });
-
-    const valoresAntes = { transbordos: existentes.map(filaParaForm) };
-    const respuesta = await guardarTransbordosEnCargolink(session, idBooking, accion.status, payload);
-    if (respuesta.status_conexion && respuesta.status_conexion !== "OK") {
-      const msg = `Cargolink no confirmó el guardado: ${JSON.stringify(respuesta).slice(0, 200)}`;
-      await bitacora({ accion: accion.status, ok: false, mensaje: msg, valores: { transbordos: filas }, valores_antes: valoresAntes, estatus_antes: estatusAntes });
-      return { ok: false, mensaje: msg };
-    }
-
-    // Confirmar releyendo: estatus de la etapa y que cada arribo estimado quedó.
-    const [despues, filasDespues] = await Promise.all([
-      leerBookingMaritimo(session, noBooking),
-      leerTransbordos(session, idBooking),
-    ]);
-    const estatusDespues = (despues?.his_mov_transbordo as string | undefined) || "SIN_COMENZAR";
-    const valoresDespues = { transbordos: filasDespues.map(filaParaForm) };
-    const arribosDespues = new Set(filasDespues.map((r) => fechaCargolink(r.fecha_arribo)));
-    const faltan = filas.filter((f) => f.fecha_arribo && !arribosDespues.has(f.fecha_arribo));
-    if (estatusDespues !== accion.resultado || faltan.length > 0) {
-      const msg = `Cargolink respondió pero quedó: etapa ${estatusDespues}${faltan.length ? `, ${faltan.length} fila(s) sin guardar` : ""}.`;
-      await bitacora({ accion: accion.status, ok: false, mensaje: msg, valores: { transbordos: filas }, valores_antes: valoresAntes, valores_despues: valoresDespues, estatus_antes: estatusAntes, estatus_despues: estatusDespues });
-      return { ok: false, mensaje: msg };
-    }
-
-    if (despues) {
-      await supabase.rpc("refrescar_operacion_maritima", {
-        p_row: { ...mapOperacionMaritima(despues), sincronizado_at: new Date().toISOString() },
-      });
-    }
-    const mensaje = `Transbordo: ${accion.label.toLowerCase()} en Cargolink (${filasDespues.length} fila(s)).`;
-    await bitacora({ accion: accion.status, ok: true, mensaje, valores: { transbordos: filas }, valores_antes: valoresAntes, valores_despues: valoresDespues, estatus_antes: estatusAntes, estatus_despues: estatusDespues });
-    revalidatePath("/operaciones-maritima");
-    revalidatePath("/track/operaciones");
-    revalidatePath("/track", "layout");
-    return { ok: true, mensaje };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error al comunicarse con Cargolink.";
-    await bitacora({ accion: accion.status, ok: false, mensaje: msg, valores: { transbordos: filas } });
-    return { ok: false, mensaje: msg };
-  }
+  return guardarTransbordosCon(await escritorUsuario(supabase), idBooking, status, filasForm);
 }
 
 // Borra una fila ya guardada en Cargolink (como el bote de basura de su pantalla).
