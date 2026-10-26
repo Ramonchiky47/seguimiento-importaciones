@@ -220,7 +220,17 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                       {p.tipo === "transbordo" ? (
                         <span className="font-semibold">No aplica</span>
                       ) : t.soloAviso ? (
-                        <span className="font-semibold text-amber-900 dark:text-amber-200">MSC: {fechaCorta(p.valor)}</span>
+                        <span className="flex flex-col items-start gap-1">
+                          <span className="font-semibold text-amber-900 dark:text-amber-200">Naviera: {fechaCorta(p.valor)}</span>
+                          {p.tipo === "ata_naviera_info" && (
+                            <a
+                              href={`/track/interactivo/${p.id_booking}?editar=ata`}
+                              className="rounded border border-amber-400 px-2 py-0.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-950"
+                            >
+                              Abrir ATA
+                            </a>
+                          )}
+                        </span>
                       ) : (
                         <input
                           type={p.tipo === "dias" ? "number" : "date"}

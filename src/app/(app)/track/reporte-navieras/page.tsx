@@ -67,7 +67,7 @@ function Seccion({
         <p className="text-xs text-slate-500 dark:text-slate-400">{ayuda}</p>
         {n > 0 && accion}
       </div>
-      {n === 0 ? <p className="px-4 py-4 text-sm text-slate-500">Nada en esta corrida.</p> : <div className="overflow-x-auto">{children}</div>}
+      {n === 0 ? <p className="px-4 py-4 text-sm text-slate-500">Nada pendiente.</p> : <div className="overflow-x-auto">{children}</div>}
     </section>
   );
 }
@@ -117,8 +117,10 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
     return Boolean(t?.ok && t.consultado_at > corte);
   };
   const enCurso = idsPagina.some((i) => enCola(i) && !actualizado(i));
-  // Lo que falta: el botón solo vuelve a consultar estos.
+  // Lo que falta: el botón solo vuelve a consultar estos; los ya actualizados salen de la lista.
   const idsPendientes = idsPagina.filter((i) => !actualizado(i));
+  const paginaVisible = pagina.filter((f) => !actualizado(f.id_booking));
+  const resueltos = pagina.length - paginaVisible.length;
   const ahora = (id: number) => {
     const t = nav.get(id);
     const s = sol.get(id);
@@ -217,8 +219,10 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
 
           <Seccion
             titulo="Problemas de la página de la naviera"
-            ayuda="La página pidió verificación, no respondió o falló: se vuelve a intentar en la siguiente corrida."
-            n={pagina.length}
+            ayuda={`La página pidió verificación, no respondió o falló: se vuelve a intentar en la siguiente corrida.${
+              resueltos ? ` ${resueltos} ya se actualizaron y salieron de la lista.` : ""
+            }`}
+            n={paginaVisible.length}
             tono="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
             accion={<ReconsultarNavieras key={elegida.id} ids={idsPendientes} enCurso={enCurso} />}
           >
@@ -232,7 +236,7 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {pagina.map((f) => (
+                {paginaVisible.map((f) => (
                   <tr key={f.id_booking} className="align-top">
                     <BookingCelda f={f} />
                     <td className="px-3 py-2">{nombreNaviera(f.naviera ?? "")}</td>
