@@ -19,7 +19,43 @@ export type Propuesta = {
   ruta?: string | null;
   // Lo que suele dar la naviera (solo días libres).
   naviera_dias?: string | null;
+  // Comparativa con la naviera (último dato bueno de los agentes).
+  nav_nombre?: string | null;
+  nav_eta?: string | null;
+  nav_ata?: string | null;
+  nav_consultado?: string | null;
+  eta_cargolink?: string | null;
 };
+
+const MESES_C = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const diasEntre = (a: string, b: string) => Math.round((Date.parse(b.slice(0, 10)) - Date.parse(a.slice(0, 10))) / 86400000);
+
+// Cargolink contra la naviera, para decidir si se finaliza la ETA.
+function Comparativa({ p }: { p: Propuesta }) {
+  const eta = p.eta_cargolink ?? p.valor;
+  if (!p.nav_nombre) {
+    return <span className="text-[11px] text-slate-500 dark:text-slate-400">Sin dato de la naviera para comparar</span>;
+  }
+  const nav = p.nav_nombre.charAt(0) + p.nav_nombre.slice(1).toLowerCase();
+  const consultado = p.nav_consultado ? new Date(p.nav_consultado) : null;
+  const cuando = consultado ? ` · consultado ${consultado.getDate()} ${MESES_C[consultado.getMonth()]}` : "";
+  if (p.nav_ata) {
+    return (
+      <span className="text-[11px] font-semibold text-green-700 dark:text-green-400">
+        {nav}: arribó {fechaCorta(p.nav_ata)}
+        <span className="font-normal text-slate-500">{cuando}</span>
+      </span>
+    );
+  }
+  if (!p.nav_eta || !eta) return <span className="text-[11px] text-slate-500">{nav}: sin ETA{cuando}</span>;
+  const d = diasEntre(eta, p.nav_eta);
+  return (
+    <span className={`text-[11px] font-semibold ${d === 0 ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
+      {d === 0 ? `✓ ${nav} coincide: ${fechaCorta(p.nav_eta)}` : `${nav} da ${fechaCorta(p.nav_eta)} (${d > 0 ? "+" : ""}${d} d)`}
+      <span className="font-normal text-slate-500">{cuando}</span>
+    </span>
+  );
+}
 
 const TIPOS: { tipo: Propuesta["tipo"]; titulo: string; accion: string; ayuda: string; soloAviso?: boolean }[] = [
   {
@@ -246,6 +282,12 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                         />
                       )}
                     </span>
+                    {(p.tipo === "eta_finalizar" || p.tipo === "eta") && (
+                      <span className="flex min-w-40 flex-col">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Cargolink vs naviera</span>
+                        <Comparativa p={p} />
+                      </span>
+                    )}
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${CONFIANZA[p.confianza].clase}`}>{CONFIANZA[p.confianza].label}</span>
                     <span className="min-w-0 flex-1 text-xs text-slate-600 dark:text-slate-400">
                       {p.explicacion}
