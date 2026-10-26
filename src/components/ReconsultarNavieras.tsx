@@ -65,6 +65,14 @@ export function ReconsultarNavieras({ ids, enCurso = false }: { ids: number[]; e
     setEnviado(true);
   };
 
+  if (ids.length === 0) {
+    return (
+      <span className="rounded-md bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 dark:bg-green-950 dark:text-green-300">
+        ✓ Todos actualizados
+      </span>
+    );
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-3">
       {enviado && (
@@ -104,7 +112,11 @@ export function ReconsultarNavieras({ ids, enCurso = false }: { ids: number[]; e
         disabled={enviando || (enviado && !lectura.terminado) || ids.length === 0}
         className="min-h-10 rounded-md bg-[#16232f] px-4 text-sm font-semibold text-white hover:bg-[#22364a] disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
       >
-        {enviando ? "Enviando…" : `Volver a consultar estos ${ids.length}`}
+        {enviando
+          ? "Enviando…"
+          : ids.length === 0
+            ? "Todos actualizados"
+            : `Volver a consultar ${ids.length === 1 ? "el pendiente" : `los ${ids.length} pendientes`}`}
       </button>
     </div>
   );

@@ -99,7 +99,7 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
   const [{ data: navAhora }, { data: solAhora }] = idsPagina.length
     ? await Promise.all([
         supabase.from("tracking_naviera").select("id_booking, ok, eta_naviera, ata_naviera, error, consultado_at").in("id_booking", idsPagina),
-        supabase.from("tracking_solicitudes").select("id_booking, estado").in("id_booking", idsPagina),
+        supabase.from("tracking_solicitudes").select("id_booking, estado, mensaje, solicitado_at, atendido_at").in("id_booking", idsPagina),
       ])
     : [{ data: [] }, { data: [] }];
   const nav = new Map(
@@ -107,16 +107,33 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
       (x) => [x.id_booking, x],
     ),
   );
-  const sol = new Map(((solAhora ?? []) as { id_booking: number; estado: string }[]).map((x) => [x.id_booking, x.estado]));
-  const enCurso = idsPagina.some((i) => ["pendiente", "en_proceso"].includes(sol.get(i) ?? ""));
+  type Sol = { id_booking: number; estado: string; mensaje: string | null; solicitado_at: string; atendido_at: string | null };
+  const sol = new Map(((solAhora ?? []) as Sol[]).map((x) => [x.id_booking, x]));
+  const enCola = (id: number) => ["pendiente", "en_proceso"].includes(sol.get(id)?.estado ?? "");
+  const corte = elegida ? (elegida.fin ?? elegida.inicio) : "";
+  // Ya resuelto: la naviera respondió con dato después del reporte.
+  const actualizado = (id: number) => {
+    const t = nav.get(id);
+    return Boolean(t?.ok && t.consultado_at > corte);
+  };
+  const enCurso = idsPagina.some((i) => enCola(i) && !actualizado(i));
+  // Lo que falta: el botón solo vuelve a consultar estos.
+  const idsPendientes = idsPagina.filter((i) => !actualizado(i));
   const ahora = (id: number) => {
     const t = nav.get(id);
-    if (["pendiente", "en_proceso"].includes(sol.get(id) ?? "")) return { texto: "En consulta…", clase: "text-amber-700 dark:text-amber-400" };
-    if (t && elegida && t.consultado_at > (elegida.fin ?? elegida.inicio)) {
-      return t.ok
-        ? { texto: `✓ Actualizado ${hora(t.consultado_at)} · ${t.ata_naviera ? `ATA ${fechaCorta(t.ata_naviera)}` : `ETA ${fechaCorta(t.eta_naviera)}`}`, clase: "text-green-700 dark:text-green-400" }
-        : { texto: `Sigue sin dato: ${t.error ?? ""}`, clase: "text-red-700 dark:text-red-400" };
+    const s = sol.get(id);
+    if (t && actualizado(id)) {
+      const reconsultando = enCola(id) && s && t.consultado_at < s.solicitado_at ? " · reconsultando…" : "";
+      return {
+        texto: `✓ Actualizado ${hora(t.consultado_at)} · ${t.ata_naviera ? `ATA ${fechaCorta(t.ata_naviera)}` : `ETA ${fechaCorta(t.eta_naviera)}`}${reconsultando}`,
+        clase: "text-green-700 dark:text-green-400",
+      };
     }
+    if (enCola(id)) return { texto: "En consulta…", clase: "text-amber-700 dark:text-amber-400" };
+    if (s?.estado === "error" && s.atendido_at && s.atendido_at > corte) {
+      return { texto: `Ninguna naviera lo encontró (${hora(s.atendido_at)}): revisar BL o contenedor`, clase: "text-red-700 dark:text-red-400" };
+    }
+    if (t && !t.ok && t.consultado_at > corte) return { texto: `Sigue sin dato: ${t.error ?? ""}`, clase: "text-red-700 dark:text-red-400" };
     return { texto: "Sin consultar desde el reporte", clase: "text-slate-500" };
   };
 
@@ -203,7 +220,7 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
             ayuda="La página pidió verificación, no respondió o falló: se vuelve a intentar en la siguiente corrida."
             n={pagina.length}
             tono="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
-            accion={<ReconsultarNavieras key={elegida.id} ids={idsPagina} enCurso={enCurso} />}
+            accion={<ReconsultarNavieras key={elegida.id} ids={idsPendientes} enCurso={enCurso} />}
           >
             <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-800">
               <thead className="bg-slate-50 dark:bg-slate-800/50">
