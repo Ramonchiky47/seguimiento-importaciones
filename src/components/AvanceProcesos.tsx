@@ -20,6 +20,9 @@ type Proceso = {
 };
 
 const NOMBRE = { bookings: "Carga de bookings (Cargolink)", navieras: "Rastreo de navieras" };
+// Navieras con agente, en el orden del rastreo (como las guardan los agentes).
+const NAVIERAS = ["MSC", "MAERSK", "YANG MING", "EVERGREEN", "TS LINES", "SINOKOR", "CMA CGM", "ONE", "COSCO", "WAN HAI", "ZIM", "HAPAG-LLOYD"];
+const titulo = (n: string) => (n.length <= 3 ? n : n.charAt(0) + n.slice(1).toLowerCase());
 // Sin señales en este tiempo, se da por detenido (la Mac se apagó o se durmió).
 const SIN_SENAL_MIN = 20;
 
@@ -44,6 +47,8 @@ async function leer(): Promise<Proceso[]> {
 
 function Medidor({ p, ahora, onPedido, esAdmin }: { p: Proceso; ahora: number; onPedido: () => void; esAdmin: boolean }) {
   const [pedido, setPedido] = useState<{ cargando: boolean; texto: string | null }>({ cargando: false, texto: null });
+  // Rastreo de navieras: todas o solo una.
+  const [naviera, setNaviera] = useState("");
   const detenido = p.estado === "corriendo" && ahora - Date.parse(p.actualizado_at) > SIN_SENAL_MIN * 60000;
   const pct = p.estado === "terminado" ? 100 : p.total ? Math.min(100, Math.round((100 * p.hechos) / p.total)) : 0;
   const color =
@@ -62,13 +67,32 @@ function Medidor({ p, ahora, onPedido, esAdmin }: { p: Proceso; ahora: number; o
         <span className="font-semibold text-slate-800 dark:text-slate-100">{NOMBRE[p.proceso]}</span>
         <span className="flex items-center gap-2">
           {/* "Correr ahora": solo administradores (la base también lo valida). */}
+          {esAdmin && (p.estado !== "corriendo" || detenido) && p.proceso === "navieras" && (
+            <select
+              value={naviera}
+              onChange={(e) => setNaviera(e.target.value)}
+              aria-label="Naviera a actualizar"
+              className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[11px] text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+            >
+              <option value="">Todas</option>
+              {NAVIERAS.map((n) => (
+                <option key={n} value={n}>
+                  {titulo(n)}
+                </option>
+              ))}
+            </select>
+          )}
           {esAdmin && (p.estado !== "corriendo" || detenido) && (
             <button
               type="button"
               disabled={pedido.cargando}
               onClick={async () => {
                 setPedido({ cargando: true, texto: null });
-                const { data, error } = await createClient().rpc("solicitar_proceso", { p_proceso: p.proceso });
+                const supabase = createClient();
+                const { data, error } =
+                  p.proceso === "navieras" && naviera
+                    ? await supabase.rpc("solicitar_rastreo_naviera", { p_naviera: naviera })
+                    : await supabase.rpc("solicitar_proceso", { p_proceso: p.proceso });
                 const r = String(data ?? "");
                 setPedido({
                   cargando: false,
@@ -78,7 +102,7 @@ function Medidor({ p, ahora, onPedido, esAdmin }: { p: Proceso; ahora: number; o
                       ? "Ya está corriendo."
                       : r === "pendiente"
                         ? "Ya estaba pedido: arranca en menos de 1 minuto."
-                        : "Pedido: la Mac lo arranca en menos de 1 minuto.",
+                        : `Pedido${p.proceso === "navieras" && naviera ? ` (solo ${titulo(naviera)})` : ""}: la Mac lo arranca en menos de 1 minuto.`,
                 });
                 if (!error) onPedido();
               }}
