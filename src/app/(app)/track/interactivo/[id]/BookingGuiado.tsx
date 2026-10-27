@@ -17,6 +17,8 @@ import { refrescarOperacionDesdeCargolink } from "@/app/(app)/operaciones-mariti
 import { ETAPAS_CARGOLINK } from "@/lib/etapasCargolink";
 import { arriboSinConfirmar, type ResumenNaviera } from "@/lib/detalleNaviera";
 import { nombreNaviera } from "@/lib/navieras";
+import { esColoader } from "@/lib/coloader";
+import { ColoaderSeccion } from "@/components/ColoaderSeccion";
 import {
   ESTILO_TAREA,
   FASES,
@@ -95,6 +97,8 @@ export function BookingGuiado({
   const [pdfPulso, setPdfPulso] = useState(false);
   const [nav, setNav] = useState(navieraInicial);
   const conNaviera = Boolean(nav);
+  // LCL sin dato de la naviera: el estatus lo da el coloader.
+  const coloader = esColoader(String(op.no_booking ?? ""), conNaviera);
   const [refresco, setRefresco] = useState<{ estado: "cargando" | "ok" | "error"; mensaje: string }>({
     estado: "cargando",
     mensaje: "Actualizando desde Cargolink…",
@@ -252,7 +256,7 @@ export function BookingGuiado({
             }}
             className="min-h-11 rounded-lg border border-white/40 px-4 text-sm font-bold text-white hover:bg-white/10"
           >
-            Estatus de la naviera
+            {coloader ? "Estatus del coloader" : "Estatus de la naviera"}
           </button>
           <button
             type="button"
@@ -536,7 +540,19 @@ export function BookingGuiado({
           </section>
 
           {/* Estatus según la naviera (agentes de la Mac); acceso desde el encabezado. */}
-          <div id="naviera" tabIndex={-1} className="scroll-mt-20 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+          <div id="naviera" tabIndex={-1} className="flex scroll-mt-20 flex-col gap-3 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+            {coloader && (
+              <ColoaderSeccion
+                idBooking={idBooking}
+                mbl={(op.mbl as string | null) ?? null}
+                contenedores={(op.contenedores as string | null) ?? null}
+                agente={datos.nameAgenExt ?? null}
+                buque={datos.buque ?? null}
+                viaje={datos.no_viaje ?? null}
+                eta={(op.eta as string | null) ?? null}
+                puedeEditar={puedeEditar}
+              />
+            )}
             <NavieraSeccion
               idBooking={idBooking}
               carrier={datos.buque_carrier ?? null}

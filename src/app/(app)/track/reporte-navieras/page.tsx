@@ -24,7 +24,7 @@ type Fila = {
   dias_vs_cargolink?: number | null;
   dias_vs_antes?: number | null;
 };
-type Reporte = { total: number; encontrados: number; pagina: Fila[]; no_encontrados: Fila[]; sin_referencia: Fila[]; aplazadas: Fila[] };
+type Reporte = { total: number; encontrados: number; pagina: Fila[]; no_encontrados: Fila[]; sin_referencia: Fila[]; aplazadas: Fila[]; coloader?: Fila[] };
 
 const hora = (iso: string) =>
   new Date(iso).toLocaleString("es-MX", { timeZone: "America/Mexico_City", dateStyle: "medium", timeStyle: "short" });
@@ -294,6 +294,33 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {r.sin_referencia.map((f) => (
+                  <tr key={f.id_booking} className="align-top">
+                    <BookingCelda f={f} />
+                    <td className="px-3 py-2 font-mono text-xs">{f.mbl || "—"}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{f.contenedores || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Seccion>
+
+          {/* LCL: no es error del rastreo; el estatus lo captura el operativo con el coloader. */}
+          <Seccion
+            titulo="LCL con coloader · estatus en el detalle"
+            ayuda="Su BL es del coloader y ninguna naviera lo reconoce: captura el estatus del coloader en el detalle o pide el BL master o el contenedor."
+            n={(r.coloader ?? []).length}
+            tono="bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300"
+          >
+            <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-800">
+              <thead className="bg-slate-50 dark:bg-slate-800/50">
+                <tr>
+                  <th scope="col" className={TH}>Booking · cliente · ejecutivo</th>
+                  <th scope="col" className={TH}>BL del coloader</th>
+                  <th scope="col" className={TH}>Contenedores capturados</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {(r.coloader ?? []).map((f) => (
                   <tr key={f.id_booking} className="align-top">
                     <BookingCelda f={f} />
                     <td className="px-3 py-2 font-mono text-xs">{f.mbl || "—"}</td>
