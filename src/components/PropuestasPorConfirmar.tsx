@@ -25,10 +25,45 @@ export type Propuesta = {
   nav_ata?: string | null;
   nav_consultado?: string | null;
   eta_cargolink?: string | null;
+  ata_cargolink?: string | null;
 };
 
 const MESES_C = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const diasEntre = (a: string, b: string) => Math.round((Date.parse(b.slice(0, 10)) - Date.parse(a.slice(0, 10))) / 86400000);
+
+// ATA por corregir: en riesgo si la naviera reporta el arribo ANTES que la ATA de
+// Cargolink (los días libres ya corren y Cargolink los cuenta tarde: posible
+// demora sin aviso). Bajo riesgo si aún no arriba o arribó después (Cargolink
+// los cuenta antes de tiempo).
+type CorreccionAta = { riesgo: boolean; accion: string; motivo: string };
+
+function correccionAta(p: Propuesta): CorreccionAta {
+  const cl = p.ata_cargolink;
+  if (p.nav_ata && cl && p.nav_ata < cl) {
+    const d = diasEntre(p.nav_ata, cl);
+    return {
+      riesgo: true,
+      accion: `Cambia ATA ${fechaCorta(cl)} → ${fechaCorta(p.nav_ata)}`,
+      motivo: `Arribó ${d} ${d === 1 ? "día" : "días"} antes: los días libres corren desde el ${fechaCorta(p.nav_ata)}.`,
+    };
+  }
+  if (p.nav_ata) {
+    return {
+      riesgo: false,
+      accion: cl ? `Cambia ATA ${fechaCorta(cl)} → ${fechaCorta(p.nav_ata)}` : `Captura ATA ${fechaCorta(p.nav_ata)}`,
+      motivo: "Arribó después de lo capturado: Cargolink cuenta los días libres antes de tiempo.",
+    };
+  }
+  return {
+    riesgo: false,
+    accion: cl ? `Borra ATA ${fechaCorta(cl)}` : "Revisa la ATA",
+    motivo: `Aún no arriba${p.nav_eta ? `: llega ${fechaCorta(p.nav_eta)}` : ""}. Cargolink cuenta los días libres antes de tiempo.`,
+  };
+}
+
+// Primero en riesgo y luego bajo riesgo; cada grupo por fecha de la naviera.
+const ordenAta = (a: Propuesta, b: Propuesta) =>
+  Number(correccionAta(b).riesgo) - Number(correccionAta(a).riesgo) || a.valor.localeCompare(b.valor);
 
 // Cargolink contra la naviera, para decidir si se finaliza la ETA.
 function Comparativa({ p }: { p: Propuesta }) {
@@ -68,7 +103,7 @@ const TIPOS: { tipo: Propuesta["tipo"]; titulo: string; accion: string; ayuda: s
     tipo: "ata_naviera_info",
     titulo: "ATA por corregir en Cargolink",
     accion: "",
-    ayuda: "La naviera contradice la ATA de Cargolink (aún no arriba o arribó otro día) o la etapa ATA ya está finalizada: la app no puede borrarla ni cambiarla. Corrígela en Cargolink.",
+    ayuda: "La naviera contradice la ATA de Cargolink. Primero los que están en riesgo (arribó antes: los días libres ya corren), luego los de bajo riesgo; cada grupo por fecha. Haz en Cargolink lo que indica cada renglón.",
     soloAviso: true,
   },
   { tipo: "eta_naviera", titulo: "ETA según la naviera", accion: "Guardar ETA de la naviera", ayuda: "Los agentes consultan a las navieras a las 7 PM (o desde el detalle) y la ETA no coincide con Cargolink." },
@@ -194,6 +229,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
 
       {TIPOS.map((t) => {
         const lista = propuestas.filter((p) => p.tipo === t.tipo);
+        if (t.tipo === "ata_naviera_info") lista.sort(ordenAta);
         if (lista.length === 0) return null;
         const abiertas = lista.filter((p) => !resultado[clave(p)]?.ok);
         const todas = abiertas.length > 0 && abiertas.every((p) => marcadas[clave(p)]);
@@ -223,6 +259,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                 const k = clave(p);
                 const r = resultado[k];
                 const hecho = r?.ok === true;
+                const corr = p.tipo === "ata_naviera_info" ? correccionAta(p) : null;
                 return (
                   <li key={k} className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-sm ${hecho ? "bg-green-50 dark:bg-green-950/40" : ""}`}>
                     {t.soloAviso ? (
@@ -252,8 +289,18 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                         {p.ruta ?? "—"}
                       </span>
                     </span>
-                    <span className="w-44">
-                      {p.tipo === "transbordo" ? (
+                    <span className={corr ? "w-56" : "w-44"}>
+                      {corr ? (
+                        <span className="flex flex-col items-start gap-1">
+                          <span className={`font-semibold ${corr.riesgo ? "text-red-700 dark:text-red-400" : "text-slate-800 dark:text-slate-200"}`}>{corr.accion}</span>
+                          <a
+                            href={`/track/interactivo/${p.id_booking}?editar=ata`}
+                            className="rounded border border-amber-400 px-2 py-0.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-950"
+                          >
+                            Abrir ATA
+                          </a>
+                        </span>
+                      ) : p.tipo === "transbordo" ? (
                         <span className="font-semibold">No aplica</span>
                       ) : t.soloAviso ? (
                         <span className="flex flex-col items-start gap-1">
@@ -288,9 +335,31 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                         <Comparativa p={p} />
                       </span>
                     )}
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${CONFIANZA[p.confianza].clase}`}>{CONFIANZA[p.confianza].label}</span>
+                    {corr ? (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                          corr.riesgo ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        }`}
+                      >
+                        {corr.riesgo ? "En riesgo" : "Bajo riesgo"}
+                      </span>
+                    ) : (
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${CONFIANZA[p.confianza].clase}`}>{CONFIANZA[p.confianza].label}</span>
+                    )}
                     <span className="min-w-0 flex-1 text-xs text-slate-600 dark:text-slate-400">
-                      {p.explicacion}
+                      {corr ? (
+                        <>
+                          {corr.motivo}
+                          {p.nav_consultado && (
+                            <span className="block text-slate-500">
+                              {p.nav_nombre ? p.nav_nombre.charAt(0) + p.nav_nombre.slice(1).toLowerCase() : "Naviera"} consultada el{" "}
+                              {fechaCorta(p.nav_consultado.slice(0, 10))}.
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        p.explicacion
+                      )}
                       {p.naviera_dias && (
                         <span className="block text-slate-500">
                           Esta naviera suele dar {p.naviera_dias}.
