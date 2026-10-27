@@ -224,7 +224,14 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
             }`}
             n={paginaVisible.length}
             tono="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
-            accion={<ReconsultarNavieras key={elegida.id} ids={idsPendientes} enCurso={enCurso} />}
+            accion={
+              <ReconsultarNavieras
+                key={elegida.id}
+                ids={idsPendientes}
+                enCurso={enCurso}
+                navieras={Object.fromEntries(paginaVisible.map((f) => [f.id_booking, f.naviera ?? null]))}
+              />
+            }
           >
             <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-800">
               <thead className="bg-slate-50 dark:bg-slate-800/50">
