@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { AGENTES_RASTREO, tituloAgente } from "@/lib/navieras";
 
 // Medidores de los procesos de la Mac (tabla rastreo_procesos): carga de
 // bookings de Cargolink y rastreo de navieras. Cada 5 s mientras corren.
@@ -21,8 +22,6 @@ type Proceso = {
 
 const NOMBRE = { bookings: "Carga de bookings (Cargolink)", navieras: "Rastreo de navieras" };
 // Navieras con agente, en el orden del rastreo (como las guardan los agentes).
-const NAVIERAS = ["MSC", "MAERSK", "YANG MING", "EVERGREEN", "TS LINES", "SINOKOR", "CMA CGM", "ONE", "COSCO", "WAN HAI", "ZIM", "HAPAG-LLOYD"];
-const titulo = (n: string) => (n.length <= 3 ? n : n.charAt(0) + n.slice(1).toLowerCase());
 // Sin señales en este tiempo, se da por detenido (la Mac se apagó o se durmió).
 const SIN_SENAL_MIN = 20;
 
@@ -75,9 +74,9 @@ function Medidor({ p, ahora, onPedido, esAdmin }: { p: Proceso; ahora: number; o
               className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[11px] text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
             >
               <option value="">Todas</option>
-              {NAVIERAS.map((n) => (
+              {AGENTES_RASTREO.map((n) => (
                 <option key={n} value={n}>
-                  {titulo(n)}
+                  {tituloAgente(n)}
                 </option>
               ))}
             </select>
@@ -102,7 +101,7 @@ function Medidor({ p, ahora, onPedido, esAdmin }: { p: Proceso; ahora: number; o
                       ? "Ya está corriendo."
                       : r === "pendiente"
                         ? "Ya estaba pedido: arranca en menos de 1 minuto."
-                        : `Pedido${p.proceso === "navieras" && naviera ? ` (solo ${titulo(naviera)})` : ""}: la Mac lo arranca en menos de 1 minuto.`,
+                        : `Pedido${p.proceso === "navieras" && naviera ? ` (solo ${tituloAgente(naviera)})` : ""}: la Mac lo arranca en menos de 1 minuto.`,
                 });
                 if (!error) onPedido();
               }}

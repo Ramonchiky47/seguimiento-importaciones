@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { AGENTES_RASTREO, tituloAgente } from "@/lib/navieras";
 
 // Vuelve a consultar a la naviera solo los bookings indicados (cola
-// tracking_solicitudes: la Mac la atiende cada minuto, con todas las navieras
-// de respaldo) y muestra el avance.
+// tracking_solicitudes: la Mac la atiende cada minuto) y muestra el avance.
+// Con "Todas" usa todas las navieras de respaldo; con una naviera elegida, solo
+// el agente de esa naviera.
 type Estado = "pendiente" | "en_proceso" | "hecho" | "error";
 type Lectura = { listos: number; conDato: number; terminado: boolean };
 
@@ -15,6 +17,7 @@ export function ReconsultarNavieras({ ids, enCurso = false }: { ids: number[]; e
   const router = useRouter();
   const [enviado, setEnviado] = useState(enCurso);
   const [enviando, setEnviando] = useState(false);
+  const [naviera, setNaviera] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [lectura, setLectura] = useState<Lectura>({ listos: 0, conDato: 0, terminado: false });
   // Cada refresh del servidor trae un arreglo nuevo: el efecto depende de su contenido.
@@ -54,7 +57,9 @@ export function ReconsultarNavieras({ ids, enCurso = false }: { ids: number[]; e
     setError(null);
     const supabase = createClient();
     for (const id of ids) {
-      const { error: e } = await supabase.rpc("solicitar_tracking_naviera", { p_id_booking: id });
+      const { error: e } = naviera
+        ? await supabase.rpc("solicitar_tracking_naviera", { p_id_booking: id, p_naviera: naviera })
+        : await supabase.rpc("solicitar_tracking_naviera", { p_id_booking: id });
       if (e) {
         setError(e.message);
         break;
@@ -101,11 +106,27 @@ export function ReconsultarNavieras({ ids, enCurso = false }: { ids: number[]; e
           <span role="status" className="text-[11px] text-slate-500 dark:text-slate-400">
             {lectura.terminado
               ? `${lectura.conDato} con información, ${ids.length - lectura.conDato} siguen sin dato.`
-              : "La Mac los atiende en 1 a 2 minutos; puedes seguir trabajando."}
+              : `La Mac los atiende en 1 a 2 minutos${naviera ? ` (solo ${tituloAgente(naviera)})` : ""}; puedes seguir trabajando.`}
           </span>
         </div>
       )}
       {error && <span className="text-xs text-red-700 dark:text-red-400">No se pudo pedir: {error}</span>}
+      <label className="flex flex-col text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+        Consultar en
+        <select
+          value={naviera}
+          onChange={(e) => setNaviera(e.target.value)}
+          disabled={enviando || (enviado && !lectura.terminado)}
+          className="min-h-10 rounded-md border border-slate-300 bg-white px-2 text-sm font-normal text-slate-800 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+        >
+          <option value="">Todas las navieras</option>
+          {AGENTES_RASTREO.map((n) => (
+            <option key={n} value={n}>
+              Solo {tituloAgente(n)}
+            </option>
+          ))}
+        </select>
+      </label>
       <button
         type="button"
         onClick={enviar}
