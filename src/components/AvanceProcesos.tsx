@@ -42,7 +42,7 @@ async function leer(): Promise<Proceso[]> {
   return r.map((x) => x.data as Proceso | null).filter((x): x is Proceso => Boolean(x));
 }
 
-function Medidor({ p, ahora, onPedido }: { p: Proceso; ahora: number; onPedido: () => void }) {
+function Medidor({ p, ahora, onPedido, esAdmin }: { p: Proceso; ahora: number; onPedido: () => void; esAdmin: boolean }) {
   const [pedido, setPedido] = useState<{ cargando: boolean; texto: string | null }>({ cargando: false, texto: null });
   const detenido = p.estado === "corriendo" && ahora - Date.parse(p.actualizado_at) > SIN_SENAL_MIN * 60000;
   const pct = p.estado === "terminado" ? 100 : p.total ? Math.min(100, Math.round((100 * p.hechos) / p.total)) : 0;
@@ -61,7 +61,8 @@ function Medidor({ p, ahora, onPedido }: { p: Proceso; ahora: number; onPedido: 
       <div className="flex items-center justify-between gap-2 text-xs">
         <span className="font-semibold text-slate-800 dark:text-slate-100">{NOMBRE[p.proceso]}</span>
         <span className="flex items-center gap-2">
-          {(p.estado !== "corriendo" || detenido) && (
+          {/* "Correr ahora": solo administradores (la base también lo valida). */}
+          {esAdmin && (p.estado !== "corriendo" || detenido) && (
             <button
               type="button"
               disabled={pedido.cargando}
@@ -119,7 +120,7 @@ function Medidor({ p, ahora, onPedido }: { p: Proceso; ahora: number; onPedido: 
   );
 }
 
-export function AvanceProcesos() {
+export function AvanceProcesos({ esAdmin = false }: { esAdmin?: boolean }) {
   const [{ procesos, ahora }, setLectura] = useState<{ procesos: Proceso[]; ahora: number }>({ procesos: [], ahora: 0 });
   // Tras "Correr ahora", se lee cada 5 s hasta que la corrida aparece.
   const [rapido, setRapido] = useState(false);
@@ -146,7 +147,7 @@ export function AvanceProcesos() {
   return (
     <section aria-label="Avance de la actualización" className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
       {procesos.map((p) => (
-        <Medidor key={p.proceso} p={p} ahora={ahora} onPedido={() => setRapido(true)} />
+        <Medidor key={p.proceso} p={p} ahora={ahora} onPedido={() => setRapido(true)} esAdmin={esAdmin} />
       ))}
     </section>
   );

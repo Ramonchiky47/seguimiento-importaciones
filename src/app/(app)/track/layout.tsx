@@ -33,7 +33,7 @@ export default async function TrackLayout({ children }: { children: React.ReactN
               Viendo solo tus {clientesAsignados} {clientesAsignados === 1 ? "cliente asignado" : "clientes asignados"}
             </p>
           )}
-          <AvanceProcesos />
+          <AvanceProcesos esAdmin={myPermissions.es_admin === true} />
           <div className="mt-2">
             <TrackTabs asignaEjecutivos={asignaEjecutivos === true} />
           </div>
