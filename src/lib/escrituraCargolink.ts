@@ -21,6 +21,19 @@ export type ResultadoEtapa = { ok: boolean; mensaje: string };
 export type Escritor = { supabase: SupabaseClient; email: string | null; nombre: string | null };
 export const SISTEMA = { email: "sistema", nombre: "Aplicación por sistema" };
 
+// Pone la fila de la app igual a lo que se acaba de leer de Cargolink. El sistema
+// escribe con la clave de servicio (sin usuario), y refrescar_operacion_maritima
+// pide permiso de operaciones del usuario: por eso actualiza la tabla directo.
+async function refrescarFila(esc: Escritor, booking: CargolinkBooking) {
+  const fila = { ...mapOperacionMaritima(booking), sincronizado_at: new Date().toISOString() };
+  if (esc.email === SISTEMA.email) {
+    const { error } = await esc.supabase.from("operaciones_maritima").update(fila).eq("id_booking", fila.id_booking);
+    return error;
+  }
+  const { error } = await esc.supabase.rpc("refrescar_operacion_maritima", { p_row: fila });
+  return error;
+}
+
 // El usuario conectado (nombre del operativo ligado a su cuenta, si lo tiene).
 export async function escritorUsuario(supabase: SupabaseClient): Promise<Escritor> {
   const {
@@ -110,7 +123,18 @@ export async function guardarEtapaCon(
     valoresAntes = camposEtapa({ ...booking, ...origen });
     estatusAntes = (booking[etapa.mov] as string | undefined) || "SIN_COMENZAR";
     if (booking[etapa.mov] === "FINALIZADO") {
-      return { ok: false, mensaje: `${etapa.label} ya está finalizada en Cargolink; ahí tampoco se puede editar.` };
+      // La app la tenía abierta (aún no se reflejaba): se actualiza con lo de
+      // Cargolink para que deje de proponerse.
+      const errRefresco = await refrescarFila(esc, booking);
+      const msg = `${etapa.label} ya está finalizada en Cargolink; ahí tampoco se puede editar.${
+        errRefresco ? "" : " La app ya se actualizó."
+      }`;
+      await bitacora(false, msg, cambios);
+      if (!errRefresco) {
+        revalidatePath("/operaciones-maritima");
+        revalidatePath("/track", "layout");
+      }
+      return { ok: false, mensaje: msg };
     }
     if (accion.resultado !== "NO_APLICA") {
       for (const c of etapa.campos) {
@@ -169,9 +193,7 @@ export async function guardarEtapaCon(
       return { ok: false, mensaje: msg };
     }
 
-    const { error: errRefresco } = await supabase.rpc("refrescar_operacion_maritima", {
-      p_row: { ...mapOperacionMaritima(despuesBooking as CargolinkBooking), sincronizado_at: new Date().toISOString() },
-    });
+    const errRefresco = await refrescarFila(esc, despuesBooking as CargolinkBooking);
     const mensaje = `${etapa.label}: ${accion.label.toLowerCase()} en Cargolink.${
       errRefresco ? " (La app se actualizará en la próxima carga.)" : ""
     }`;
@@ -305,11 +327,7 @@ export async function guardarTransbordosCon(
       return { ok: false, mensaje: msg };
     }
 
-    if (despues) {
-      await supabase.rpc("refrescar_operacion_maritima", {
-        p_row: { ...mapOperacionMaritima(despues), sincronizado_at: new Date().toISOString() },
-      });
-    }
+    if (despues) await refrescarFila(esc, despues);
     const mensaje = `Transbordo: ${accion.label.toLowerCase()} en Cargolink (${filasDespues.length} fila(s)).`;
     await bitacora({ accion: accion.status, ok: true, mensaje, valores: { transbordos: filas }, valores_antes: valoresAntes, valores_despues: valoresDespues, estatus_antes: estatusAntes, estatus_despues: estatusDespues });
     revalidatePath("/operaciones-maritima");
