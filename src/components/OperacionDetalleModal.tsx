@@ -2186,6 +2186,9 @@ type TrackingNaviera = {
   ultimo_evento_fecha: string | null;
   ata_naviera: string | null;
   consultado_at: string;
+  // BL que muestra la página de la naviera (MSC por contenedor, PIL por BL).
+  bl_msc?: string | null;
+  bl_pagina?: string | null;
 };
 type SolicitudTracking = { estado: "pendiente" | "en_proceso" | "hecho" | "error"; mensaje: string | null; solicitado_at: string };
 
@@ -2194,7 +2197,9 @@ async function leerTrackingNaviera(idBooking: number) {
   const [tr, so] = await Promise.all([
     supabase
       .from("tracking_naviera")
-      .select("naviera, referencia, ok, error, eta_naviera, pod, transbordos, ultimo_evento, ultimo_evento_fecha, ata_naviera, consultado_at")
+      .select(
+        "naviera, referencia, ok, error, eta_naviera, pod, transbordos, ultimo_evento, ultimo_evento_fecha, ata_naviera, consultado_at, bl_msc:respuesta->BillOfLadings->0->>BillOfLadingNumber, bl_pagina:respuesta->>bl",
+      )
       .eq("id_booking", idBooking)
       .maybeSingle(),
     supabase.from("tracking_solicitudes").select("estado, mensaje, solicitado_at").eq("id_booking", idBooking).maybeSingle(),
@@ -2315,6 +2320,7 @@ export function NavieraSeccion({
         {verEnSitio && <div className="mt-1">{verEnSitio}</div>}
       </section>
     );
+  const blNaviera = t?.ok ? ((t.bl_msc || t.bl_pagina || "").trim().toUpperCase() || null) : null;
   // TS Lines: datos del itinerario del buque, no del contenedor.
   const porItinerario = Boolean(t?.ok && t.naviera.toUpperCase() === "TS LINES");
   const difEta = t?.ok && t.eta_naviera && eta ? Math.round((Date.parse(t.eta_naviera) - Date.parse(eta.slice(0, 10))) / 86400000) : null;
@@ -2380,6 +2386,12 @@ export function NavieraSeccion({
         />
       )}
       {navieraMal}
+      {blNaviera && blNaviera !== (mbl ?? "").trim().toUpperCase() && (
+        <p className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-950 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100">
+          BL según {naviera}: <strong className="font-mono">{blNaviera}</strong>
+          {(mbl ?? "").trim() ? ` · en Cargolink: ${mbl}` : " · en Cargolink no hay BL capturado"}. Revísalo y captúralo en Cargolink.
+        </p>
+      )}
       {esperando && (
         <p role="status" className="mb-3 flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
           <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin" aria-hidden="true">

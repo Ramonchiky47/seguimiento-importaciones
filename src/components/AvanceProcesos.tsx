@@ -18,6 +18,8 @@ type Proceso = {
   inicio: string;
   actualizado_at: string;
   fin: string | null;
+  // Rastreo de navieras: avance de cada agente (si uno truena, se sabe cuál).
+  por_naviera?: Record<string, { total: number; hechos: number; encontrados: number; estado: string; mensaje: string | null }> | null;
 };
 
 const NOMBRE = { bookings: "Carga de bookings (Cargolink)", navieras: "Rastreo de navieras" };
@@ -34,7 +36,7 @@ async function leer(): Promise<Proceso[]> {
     (["bookings", "navieras"] as const).map((p) =>
       supabase
         .from("rastreo_procesos")
-        .select("id, proceso, estado, total, hechos, etapa, mensaje, inicio, actualizado_at, fin")
+        .select("id, proceso, estado, total, hechos, etapa, mensaje, inicio, actualizado_at, fin, por_naviera:reporte->por_naviera")
         .eq("proceso", p)
         .order("inicio", { ascending: false })
         .limit(1)
@@ -134,6 +136,28 @@ function Medidor({ p, ahora, onPedido, esAdmin }: { p: Proceso; ahora: number; o
           </>
         )}
       </p>
+      {p.proceso === "navieras" && p.por_naviera && Object.keys(p.por_naviera).length > 0 && (
+        <ul aria-label="Avance por naviera" className="mt-1 flex flex-wrap gap-1">
+          {Object.entries(p.por_naviera).map(([nav, n]) => {
+            const pn = n.total ? Math.min(100, Math.round((100 * n.hechos) / n.total)) : 0;
+            const tono =
+              n.estado === "error"
+                ? "border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+                : n.estado === "terminado"
+                  ? "border-green-300 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-300"
+                  : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200";
+            return (
+              <li
+                key={nav}
+                title={n.estado === "error" ? `Falló: ${n.mensaje ?? ""}` : `${n.hechos} de ${n.total} consultados · ${n.encontrados} encontrados`}
+                className={`rounded border px-1.5 py-0.5 text-[11px] tabular-nums ${tono}`}
+              >
+                {tituloAgente(nav)} {n.estado === "error" ? "✗" : `${pn} %`}
+              </li>
+            );
+          })}
+        </ul>
+      )}
       {pedido.texto && (
         <p role="status" className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
           {pedido.texto}

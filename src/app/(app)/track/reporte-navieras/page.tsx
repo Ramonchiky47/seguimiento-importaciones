@@ -24,7 +24,18 @@ type Fila = {
   dias_vs_cargolink?: number | null;
   dias_vs_antes?: number | null;
 };
-type Reporte = { total: number; encontrados: number; pagina: Fila[]; no_encontrados: Fila[]; sin_referencia: Fila[]; aplazadas: Fila[]; coloader?: Fila[] };
+type PorNaviera = Record<string, { total: number; hechos: number; encontrados: number; estado: string; mensaje: string | null }>;
+type Reporte = {
+  total: number;
+  encontrados: number;
+  pagina: Fila[];
+  no_encontrados: Fila[];
+  sin_referencia: Fila[];
+  aplazadas: Fila[];
+  coloader?: Fila[];
+  bl_naviera?: (Fila & { bl_naviera: string })[];
+  por_naviera?: PorNaviera;
+};
 
 const hora = (iso: string) =>
   new Date(iso).toLocaleString("es-MX", { timeZone: "America/Mexico_City", dateStyle: "medium", timeStyle: "short" });
@@ -81,7 +92,8 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
     .from("rastreo_procesos")
     .select("id, estado, total, hechos, mensaje, inicio, fin")
     .eq("proceso", "navieras")
-    .not("reporte", "is", null)
+    // Solo corridas con reporte completo (mientras corre, reporte solo trae el avance por naviera).
+    .not("reporte->total", "is", null)
     .order("inicio", { ascending: false })
     .limit(10);
   const lista = (corridas ?? []) as { id: number; inicio: string; fin: string | null; mensaje: string | null }[];
@@ -170,6 +182,38 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
               </nav>
             )}
           </div>
+
+          {r.por_naviera && Object.keys(r.por_naviera).length > 0 && (
+            <section aria-label="Avance por naviera" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <h2 className="border-b border-slate-200 px-4 py-3 text-base font-bold text-slate-900 dark:border-slate-800 dark:text-slate-50">Por naviera</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-800">
+                  <thead className="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                      <th scope="col" className={TH}>Naviera</th>
+                      <th scope="col" className={TH}>Consultados</th>
+                      <th scope="col" className={TH}>Encontrados</th>
+                      <th scope="col" className={TH}>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {Object.entries(r.por_naviera).map(([nav, n]) => (
+                      <tr key={nav} className="align-top">
+                        <td className="px-3 py-2 font-semibold">{nombreNaviera(nav)}</td>
+                        <td className="px-3 py-2 tabular-nums">
+                          {n.hechos} de {n.total}
+                        </td>
+                        <td className="px-3 py-2 tabular-nums">{n.encontrados}</td>
+                        <td className={`px-3 py-2 text-sm ${n.estado === "error" ? "font-semibold text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"}`}>
+                          {n.estado === "error" ? `Falló: ${n.mensaje ?? ""}` : n.estado === "terminado" ? "✓ Terminó" : n.estado}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           <Seccion
             titulo="ETA que se aplazan · avisar al cliente"
@@ -309,6 +353,34 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
                     <BookingCelda f={f} />
                     <td className="px-3 py-2 font-mono text-xs">{f.mbl || "—"}</td>
                     <td className="px-3 py-2 font-mono text-xs">{f.contenedores || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Seccion>
+
+          <Seccion
+            titulo="BL según la naviera · capturar en Cargolink"
+            ayuda="Se rastreó por contenedor y la naviera muestra un BL que falta en Cargolink o es otro (el de la agencia)."
+            n={(r.bl_naviera ?? []).length}
+            tono="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+          >
+            <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-800">
+              <thead className="bg-slate-50 dark:bg-slate-800/50">
+                <tr>
+                  <th scope="col" className={TH}>Booking · cliente · ejecutivo</th>
+                  <th scope="col" className={TH}>Naviera</th>
+                  <th scope="col" className={TH}>BL de la naviera</th>
+                  <th scope="col" className={TH}>En Cargolink</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {(r.bl_naviera ?? []).map((f) => (
+                  <tr key={f.id_booking} className="align-top">
+                    <BookingCelda f={f} />
+                    <td className="px-3 py-2">{nombreNaviera(f.naviera ?? "")}</td>
+                    <td className="px-3 py-2 font-mono text-xs font-semibold">{f.bl_naviera}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{f.mbl || "Sin BL"}</td>
                   </tr>
                 ))}
               </tbody>
