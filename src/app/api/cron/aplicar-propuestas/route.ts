@@ -12,7 +12,9 @@ export const maxDuration = 300;
 // quepa en el tiempo y se regresa cuántas faltan para volver a llamar.
 // ETA con la etapa ya finalizada en Cargolink (eta_naviera_info): se libera la
 // etapa (Liberar etapas) y se guarda la de la naviera, solo si difiere 30 días
-// o menos de la de Cargolink; las diferencias mayores se revisan a mano.
+// o menos de la de Cargolink, o si la de Cargolink no puede ser real (igual o
+// anterior al zarpe, o anterior a un transbordo que reporta la naviera: se
+// capturó mal). Las demás diferencias mayores se revisan a mano.
 const PRESUPUESTO_MS = 260_000;
 const TIPOS = ["eta_naviera", "ata_naviera", "transbordo", "eta", "eta_finalizar", "dias", "eta_naviera_info"];
 const MAX_DIAS_LIBERAR = 30;
@@ -20,8 +22,12 @@ const MAX_DIAS_LIBERAR = 30;
 type Propuesta = { id_booking: number; no_booking: string; tipo: string; valor: string; confianza: string; eta_cargolink?: string | null };
 
 const diasEntre = (a: string, b: string) => Math.round((Date.parse(b.slice(0, 10)) - Date.parse(a.slice(0, 10))) / 86400000);
-const liberable = (p: Propuesta) =>
-  Boolean(p.eta_cargolink && p.valor) && Math.abs(diasEntre(p.eta_cargolink as string, p.valor)) <= MAX_DIAS_LIBERAR;
+// limite: zarpe o último transbordo de la naviera, lo más tardío.
+const liberable = (p: Propuesta, limite: string | undefined) => {
+  if (!p.eta_cargolink || !p.valor) return false;
+  if (Math.abs(diasEntre(p.eta_cargolink, p.valor)) <= MAX_DIAS_LIBERAR) return true;
+  return Boolean(limite && p.eta_cargolink.slice(0, 10) <= limite.slice(0, 10));
+};
 
 function aplicar(p: Propuesta): Promise<ResultadoEtapa> {
   const esc = { supabase: createAdminClient(), ...SISTEMA };
@@ -48,7 +54,22 @@ export async function GET(request: Request) {
     p_atd: periodoAtd(undefined).codigos,
   });
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-  const lista = ((data ?? []) as Propuesta[]).filter((p) => p.confianza === "alta" && TIPOS.includes(p.tipo) && (p.tipo !== "eta_naviera_info" || liberable(p)));
+  const todas = ((data ?? []) as Propuesta[]).filter((p) => p.confianza === "alta" && TIPOS.includes(p.tipo));
+  const ids = todas.filter((p) => p.tipo === "eta_naviera_info").map((p) => p.id_booking);
+  const limites = new Map<number, string>();
+  if (ids.length) {
+    const [{ data: ops }, { data: navs }] = await Promise.all([
+      supabase.from("operaciones_maritima").select("id_booking, etd_atd").in("id_booking", ids),
+      supabase.from("tracking_naviera").select("id_booking, transbordos").in("id_booking", ids).eq("ok", true),
+    ]);
+    for (const o of (ops ?? []) as { id_booking: number; etd_atd: string | null }[]) if (o.etd_atd) limites.set(o.id_booking, o.etd_atd);
+    for (const n of (navs ?? []) as { id_booking: number; transbordos: { fecha: string | null }[] | null }[]) {
+      for (const t of n.transbordos ?? []) {
+        if (t.fecha && t.fecha > (limites.get(n.id_booking) ?? "")) limites.set(n.id_booking, t.fecha);
+      }
+    }
+  }
+  const lista = todas.filter((p) => p.tipo !== "eta_naviera_info" || liberable(p, limites.get(p.id_booking)));
 
   let aplicadas = 0;
   const errores: { no_booking: string; tipo: string; mensaje: string }[] = [];

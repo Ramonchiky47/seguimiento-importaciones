@@ -21,6 +21,14 @@ export type ResultadoEtapa = { ok: boolean; mensaje: string };
 // Quién escribe: así queda en la bitácora.
 export type Escritor = { supabase: SupabaseClient; email: string | null; nombre: string | null };
 export const SISTEMA = { email: "sistema", nombre: "Aplicación por sistema" };
+const CUENTAS_SISTEMA = ["ramonf.villanueva@gmail.com"];
+
+// Cómo queda quien escribe en la bitácora. Lo que aplica Ramón desde la app
+// (propuestas, correcciones) queda como sistema: lo pidió así.
+export function quienBitacora(email: string | null | undefined, operativo?: string | null): { email: string | null; nombre: string | null } {
+  if (email && CUENTAS_SISTEMA.includes(email.toLowerCase())) return { ...SISTEMA };
+  return { email: email ?? null, nombre: operativo ?? email ?? null };
+}
 
 // Pone la fila de la app igual a lo que se acaba de leer de Cargolink. El sistema
 // escribe con la clave de servicio (sin usuario), y refrescar_operacion_maritima
@@ -43,7 +51,7 @@ export async function escritorUsuario(supabase: SupabaseClient): Promise<Escrito
   const { data: operativo } = user
     ? await supabase.from("catalogo_operativos").select("nombre_operativo").eq("user_id", user.id).maybeSingle()
     : { data: null };
-  return { supabase, email: user?.email ?? null, nombre: (operativo?.nombre_operativo as string | undefined) ?? user?.email ?? null };
+  return { supabase, ...quienBitacora(user?.email, operativo?.nombre_operativo as string | undefined) };
 }
 
 // Guarda una etapa en Cargolink a nombre de quien escribe (esc): el usuario de

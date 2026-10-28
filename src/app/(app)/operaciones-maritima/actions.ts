@@ -19,6 +19,7 @@ import {
 } from "@/lib/operacionesMaritima";
 import {
   escritorUsuario,
+  quienBitacora,
   filaParaForm,
   guardarEtapaCon,
   guardarTransbordosCon,
@@ -154,8 +155,8 @@ async function contextoTransbordo(idBooking: number) {
       id_booking: idBooking,
       no_booking: (op?.no_booking as string | undefined) ?? String(idBooking),
       etapa: "transbordo",
-      usuario_email: user?.email ?? null,
-      usuario_nombre: (operativo?.nombre_operativo as string | undefined) ?? user?.email ?? null,
+      usuario_email: quienBitacora(user?.email, operativo?.nombre_operativo as string | undefined).email,
+      usuario_nombre: quienBitacora(user?.email, operativo?.nombre_operativo as string | undefined).nombre,
       ...registro,
     });
   };
@@ -313,8 +314,8 @@ export async function subirDocumentoCargolink(idBooking: number, formData: FormD
       valores,
       valores_antes: antes,
       valores_despues: despues,
-      usuario_email: user?.email ?? null,
-      usuario_nombre: (operativo?.nombre_operativo as string | undefined) ?? user?.email ?? null,
+      usuario_email: quienBitacora(user?.email, operativo?.nombre_operativo as string | undefined).email,
+      usuario_nombre: quienBitacora(user?.email, operativo?.nombre_operativo as string | undefined).nombre,
       ok,
       mensaje,
     });
@@ -396,8 +397,7 @@ async function contextoAsignacion() {
     : { data: null };
   return {
     supabase,
-    email: user?.email ?? null,
-    nombre: (operativo?.nombre_operativo as string | undefined) ?? user?.email ?? null,
+    ...quienBitacora(user?.email, operativo?.nombre_operativo as string | undefined),
   };
 }
 
