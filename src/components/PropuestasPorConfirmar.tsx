@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { guardarEtapaCargolink, guardarTransbordosCargolink } from "@/app/(app)/operaciones-maritima/actions";
+import { guardarEtapaCargolink, guardarTransbordosCargolink, liberarYGuardarEtaCargolink } from "@/app/(app)/operaciones-maritima/actions";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import { fechaCorta } from "@/lib/track";
 
@@ -109,10 +109,10 @@ const TIPOS: { tipo: Propuesta["tipo"]; titulo: string; accion: string; ayuda: s
   { tipo: "eta_naviera", titulo: "ETA según la naviera", accion: "Guardar ETA de la naviera", ayuda: "Los agentes consultan a las navieras a las 7 PM (o desde el detalle) y la ETA no coincide con Cargolink." },
   {
     tipo: "eta_naviera_info",
-    titulo: "ETA de la naviera distinta · corregir en Cargolink",
-    accion: "",
-    ayuda: "La naviera trae otra ETA, pero la etapa ETA ya está finalizada en Cargolink: la app no puede cambiarla. Corrígela en Cargolink.",
-    soloAviso: true,
+    titulo: "ETA de la naviera distinta · etapa finalizada",
+    accion: "Liberar etapa y guardar ETA",
+    ayuda:
+      "La naviera trae otra ETA y la etapa ETA ya está finalizada en Cargolink. Al confirmar se libera la etapa (como Liberación > Liberar etapas) y se guarda la fecha; queda en edición para finalizarla al arribo.",
   },
   { tipo: "transbordo", titulo: "Transbordo → No aplica", accion: "Marcar No aplica", ayuda: "La naviera casi nunca transborda en esa ruta." },
   { tipo: "eta_finalizar", titulo: "Finalizar ETA", accion: "Finalizar con la ETA capturada", ayuda: "La ETA ya está capturada; falta finalizar la etapa en Cargolink." },
@@ -153,7 +153,9 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
     for (const [i, p] of seleccion.entries()) {
       const v = valores[clave(p)];
       const r =
-        p.tipo === "eta_naviera"
+        p.tipo === "eta_naviera_info"
+          ? await liberarYGuardarEtaCargolink(p.id_booking, v)
+          : p.tipo === "eta_naviera"
           ? await guardarEtapaCargolink(p.id_booking, "eta", "EDICION", { buque_eta: v })
           : p.tipo === "ata_naviera"
           ? await guardarEtapaCargolink(p.id_booking, "ata", "EDICION", { fecha_ata: v })
@@ -207,7 +209,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
         <div role="alertdialog" aria-labelledby="rev-propuestas" className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950">
           <p id="rev-propuestas" className="text-sm font-semibold text-amber-950 dark:text-amber-100">
             Se escribirán en Cargolink {seleccion.length} propuestas en {new Set(seleccion.map((p) => p.id_booking)).size} bookings. No se notificará al
-            cliente; queda en la Bitácora con tu nombre.
+            cliente; queda registrado en la Bitácora.
           </p>
           <ul className="max-h-60 list-disc space-y-0.5 overflow-y-auto pl-5 text-sm text-amber-950 dark:text-amber-100">
             {seleccion.map((p) => (
