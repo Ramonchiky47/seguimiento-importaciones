@@ -8,6 +8,7 @@ import {
   leerBookingMaritimo,
   leerOrigen,
   leerTransbordos,
+  liberarEtapaEnCargolink,
   mapOperacionMaritima,
   type FilaTransbordo,
 } from "@/lib/operacionesMaritima";
@@ -55,6 +56,8 @@ export async function guardarEtapaCon(
   etapaKey: string,
   status: string,
   valores: Record<string, string>,
+  // liberar: si la etapa está finalizada, reabrirla (Liberar etapas) y guardar.
+  opciones: { liberar?: boolean } = {},
 ): Promise<ResultadoEtapa> {
   const etapa = ETAPAS_CARGOLINK[etapaKey];
   const accion = etapa?.acciones.find((a) => a.status === status);
@@ -115,13 +118,28 @@ export async function guardarEtapaCon(
 
   try {
     const session = await loginCargolink();
-    const booking = await leerBookingMaritimo(session, noBooking);
+    let booking = await leerBookingMaritimo(session, noBooking);
     if (!booking) return { ok: false, mensaje: `No se encontró ${noBooking} en Servicios marítimos de Cargolink.` };
     // Origen: sus datos viven en el registro de origen (consultaOrigen).
     const esOrigen = etapa.guardado === "origen";
     const origen = esOrigen ? await leerOrigen(session, idBooking) : {};
     valoresAntes = camposEtapa({ ...booking, ...origen });
     estatusAntes = (booking[etapa.mov] as string | undefined) || "SIN_COMENZAR";
+    let liberada = false;
+    if (booking[etapa.mov] === "FINALIZADO" && opciones.liberar && etapa.tablaLiberar) {
+      if (await liberarEtapaEnCargolink(session, noBooking, etapa.tablaLiberar)) {
+        const reabierto = await leerBookingMaritimo(session, noBooking);
+        if (reabierto && reabierto[etapa.mov] !== "FINALIZADO") {
+          booking = reabierto;
+          liberada = true;
+        }
+      }
+      if (!liberada) {
+        const msg = `${etapa.label}: no se pudo liberar la etapa finalizada en Cargolink.`;
+        await bitacora(false, msg, cambios);
+        return { ok: false, mensaje: msg };
+      }
+    }
     if (booking[etapa.mov] === "FINALIZADO") {
       // La app la tenía abierta (aún no se reflejaba): se actualiza con lo de
       // Cargolink para que deje de proponerse.
@@ -194,7 +212,7 @@ export async function guardarEtapaCon(
     }
 
     const errRefresco = await refrescarFila(esc, despuesBooking as CargolinkBooking);
-    const mensaje = `${etapa.label}: ${accion.label.toLowerCase()} en Cargolink.${
+    const mensaje = `${etapa.label}: ${liberada ? "liberada (estaba finalizada) y " : ""}${accion.label.toLowerCase()} en Cargolink.${
       errRefresco ? " (La app se actualizará en la próxima carga.)" : ""
     }`;
     await bitacora(true, mensaje, cambios);

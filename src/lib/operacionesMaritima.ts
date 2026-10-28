@@ -190,6 +190,39 @@ export async function guardarEtapaEnCargolink(
   }
 }
 
+// Reabre (pasa a EDICION) una etapa finalizada, como Operaciones > Liberación >
+// Liberar etapas en Cargolink: busca el último movimiento de esa etapa del
+// booking (consultaLiberarEtapas) y lo manda a registroLiberarEtapas.
+export async function liberarEtapaEnCargolink(session: CargolinkSession, noBooking: string, tabla: string): Promise<boolean> {
+  const base = `${BASE_URL}/ws/cliente_conexion.php?token=${session.token}&cat=api2`;
+  const headers = { "Content-Type": "application/json", Cookie: session.cookie };
+  const res = await fetch(`${base}&fn=consultaLiberarEtapas&limit=0`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ no_booking: noBooking }),
+  });
+  const data = await res.json().catch(() => null);
+  const filas = (data?.values ?? []) as Record<string, string | null>[];
+  const fila = filas.find((f) => f.tabla === tabla && f.no_booking === noBooking);
+  if (!fila?.id) return false;
+  const r = await fetch(`${base}&fn=registroLiberarEtapas`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      id_tabla: fila.id_tabla,
+      id: fila.id,
+      fecha: `${String(fila.fecha ?? "").slice(0, 10)}T06:00:00.000Z`,
+      tabla: fila.tabla,
+      stage_names: fila.stage_names,
+      no_booking: noBooking,
+      observaciones: fila.observaciones ?? "",
+      movimiento: fila.movimiento,
+    }),
+  });
+  const resp = await r.json().catch(() => null);
+  return resp?.status_conexion === "OK";
+}
+
 // ---- Transbordos (etapa TRANSBORDO): filas propias, no campos del booking.
 export type FilaTransbordo = {
   id_booking_transbordo?: string | number;

@@ -10,14 +10,23 @@ export const maxDuration = 300;
 // Mac (com.ramon.aplicar-propuestas). En la bitácora quedan como "Aplicación por
 // sistema". Cada guardado en Cargolink tarda unos segundos: se aplica lo que
 // quepa en el tiempo y se regresa cuántas faltan para volver a llamar.
+// ETA con la etapa ya finalizada en Cargolink (eta_naviera_info): se libera la
+// etapa (Liberar etapas) y se guarda la de la naviera, solo si difiere 30 días
+// o menos de la de Cargolink; las diferencias mayores se revisan a mano.
 const PRESUPUESTO_MS = 260_000;
-const TIPOS = ["eta_naviera", "ata_naviera", "transbordo", "eta", "eta_finalizar", "dias"];
+const TIPOS = ["eta_naviera", "ata_naviera", "transbordo", "eta", "eta_finalizar", "dias", "eta_naviera_info"];
+const MAX_DIAS_LIBERAR = 30;
 
-type Propuesta = { id_booking: number; no_booking: string; tipo: string; valor: string; confianza: string };
+type Propuesta = { id_booking: number; no_booking: string; tipo: string; valor: string; confianza: string; eta_cargolink?: string | null };
+
+const diasEntre = (a: string, b: string) => Math.round((Date.parse(b.slice(0, 10)) - Date.parse(a.slice(0, 10))) / 86400000);
+const liberable = (p: Propuesta) =>
+  Boolean(p.eta_cargolink && p.valor) && Math.abs(diasEntre(p.eta_cargolink as string, p.valor)) <= MAX_DIAS_LIBERAR;
 
 function aplicar(p: Propuesta): Promise<ResultadoEtapa> {
   const esc = { supabase: createAdminClient(), ...SISTEMA };
   // Igual que "Revisar y confirmar" en la pantalla.
+  if (p.tipo === "eta_naviera_info") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor }, { liberar: true });
   if (p.tipo === "eta_naviera" || p.tipo === "eta") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor });
   if (p.tipo === "ata_naviera") return guardarEtapaCon(esc, p.id_booking, "ata", "EDICION", { fecha_ata: p.valor });
   if (p.tipo === "eta_finalizar") return guardarEtapaCon(esc, p.id_booking, "eta", "FINALIZADO", { buque_eta: p.valor });
@@ -39,7 +48,7 @@ export async function GET(request: Request) {
     p_atd: periodoAtd(undefined).codigos,
   });
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-  const lista = ((data ?? []) as Propuesta[]).filter((p) => p.confianza === "alta" && TIPOS.includes(p.tipo));
+  const lista = ((data ?? []) as Propuesta[]).filter((p) => p.confianza === "alta" && TIPOS.includes(p.tipo) && (p.tipo !== "eta_naviera_info" || liberable(p)));
 
   let aplicadas = 0;
   const errores: { no_booking: string; tipo: string; mensaje: string }[] = [];

@@ -56,6 +56,9 @@ export type EtapaCargolink = {
   // Etapa de filas (Transbordo): columnas de cada fila; se guarda con su
   // propio web service, no con los campos del booking.
   filas?: { key: string; label: string; tipo: "date" | "text"; requerido: boolean }[];
+  // Nombre en Operaciones > Liberación > Liberar etapas: permite reabrir la
+  // etapa finalizada (solo la aplicación automática lo usa).
+  tablaLiberar?: string;
 };
 
 const GUARDAR: AccionEtapa = { status: "EDICION", label: "Guardar", resultado: "EDICION" };
@@ -97,6 +100,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     label: "ETA",
     fn: "registraTransitoEta",
     mov: "his_mov_eta",
+    tablaLiberar: "TRANSITO_ETA",
     campos: [{ key: "buque_eta", label: "Fecha estimada de arribo", tipo: "date", requerido: true, actual: "eta" }],
     acciones: [GUARDAR, FINALIZAR, NO_APLICA],
   },
