@@ -16,7 +16,7 @@ import { EstatusEmbarquePdfDialog } from "@/components/EstatusEmbarquePdfDialog"
 import { refrescarOperacionDesdeCargolink } from "@/app/(app)/operaciones-maritima/actions";
 import { ETAPAS_CARGOLINK } from "@/lib/etapasCargolink";
 import { arriboSinConfirmar, type ResumenNaviera } from "@/lib/detalleNaviera";
-import { nombreNaviera } from "@/lib/navieras";
+import { nombreNaviera, navieraRastreo } from "@/lib/navieras";
 import { esColoader } from "@/lib/coloader";
 import { ColoaderSeccion } from "@/components/ColoaderSeccion";
 import {
@@ -99,6 +99,10 @@ export function BookingGuiado({
   const conNaviera = Boolean(nav);
   // LCL sin dato de la naviera: el estatus lo da el coloader.
   const coloader = esColoader(String(op.no_booking ?? ""), conNaviera);
+  // FCL: la que encontró el rastreo o, si aún no hay dato, la del MBL/contenedor o la de Cargolink.
+  const navieraFcl = String(op.no_booking ?? "").toUpperCase().endsWith("FCLI")
+    ? nombreNaviera(nav?.naviera ?? navieraRastreo(op.mbl as string | null, op.contenedores as string | null, datos.buque_carrier).naviera ?? "")
+    : "";
   const [refresco, setRefresco] = useState<{ estado: "cargando" | "ok" | "error"; mensaje: string }>({
     estado: "cargando",
     mensaje: "Actualizando desde Cargolink…",
@@ -237,6 +241,12 @@ export function BookingGuiado({
           <span className="text-sm text-slate-400">
             Ejecutivo:{" "}
             <strong className={op.ejecutivo ? "text-slate-200" : "text-red-300"}>{String(op.ejecutivo ?? "Sin ejecutivo")}</strong>
+            {navieraFcl && (
+              <>
+                {" · Naviera: "}
+                <strong className="text-slate-200">{navieraFcl}</strong>
+              </>
+            )}
             {datos.buque ? ` · Buque: ${datos.buque}` : ""}
             {op.mbl ? ` · MBL ${String(op.mbl)}` : ""}
           </span>
