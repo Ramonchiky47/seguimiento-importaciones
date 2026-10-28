@@ -64,8 +64,6 @@ export async function guardarEtapaCon(
   etapaKey: string,
   status: string,
   valores: Record<string, string>,
-  // liberar: si la etapa está finalizada, reabrirla (Liberar etapas) y guardar.
-  opciones: { liberar?: boolean } = {},
 ): Promise<ResultadoEtapa> {
   const etapa = ETAPAS_CARGOLINK[etapaKey];
   const accion = etapa?.acciones.find((a) => a.status === status);
@@ -134,7 +132,23 @@ export async function guardarEtapaCon(
     valoresAntes = camposEtapa({ ...booking, ...origen });
     estatusAntes = (booking[etapa.mov] as string | undefined) || "SIN_COMENZAR";
     let liberada = false;
-    if (booking[etapa.mov] === "FINALIZADO" && opciones.liberar && etapa.tablaLiberar) {
+    // Etapa finalizada: si ya tiene lo que se pide no hay nada que hacer; si
+    // no, se libera (Liberar etapas) para poder corregirla.
+    const actual: Record<string, unknown> = { ...booking, ...origen };
+    const pendientes = Object.entries(cambios).filter(([k, v]) => String(actual[k] ?? "").slice(0, v.length) !== v);
+    if (booking[etapa.mov] === "FINALIZADO" && pendientes.length === 0) {
+      valoresDespues = valoresAntes;
+      estatusDespues = estatusAntes;
+      const errRefresco = await refrescarFila(esc, booking);
+      const msg = `${etapa.label}: ya estaba finalizada en Cargolink con ese valor; no hubo que cambiar nada.`;
+      await bitacora(true, msg, cambios);
+      if (!errRefresco) {
+        revalidatePath("/operaciones-maritima");
+        revalidatePath("/track", "layout");
+      }
+      return { ok: true, mensaje: msg };
+    }
+    if (booking[etapa.mov] === "FINALIZADO" && etapa.tablaLiberar) {
       if (await liberarEtapaEnCargolink(session, noBooking, etapa.tablaLiberar)) {
         const reabierto = await leerBookingMaritimo(session, noBooking);
         if (reabierto && reabierto[etapa.mov] !== "FINALIZADO") {

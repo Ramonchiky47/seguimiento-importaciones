@@ -537,7 +537,9 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                             const e = ESTADOS[h.estado] ?? ESTADOS.en_tiempo;
                             const etapa = ETAPAS_CARGOLINK[ETAPA_POR_HITO[h.orden]];
                             const movEtapa = etapa ? datos[etapa.mov] : undefined;
-                            const editable = puedeEditar && Boolean(etapa) && movEtapa !== "FINALIZADO" && movEtapa !== "NO_APLICA";
+                            // Finalizada: se puede corregir si Cargolink permite liberarla.
+                            const editable =
+                              puedeEditar && Boolean(etapa) && movEtapa !== "NO_APLICA" && (movEtapa !== "FINALIZADO" || Boolean(etapa?.tablaLiberar));
                             const estEtapa = movEtapa ? ESTATUS_ETAPA[movEtapa] : undefined;
                             return (
                               <Fragment key={h.orden}>
@@ -872,6 +874,11 @@ export function EditorEtapa({
         <span className={`font-normal ${faltaCaptura ? "text-red-700 dark:text-red-400" : "text-slate-500 dark:text-slate-400"}`}>
           · se guarda en Cargolink sin notificar al cliente
         </span>
+        {datos[etapa.mov] === "FINALIZADO" && (
+          <span className="mt-0.5 block text-xs font-semibold text-amber-800 dark:text-amber-300">
+            Etapa finalizada en Cargolink: al guardar se libera (Liberar etapas) y se corrige.
+          </span>
+        )}
         {faltaCaptura && (
           <span className="mt-0.5 block text-xs font-semibold">
             Falta capturar en Cargolink:{" "}
@@ -1244,7 +1251,8 @@ function EtapaDetalle({
   const est = mov ? ESTATUS_ETAPA[mov] : undefined;
   const detalle = DETALLE_ETAPA[etapa.clave] ?? { campos: [] };
   const editable = detalle.editar ? ETAPAS_CARGOLINK[detalle.editar] : undefined;
-  const puedeEditarEtapa = puedeEditar && editable && mov !== "FINALIZADO" && mov !== "NO_APLICA";
+  // Finalizada: se puede corregir si Cargolink permite liberarla (se libera al guardar).
+  const puedeEditarEtapa = puedeEditar && editable && mov !== "NO_APLICA" && (mov !== "FINALIZADO" || Boolean(editable.tablaLiberar));
   const campos = detalle.campos
     .map(([label, key]) => [label, valorEtapa(datos[key] ?? op[key])] as const)
     .filter(([, v]) => v !== null);

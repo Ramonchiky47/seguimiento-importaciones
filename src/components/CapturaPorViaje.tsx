@@ -43,7 +43,8 @@ function celda(b: BookingViaje, k: CampoKey, valor: string): Celda {
   const mov = b[`mov_${k}` as const];
   if (!valor) return { estado: "vacia", marcable: false };
   if (actual === valor) return { estado: "igual", marcable: mov !== "FINALIZADO" && mov !== "NO_APLICA" };
-  if (mov === "FINALIZADO" || mov === "NO_APLICA") return { estado: "bloqueada", marcable: false };
+  // Finalizada: al guardar se libera en Cargolink (Liberar etapas) y se vuelve a finalizar.
+  if (mov === "NO_APLICA") return { estado: "bloqueada", marcable: false };
   return { estado: actual ? "distinta" : "agregar", marcable: true };
 }
 
@@ -83,7 +84,8 @@ function ViajeTarjeta({ v, puedeEditar }: { v: Viaje; puedeEditar: boolean }) {
     const res: Record<string, { ok: boolean; mensaje: string }> = {};
     // Uno por uno, con el mismo guardado de cada etapa (verificación y bitácora).
     for (const [i, x] of cambios.entries()) {
-      const r = await guardarEtapaCargolink(x.b.id_booking, x.c.etapa, finalizar ? "FINALIZADO" : "EDICION", { [x.c.campo]: x.despues });
+      const fin = finalizar || x.b[x.c.mov] === "FINALIZADO";
+      const r = await guardarEtapaCargolink(x.b.id_booking, x.c.etapa, fin ? "FINALIZADO" : "EDICION", { [x.c.campo]: x.despues });
       res[`${x.b.id_booking}:${x.c.key}`] = r;
       setResultado({ ...res });
       setProgreso({ total: cambios.length, hechos: i + 1 });

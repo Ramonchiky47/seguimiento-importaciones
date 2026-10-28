@@ -56,8 +56,9 @@ export type EtapaCargolink = {
   // Etapa de filas (Transbordo): columnas de cada fila; se guarda con su
   // propio web service, no con los campos del booking.
   filas?: { key: string; label: string; tipo: "date" | "text"; requerido: boolean }[];
-  // Nombre en Operaciones > Liberación > Liberar etapas: permite reabrir la
-  // etapa finalizada (solo la aplicación automática lo usa).
+  // Nombre en Operaciones > Liberación > Liberar etapas: si la etapa está
+  // finalizada y hay que cambiarla, se reabre antes de guardar. Los avisos no
+  // se liberan (volverían a notificar al cliente).
   tablaLiberar?: string;
 };
 
@@ -92,6 +93,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     label: "ATD",
     fn: "registraTransitoAtd",
     mov: "his_mov_atd",
+    tablaLiberar: "TRANSITO_ATD",
     campos: [{ key: "fecha_atd", label: "Fecha de zarpe", tipo: "date", requerido: true, actual: "etd_atd" }],
     acciones: [GUARDAR, FINALIZAR, NO_APLICA],
   },
@@ -119,6 +121,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     fn: "registraOrigen",
     guardado: "origen",
     mov: "his_mov_origen",
+    tablaLiberar: "ORIGEN",
     // registraOrigen también guarda Recepción de documentos; con este valor
     // (el mismo que pone la pantalla de Cargolink) actualiza his_mov_origen.
     desdeEtapa: "SALIDA DE MERCANCIA",
@@ -180,6 +183,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     fn2: "registraSeguro",
     desdeEtapa: "SEGURO_MERCANCIA",
     mov: "his_mov_seguro",
+    tablaLiberar: "BOOKING_SEGURO",
     campos: [
       { key: "segurar_por", label: "Asegurado por", tipo: "select", requerido: false, actual: "datos.segurar_por", opciones: ASEGURADO_POR, grupo: "Renglón 1" },
       { key: "moneda", label: "Moneda", tipo: "select", requerido: false, actual: "datos.moneda", opciones: MONEDAS, grupo: "Renglón 1" },
@@ -218,6 +222,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     fn: "registraTransitoCheck",
     desdeEtapa: "HOUSE BL TELEX",
     mov: "his_mov_hbl_telex",
+    tablaLiberar: "TRANSITO_HOUSE_TELEX",
     campos: [{ key: "fecha_telex_house_bl", label: "Fecha HBL", tipo: "date", requerido: true, actual: "telex_house_bl" }],
     acciones: [GUARDAR, FINALIZAR, NO_APLICA],
   },
@@ -227,6 +232,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     fn: "registraTransitoCheck",
     desdeEtapa: "MASTER BL TELEX",
     mov: "his_mov_mbl_telex",
+    tablaLiberar: "TRANSITO_MASTER_TELEX",
     campos: [{ key: "fecha_telex_master_bl", label: "Fecha MBL", tipo: "date", requerido: true, actual: "telex_master_bl" }],
     acciones: [GUARDAR, FINALIZAR, NO_APLICA],
   },
@@ -236,6 +242,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     fn: "registraHistorialDocs",
     desdeEtapa: "REVALIDACION",
     mov: "his_mov_rev",
+    tablaLiberar: "TRANSITO_REVALIDACION",
     campos: [
       // Sin pre-proforma (decisión del usuario): se manda la que ya tenga el booking.
       { key: "fecha_revalidacion", label: "Fecha de revalidación", tipo: "date", requerido: true, actual: "revalidacion" },
@@ -247,6 +254,7 @@ export const ETAPAS_CARGOLINK: Record<string, EtapaCargolink> = {
     label: "ATA y días libres",
     fn: "registraTransitoAta",
     mov: "his_mov_ata",
+    tablaLiberar: "TRANSITO_ATA",
     campos: [
       { key: "fecha_ata", label: "Fecha de arribo efectivo", tipo: "date", requerido: true, actual: "ata" },
       { key: "dias_demora", label: "Días libres de demora", tipo: "number", requerido: false, actual: "dias_libres_demora", propuesta: "dias_libres" },

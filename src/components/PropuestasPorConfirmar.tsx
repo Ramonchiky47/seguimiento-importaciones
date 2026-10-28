@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { guardarEtapaCargolink, guardarTransbordosCargolink, liberarYGuardarEtaCargolink } from "@/app/(app)/operaciones-maritima/actions";
+import { guardarEtapaCargolink, guardarTransbordosCargolink } from "@/app/(app)/operaciones-maritima/actions";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import { fechaCorta } from "@/lib/track";
 
@@ -102,9 +102,8 @@ const TIPOS: { tipo: Propuesta["tipo"]; titulo: string; accion: string; ayuda: s
   {
     tipo: "ata_naviera_info",
     titulo: "ATA por corregir en Cargolink",
-    accion: "",
-    ayuda: "La naviera contradice la ATA de Cargolink. Primero los que están en riesgo (arribó antes: los días libres ya corren), luego los de bajo riesgo; cada grupo por fecha. Haz en Cargolink lo que indica cada renglón.",
-    soloAviso: true,
+    accion: "Liberar etapa y corregir ATA",
+    ayuda: "La naviera contradice la ATA finalizada de Cargolink. Primero los que están en riesgo (arribó antes: los días libres ya corren), luego los de bajo riesgo; cada grupo por fecha. Si la naviera ya reporta el arribo, al confirmar se libera la etapa y se guarda su ATA, finalizada; si aún no arriba, corrígela en Cargolink.",
   },
   { tipo: "eta_naviera", titulo: "ETA según la naviera", accion: "Guardar ETA de la naviera", ayuda: "Los agentes consultan a las navieras a las 7 PM (o desde el detalle) y la ETA no coincide con Cargolink." },
   {
@@ -127,7 +126,9 @@ const CONFIANZA: Record<Propuesta["confianza"], { label: string; clase: string }
 };
 
 const clave = (p: Propuesta) => `${p.tipo}:${p.id_booking}`;
-const soloAviso = (p: Propuesta) => Boolean(TIPOS.find((t) => t.tipo === p.tipo)?.soloAviso);
+// ATA anticipada (la naviera aún no arriba): no se puede dejar vacía desde la app.
+const soloAviso = (p: Propuesta) =>
+  Boolean(TIPOS.find((t) => t.tipo === p.tipo)?.soloAviso) || (p.tipo === "ata_naviera_info" && !p.nav_ata);
 
 export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas: Propuesta[]; puedeEditar: boolean }) {
   const router = useRouter();
@@ -153,9 +154,9 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
     for (const [i, p] of seleccion.entries()) {
       const v = valores[clave(p)];
       const r =
-        p.tipo === "eta_naviera_info"
-          ? await liberarYGuardarEtaCargolink(p.id_booking, v)
-          : p.tipo === "eta_naviera"
+        p.tipo === "ata_naviera_info"
+          ? await guardarEtapaCargolink(p.id_booking, "ata", "FINALIZADO", { fecha_ata: v })
+          : p.tipo === "eta_naviera_info" || p.tipo === "eta_naviera"
           ? await guardarEtapaCargolink(p.id_booking, "eta", "EDICION", { buque_eta: v })
           : p.tipo === "ata_naviera"
           ? await guardarEtapaCargolink(p.id_booking, "ata", "EDICION", { fecha_ata: v })
@@ -233,7 +234,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
         const lista = propuestas.filter((p) => p.tipo === t.tipo);
         if (t.tipo === "ata_naviera_info") lista.sort(ordenAta);
         if (lista.length === 0) return null;
-        const abiertas = lista.filter((p) => !resultado[clave(p)]?.ok);
+        const abiertas = lista.filter((p) => !resultado[clave(p)]?.ok && !soloAviso(p));
         const todas = abiertas.length > 0 && abiertas.every((p) => marcadas[clave(p)]);
         return (
           <section key={t.tipo} aria-labelledby={`tipo-${t.tipo}`} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -244,7 +245,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">{t.ayuda}</p>
               </div>
-              {!t.soloAviso && (
+              {abiertas.length > 0 && (
               <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                 <input
                   type="checkbox"
@@ -264,7 +265,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
                 const corr = p.tipo === "ata_naviera_info" ? correccionAta(p) : null;
                 return (
                   <li key={k} className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-sm ${hecho ? "bg-green-50 dark:bg-green-950/40" : ""}`}>
-                    {t.soloAviso ? (
+                    {soloAviso(p) ? (
                       <span aria-hidden="true" className="w-[13px]" />
                     ) : (
                     <input

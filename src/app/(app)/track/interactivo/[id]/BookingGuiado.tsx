@@ -86,10 +86,10 @@ export function BookingGuiado({
   const tareaInicial = editarInicial ? tareas.find((t) => t.id === editarInicial) : undefined;
   const [fase, setFase] = useState<FaseClave>(tareaInicial?.fase ?? sig?.fase ?? faseActual(tareas));
   const [editando, setEditando] = useState<string | null>(() => {
-    // Mismo criterio que editorDe: con permiso, etapa con editor y sin finalizar.
+    // Mismo criterio que editorDe: con permiso, etapa con editor y editable.
     const etapa = tareaInicial?.editar ? ETAPAS_CARGOLINK[tareaInicial.editar] : undefined;
     const mov = etapa ? datos[etapa.mov] : undefined;
-    return puedeEditar && etapa && mov !== "FINALIZADO" && mov !== "NO_APLICA" ? tareaInicial!.id : null;
+    return puedeEditar && etapa && mov !== "NO_APLICA" && (mov !== "FINALIZADO" || etapa.tablaLiberar) ? tareaInicial!.id : null;
   });
   const [aviso, setAviso] = useState<string | null>(null);
   const [pdf, setPdf] = useState(false);
@@ -181,13 +181,14 @@ export function BookingGuiado({
   const circ = 2 * Math.PI * 31;
   const fraccion = !arribo || dl <= 0 ? (reloj.tono === "red" ? 0.75 : 0) : regresado ? 1 : usados / dl;
 
-  // ¿Se puede capturar esta tarea aquí? (editor de la etapa y no finalizada)
+  // ¿Se puede capturar esta tarea aquí? (editor de la etapa; si está finalizada,
+  // solo si Cargolink permite liberarla: se libera al guardar)
   const editorDe = (t: Tarea) => {
     if (!puedeEditar || !t.editar) return null;
     const etapa = ETAPAS_CARGOLINK[t.editar];
     if (!etapa) return null;
     const mov = datos[etapa.mov];
-    if (mov === "FINALIZADO" || mov === "NO_APLICA") return null;
+    if (mov === "NO_APLICA" || (mov === "FINALIZADO" && !etapa.tablaLiberar)) return null;
     return etapa;
   };
   const guardado = (mensaje: string) => {

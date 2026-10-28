@@ -15,11 +15,24 @@ export const maxDuration = 300;
 // o menos de la de Cargolink, o si la de Cargolink no puede ser real (igual o
 // anterior al zarpe, o anterior a un transbordo que reporta la naviera: se
 // capturó mal). Las demás diferencias mayores se revisan a mano.
+// ATA finalizada que la naviera contradice con su arribo real
+// (ata_naviera_info con ATA de la naviera): se libera y se guarda finalizada
+// con la de la naviera, si difiere 30 días o menos. La ATA anticipada (la
+// naviera aún no arriba) no se puede dejar vacía: sigue a mano.
 const PRESUPUESTO_MS = 260_000;
-const TIPOS = ["eta_naviera", "ata_naviera", "transbordo", "eta", "eta_finalizar", "dias", "eta_naviera_info"];
+const TIPOS = ["eta_naviera", "ata_naviera", "transbordo", "eta", "eta_finalizar", "dias", "eta_naviera_info", "ata_naviera_info"];
 const MAX_DIAS_LIBERAR = 30;
 
-type Propuesta = { id_booking: number; no_booking: string; tipo: string; valor: string; confianza: string; eta_cargolink?: string | null };
+type Propuesta = {
+  id_booking: number;
+  no_booking: string;
+  tipo: string;
+  valor: string;
+  confianza: string;
+  eta_cargolink?: string | null;
+  ata_cargolink?: string | null;
+  nav_ata?: string | null;
+};
 
 const diasEntre = (a: string, b: string) => Math.round((Date.parse(b.slice(0, 10)) - Date.parse(a.slice(0, 10))) / 86400000);
 // limite: zarpe o último transbordo de la naviera, lo más tardío.
@@ -28,11 +41,15 @@ const liberable = (p: Propuesta, limite: string | undefined) => {
   if (Math.abs(diasEntre(p.eta_cargolink, p.valor)) <= MAX_DIAS_LIBERAR) return true;
   return Boolean(limite && p.eta_cargolink.slice(0, 10) <= limite.slice(0, 10));
 };
+const ataCorregible = (p: Propuesta) =>
+  Boolean(p.nav_ata && p.valor && p.nav_ata.slice(0, 10) === p.valor.slice(0, 10)) &&
+  (!p.ata_cargolink || Math.abs(diasEntre(p.ata_cargolink, p.valor)) <= MAX_DIAS_LIBERAR);
 
 function aplicar(p: Propuesta): Promise<ResultadoEtapa> {
   const esc = { supabase: createAdminClient(), ...SISTEMA };
   // Igual que "Revisar y confirmar" en la pantalla.
-  if (p.tipo === "eta_naviera_info") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor }, { liberar: true });
+  if (p.tipo === "eta_naviera_info") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor });
+  if (p.tipo === "ata_naviera_info") return guardarEtapaCon(esc, p.id_booking, "ata", "FINALIZADO", { fecha_ata: p.valor });
   if (p.tipo === "eta_naviera" || p.tipo === "eta") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor });
   if (p.tipo === "ata_naviera") return guardarEtapaCon(esc, p.id_booking, "ata", "EDICION", { fecha_ata: p.valor });
   if (p.tipo === "eta_finalizar") return guardarEtapaCon(esc, p.id_booking, "eta", "FINALIZADO", { buque_eta: p.valor });
@@ -69,7 +86,9 @@ export async function GET(request: Request) {
       }
     }
   }
-  const lista = todas.filter((p) => p.tipo !== "eta_naviera_info" || liberable(p, limites.get(p.id_booking)));
+  const lista = todas.filter((p) =>
+    p.tipo === "eta_naviera_info" ? liberable(p, limites.get(p.id_booking)) : p.tipo === "ata_naviera_info" ? ataCorregible(p) : true,
+  );
 
   let aplicadas = 0;
   const errores: { no_booking: string; tipo: string; mensaje: string }[] = [];

@@ -89,17 +89,6 @@ export async function guardarEtapaCargolink(
   return guardarEtapaCon(await escritorUsuario(supabase), idBooking, etapaKey, status, valores);
 }
 
-// ETA finalizada en Cargolink que hay que corregir: libera la etapa (como
-// Operaciones > Liberación > Liberar etapas) y guarda la fecha, en edición.
-export async function liberarYGuardarEtaCargolink(idBooking: number, buqueEta: string): Promise<ResultadoEtapa> {
-  const supabase = await createClient();
-  const { data: puedeEditar } = await supabase.rpc("puedo_editar_cargolink");
-  if (puedeEditar !== true) {
-    return { ok: false, mensaje: "No tienes autorización para editar en Cargolink (piloto)." };
-  }
-  return guardarEtapaCon(await escritorUsuario(supabase), idBooking, "eta", "EDICION", { buque_eta: buqueEta }, { liberar: true });
-}
-
 // Al abrir la ventana de indicadores: relee ESE booking de Cargolink (solo
 // lectura) y actualiza su fila en la app, para no depender de la última
 // carga programada.
