@@ -133,6 +133,10 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
     }
     if (enCola(id)) return { texto: "En consulta…", clase: "text-amber-700 dark:text-amber-400" };
     if (s?.estado === "error" && s.atendido_at && s.atendido_at > corte) {
+      // Ya tenía dato bueno: falló la consulta (ventana de Chrome o página), no el BL.
+      if (t?.ok || s.mensaje?.startsWith("No se pudo actualizar")) {
+        return { texto: `${s.mensaje ?? "No se pudo actualizar"} (${hora(s.atendido_at)})`, clase: "text-amber-700 dark:text-amber-400" };
+      }
       return { texto: `Ninguna naviera lo encontró (${hora(s.atendido_at)}): revisar BL o contenedor`, clase: "text-red-700 dark:text-red-400" };
     }
     if (t && !t.ok && t.consultado_at > corte) return { texto: `Sigue sin dato: ${t.error ?? ""}`, clase: "text-red-700 dark:text-red-400" };
