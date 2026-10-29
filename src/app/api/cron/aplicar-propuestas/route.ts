@@ -86,8 +86,31 @@ export async function GET(request: Request) {
       }
     }
   }
+  // Un contenedor reutilizado puede traer otro viaje (2609-4489, 2610-4882, 2609-4486: fechas
+  // de mayo en bookings de septiembre): no se aplica una llegada anterior al zarpe por más de 15 días.
+  const fechasTipo = ["eta_naviera", "ata_naviera", "eta", "eta_finalizar", "eta_naviera_info", "ata_naviera_info"];
+  const idsFecha = [...new Set(todas.filter((p) => fechasTipo.includes(p.tipo)).map((p) => p.id_booking))];
+  const zarpe = new Map<number, string>();
+  if (idsFecha.length) {
+    const { data: ops } = await supabase.from("operaciones_maritima").select("id_booking, etd_atd, fecha").in("id_booking", idsFecha);
+    for (const o of (ops ?? []) as { id_booking: number; etd_atd: string | null; fecha: string | null }[]) {
+      const base = o.etd_atd ?? o.fecha;
+      if (base) zarpe.set(o.id_booking, base.slice(0, 10));
+    }
+  }
+  const deOtroViaje = (p: Propuesta) => {
+    const base = zarpe.get(p.id_booking);
+    if (!fechasTipo.includes(p.tipo) || !base || !/^\d{4}-\d{2}-\d{2}/.test(p.valor ?? "")) return false;
+    return Date.parse(p.valor.slice(0, 10)) < Date.parse(base) - 15 * 86400000;
+  };
   const lista = todas.filter((p) =>
-    p.tipo === "eta_naviera_info" ? liberable(p, limites.get(p.id_booking)) : p.tipo === "ata_naviera_info" ? ataCorregible(p) : true,
+    deOtroViaje(p)
+      ? false
+      : p.tipo === "eta_naviera_info"
+        ? liberable(p, limites.get(p.id_booking))
+        : p.tipo === "ata_naviera_info"
+          ? ataCorregible(p)
+          : true,
   );
 
   let aplicadas = 0;
