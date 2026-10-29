@@ -38,11 +38,18 @@ type Booking = {
   buque: string | null;
   viaje: string | null;
   carrier: string | null;
+  agente_ext: string | null;
+  sitio_origen: string | null;
+  sitio_destino: string | null;
 };
 type Estado = "igual" | "distinto" | "falta_cl" | "sin_dato";
 
 const TH = "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400";
 const limpio = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+// Palabras que no distinguen a una empresa (razón social, país, giro).
+const COMUNES = new Set(["SA", "DE", "CV", "SAPI", "RL", "SRL", "CO", "LTD", "LIMITED", "INC", "LLC", "MEXICO", "CHINA", "LOGISTICS", "LOGISTIC", "INTERNATIONAL", "SHIPPING", "SHENZHEN", "GROUP", "THE", "Y", "AND"]);
+const palabras = (s: string | null | undefined) =>
+  new Set((s ?? "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length >= 3 && !COMUNES.has(w)));
 const ciudad = (s: string | null | undefined) => limpio((s ?? "").split(",")[0].split(" - ")[0]);
 // Alias de navieras que usan los agentes de origen.
 const NAVIERA_ALIAS: [RegExp, RegExp][] = [
@@ -75,6 +82,13 @@ function comparar(campo: string, correo: string | null | undefined, cl: string |
       const b = new Set(limpio(cl).match(/[A-Z]{4}\d{7}/g) ?? []);
       return a.size === b.size && [...a].every((c) => b.has(c)) ? "igual" : "distinto";
     }
+    case "booking":
+      return limpio(correo) === limpio(cl) ? "igual" : "distinto";
+    case "cliente":
+    case "agente": {
+      const a = palabras(correo);
+      return [...palabras(cl)].some((w) => a.has(w)) ? "igual" : "distinto";
+    }
     case "remitente":
     case "consignatario":
       return limpio(cl).slice(0, 12) === limpio(correo).slice(0, 12) || limpio(correo).includes(limpio(cl)) ? "igual" : "distinto";
@@ -98,14 +112,17 @@ function filas(c: Correo, b: Booking | undefined) {
   const atdCl = b?.etd_atd ?? null;
   const etaCl = b?.ata ?? b?.eta ?? null;
   return [
+    { campo: "booking", etiqueta: "Número de booking", correo: d.booking_correo, cl: b?.no_booking },
+    { campo: "cliente", etiqueta: "Cliente", correo: d.cliente_correo, cl: b?.cliente },
+    { campo: "agente", etiqueta: "Agente extranjero", correo: d.agente_correo ?? c.agente_origen, cl: b?.agente_ext },
     { campo: "portador", etiqueta: "Portador (naviera)", correo: d.portador, cl: b?.carrier },
     { campo: "buque", etiqueta: "Buque", correo: d.buque?.replace(/\s+\S*\d\S*$/, ""), cl: b?.buque },
     { campo: "viaje", etiqueta: "Viaje", correo: d.buque?.match(/\s(\S*\d\S*)$/)?.[1].replace(/^V\.?/, ""), cl: b?.viaje },
     { campo: "atd", etiqueta: "ATD (fecha de zarpe)", correo: d.atd_iso, cl: atdCl, fecha: true },
     { campo: "eta", etiqueta: b?.ata ? "ETA vs ATA de Cargolink" : "ETA (fecha estimada de llegada)", correo: d.eta_iso, cl: etaCl, fecha: true },
-    { campo: "pol", etiqueta: "POL", correo: d.pol, cl: b?.origen },
-    { campo: "pod", etiqueta: "POD", correo: d.pod, cl: b?.destino },
-    { campo: "destino", etiqueta: "Destino", correo: d.destino, cl: b?.destino },
+    { campo: "pol", etiqueta: "Origen (POL)", correo: d.pol, cl: b?.sitio_origen || b?.origen },
+    { campo: "pod", etiqueta: "Puerto de descarga (POD)", correo: d.pod, cl: b?.sitio_destino || b?.destino },
+    { campo: "destino", etiqueta: "Destino final", correo: d.destino, cl: b?.sitio_destino || b?.destino },
     { campo: "mbl", etiqueta: "MB/L", correo: d.mbl, cl: b?.mbl, nota: d.mbl_estatus },
     { campo: "hbl", etiqueta: "HB/L", correo: d.hbl, cl: null, nota: d.hbl_estatus, sinCampo: true },
     { campo: "contenedores", etiqueta: "Contenedores", correo: d.contenedores, cl: b?.contenedores },
@@ -124,7 +141,7 @@ export default async function InfoCorreosPage() {
   const { data: ops } = ids.length
     ? await supabase
         .from("operaciones_maritima")
-        .select("id_booking, no_booking, cliente, ejecutivo, mbl, contenedores, etd_atd, eta, ata, origen, destino, shipper, consignatario, buque:datos->>buque, viaje:datos->>no_viaje, id_carrier:datos->>buque_carrier")
+        .select("id_booking, no_booking, cliente, ejecutivo, mbl, contenedores, etd_atd, eta, ata, origen, destino, shipper, consignatario, buque:datos->>buque, viaje:datos->>no_viaje, id_carrier:datos->>buque_carrier, agente_ext:datos->>nameAgenExt, sitio_origen:datos->>sitioOrigenNombre, sitio_destino:datos->>sitioDestinoNombre")
         .in("id_booking", ids)
     : { data: [] };
   const carriers = [...new Set((ops ?? []).map((o) => o.id_carrier as string).filter(Boolean))];
