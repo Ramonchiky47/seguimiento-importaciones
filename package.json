@@ -6,7 +6,8 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start -p 3001",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync:coloader": "tsx scripts/run_coloader_agent.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

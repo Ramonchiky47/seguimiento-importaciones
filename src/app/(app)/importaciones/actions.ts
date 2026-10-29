@@ -112,6 +112,12 @@ export async function actualizarImportacion(id: number) {
   revalidatePath(`/importaciones/${id}`);
 }
 
+export type {
+  FilaSincronizacion,
+  PrevisualizacionSincronizacion,
+  ResultadoSincronizacion,
+};
+
 export async function previsualizarSincronizacion(): Promise<PrevisualizacionSincronizacion> {
   const supabase = await createClient();
   return previsualizarSincronizacionCon(supabase);
@@ -120,7 +126,7 @@ export async function previsualizarSincronizacion(): Promise<PrevisualizacionSin
 export async function confirmarSincronizacion(
   filas: FilaSincronizacion[],
   totalRevisados: number,
-): Promise<ResultadoSincronizacion> {
+) {
   const supabase = await createClient();
   const r = await confirmarSincronizacionCon(supabase, filas, totalRevisados);
   revalidatePath("/importaciones");
@@ -186,3 +192,45 @@ export async function deleteImportacion(id: number) {
 
   revalidatePath("/importaciones");
 }
+
+export async function consultarTrackingColoader(id: number) {
+  const { sincronizarTrackingBooking } = await import("@/lib/agents/syncColoaderTracking");
+  const supabase = await createClient();
+  const { data: row, error } = await supabase
+    .from("seguimiento_importaciones")
+    .select("id, booking, type, agente, naviera, hbl, mbl, contenedor")
+    .eq("id", id)
+    .single();
+
+  if (error || !row) {
+    throw new Error("No se encontró el registro de importación.");
+  }
+
+  const coloader = (row.agente || row.naviera || "").trim();
+  if (!coloader) {
+    throw new Error("Este booking no tiene coloader asignado en el campo Agente/Naviera.");
+  }
+
+  const ref = (row.hbl || row.mbl || row.contenedor || "").trim();
+  if (!ref) {
+    throw new Error(`Coloader detectado: ${coloader}, pero falta registrar HBL, MBL o Contenedor para consultar su portal.`);
+  }
+
+  const res = await sincronizarTrackingBooking(row.id, row.booking, coloader, ref);
+  if (!res.ok) {
+    throw new Error(res.error || "No se pudo extraer información del portal del coloader.");
+  }
+
+  revalidatePath(`/importaciones/${id}`);
+  revalidatePath("/importaciones");
+  return res.result;
+}
+
+export async function sincronizarColoadersMasivoAction() {
+  const { sincronizarTodosLosLcl } = await import("@/lib/agents/syncColoaderTracking");
+  const stats = await sincronizarTodosLosLcl();
+  revalidatePath("/importaciones");
+  return stats;
+}
+
+

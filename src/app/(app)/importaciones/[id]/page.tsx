@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ImportacionForm } from "@/components/ImportacionForm";
 import { IncidenciaForm } from "@/components/IncidenciaForm";
 import { CatalogoDeleteButton } from "@/components/CatalogoDeleteButton";
+import { ColoaderTrackButton } from "@/components/ColoaderTrackButton";
 import { updateImportacion, addIncidencia, deleteIncidencia } from "../actions";
 import { getMyPermissions } from "@/lib/permissions";
 import { calcularDiasDemoras } from "@/lib/dateLabels";
@@ -103,14 +104,22 @@ export default async function EditarImportacionPage({
             </h1>
           </div>
 
-          {myPermissions.puede_exportar && (
-            <a
-              href={`/importaciones/${row.id}/export-pdf`}
-              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              Exportar a PDF
-            </a>
-          )}
+          <div className="flex items-center gap-3">
+            <ColoaderTrackButton
+              importacionId={row.id}
+              coloader={row.agente || row.naviera}
+              referencia={row.hbl || row.mbl || row.contenedor}
+            />
+
+            {myPermissions.puede_exportar && (
+              <a
+                href={`/importaciones/${row.id}/export-pdf`}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Exportar a PDF
+              </a>
+            )}
+          </div>
         </div>
       </header>
 

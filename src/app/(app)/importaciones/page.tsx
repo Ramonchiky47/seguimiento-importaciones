@@ -13,6 +13,7 @@ import { ClickableRow } from "@/components/ClickableRow";
 import { EstatusDropdown } from "@/components/EstatusDropdown";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { SincronizarButton } from "@/components/SincronizarButton";
+import { RastrearColoadersButton } from "@/components/RastrearColoadersButton";
 import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { getMyPermissions } from "@/lib/permissions";
 import { calcularDiasDemoras } from "@/lib/dateLabels";
@@ -203,6 +204,7 @@ export default async function ImportacionesPage({
           </div>
 
           <div className="flex items-center gap-2">
+            <RastrearColoadersButton />
             <SincronizarButton
               onPrevisualizar={previsualizarSincronizacion}
               onConfirmar={confirmarSincronizacion}
