@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
 // (tabla info_correos, la llena info_correos.py en la Mac) contra lo capturado
 // en Cargolink. Cada dato dice si coincide, si es distinto o si falta en Cargolink.
 
-type Datos = Record<string, string | null | undefined>;
+type Cambio = { fecha: string; campo: string; antes: string | null; despues: string };
+type Datos = Record<string, string | null | undefined> & { cambios?: Cambio[] };
 type Correo = {
   id: number;
   id_booking: number;
@@ -212,6 +213,15 @@ export default async function InfoCorreosPage() {
               </div>
               {c.asunto && <p className="truncate px-4 pt-2 text-xs text-slate-500 dark:text-slate-400" title={c.asunto}>{c.asunto}</p>}
               {c.datos.nota && <p className="px-4 pt-1 text-xs font-semibold text-amber-800 dark:text-amber-300">{c.datos.nota}</p>}
+              {(c.datos.cambios ?? []).length > 0 && (
+                <p className="px-4 pt-1 text-xs text-blue-800 dark:text-blue-300">
+                  <span className="font-semibold">Actualizado con correos nuevos:</span>{" "}
+                  {(c.datos.cambios ?? [])
+                    .slice(-6)
+                    .map((x) => `${x.campo.replace(/_/g, " ")}: ${x.antes ?? "—"} → ${x.despues} (${fechaCorta(x.fecha)})`)
+                    .join(" · ")}
+                </p>
+              )}
               {c.datos.historial && (
                 <p className="px-4 pt-1 text-xs text-slate-600 dark:text-slate-300">
                   <span className="font-semibold">En la cadena de correos:</span> {c.datos.historial}
