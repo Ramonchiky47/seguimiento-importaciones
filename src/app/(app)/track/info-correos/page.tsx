@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { fechaCorta } from "@/lib/track";
+import { getMyPermissions } from "@/lib/permissions";
+import { RevisarCorreos } from "@/components/RevisarCorreos";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +137,7 @@ function filas(c: Correo, b: Booking | undefined) {
 
 export default async function InfoCorreosPage() {
   const supabase = await createClient();
+  const permisos = await getMyPermissions();
   const { data, error } = await supabase.from("info_correos").select("*").order("fecha_correo", { ascending: false }).limit(200);
   const correos = (data ?? []) as Correo[];
   const ids = [...new Set(correos.map((c) => c.id_booking))];
@@ -166,6 +169,7 @@ export default async function InfoCorreosPage() {
             </>
           )}
         </p>
+        <RevisarCorreos esAdmin={Boolean(permisos.es_admin)} />
       </div>
       {error ? (
         <p className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-6 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
