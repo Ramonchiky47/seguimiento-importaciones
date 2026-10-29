@@ -34,6 +34,7 @@ type Reporte = {
   aplazadas: Fila[];
   coloader?: Fila[];
   bl_naviera?: (Fila & { bl_naviera: string })[];
+  ata_sin_confirmar?: (Fila & { ata_cargolink: string })[];
   por_naviera?: PorNaviera;
 };
 
@@ -353,6 +354,34 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
                     <BookingCelda f={f} />
                     <td className="px-3 py-2 font-mono text-xs">{f.mbl || "—"}</td>
                     <td className="px-3 py-2 font-mono text-xs">{f.contenedores || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Seccion>
+
+          <Seccion
+            titulo="ATA sin confirmar por la naviera · revisar"
+            ayuda="Cargolink tiene ATA, pero la naviera no confirma el arribo y da una llegada posterior: la ATA puede ser una fecha estimada."
+            n={(r.ata_sin_confirmar ?? []).length}
+            tono="bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+          >
+            <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-800">
+              <thead className="bg-slate-50 dark:bg-slate-800/50">
+                <tr>
+                  <th scope="col" className={TH}>Booking · cliente · ejecutivo</th>
+                  <th scope="col" className={TH}>Naviera</th>
+                  <th scope="col" className={TH}>ATA en Cargolink</th>
+                  <th scope="col" className={TH}>Llegada según la naviera</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {(r.ata_sin_confirmar ?? []).map((f) => (
+                  <tr key={f.id_booking} className="align-top">
+                    <BookingCelda f={f} />
+                    <td className="px-3 py-2">{nombreNaviera(f.naviera ?? "")}</td>
+                    <td className="px-3 py-2 whitespace-nowrap font-semibold text-red-700 dark:text-red-400">{fechaCorta(f.ata_cargolink)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{fechaCorta(f.eta_naviera)} (estimada)</td>
                   </tr>
                 ))}
               </tbody>
