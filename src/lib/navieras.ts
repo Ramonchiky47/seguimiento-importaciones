@@ -118,7 +118,14 @@ export function ligaRastreo(naviera: string | null, mbl: string | null | undefin
       return `https://www.pilship.com/digital-solutions/?tab=customer&id=track-trace&label=containerTandT&module=${/^[A-Z]{4}\d{7}$/.test(ref) || !ref ? "TrackContStatus" : "TrackTraceBL"}&refNo=${ref}`;
     case "Wan Hai":
       return "https://www.wanhai.com/views/cargo_track_v2/tracking_query.xhtml";
-    default:
+    default: {
+      const navUpper = (naviera ?? "").toUpperCase();
+      if (navUpper.includes("INTERTEAM")) return "https://www.interteam.com.mx/estatus-de-importacion/";
+      if (navUpper.includes("CTL") || navUpper.includes("CHARTER LINK")) return "https://ctl-latam.com/papeleta/";
+      if (navUpper.includes("IFS")) return "https://www.ifswebtools.com/TrackAndTrace";
+      if (navUpper.includes("ECU")) return "https://ecu360.com";
+      if (navUpper.includes("FAST FORWARD")) return "https://www.fastforward.mx";
       return null;
+    }
   }
 }

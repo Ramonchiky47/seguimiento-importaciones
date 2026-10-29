@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { fechaCorta } from "@/lib/track";
-import { nombreNaviera } from "@/lib/navieras";
+import { nombreNaviera, ligaRastreo } from "@/lib/navieras";
 import { ReconsultarNavieras } from "@/components/ReconsultarNavieras";
 
 export const dynamic = "force-dynamic";
@@ -400,6 +400,7 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
                   <th scope="col" className={TH}>Booking · cliente · ejecutivo</th>
                   <th scope="col" className={TH}>BL del coloader</th>
                   <th scope="col" className={TH}>Contenedores capturados</th>
+                  <th scope="col" className={TH}>Portal del coloader</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -408,6 +409,23 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
                     <BookingCelda f={f} />
                     <td className="px-3 py-2 font-mono text-xs">{f.mbl || "—"}</td>
                     <td className="px-3 py-2 font-mono text-xs">{f.contenedores || "—"}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {(() => {
+                        const liga = ligaRastreo(f.naviera ?? null, f.mbl, f.contenedores);
+                        return liga ? (
+                          <a
+                            href={liga}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-semibold text-sky-600 hover:underline dark:text-sky-400"
+                          >
+                            Abrir portal ↗
+                          </a>
+                        ) : (
+                          "—"
+                        );
+                      })()}
+                    </td>
                   </tr>
                 ))}
               </tbody>
