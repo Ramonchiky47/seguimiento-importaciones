@@ -191,6 +191,11 @@ export default async function InfoCorreosPage() {
               </div>
               {c.asunto && <p className="truncate px-4 pt-2 text-xs text-slate-500 dark:text-slate-400" title={c.asunto}>{c.asunto}</p>}
               {c.datos.nota && <p className="px-4 pt-1 text-xs font-semibold text-amber-800 dark:text-amber-300">{c.datos.nota}</p>}
+              {c.datos.historial && (
+                <p className="px-4 pt-1 text-xs text-slate-600 dark:text-slate-300">
+                  <span className="font-semibold">En la cadena de correos:</span> {c.datos.historial}
+                </p>
+              )}
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-800">
                   <thead className="bg-slate-50 dark:bg-slate-800/50">
