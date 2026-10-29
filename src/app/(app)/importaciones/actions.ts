@@ -112,12 +112,6 @@ export async function actualizarImportacion(id: number) {
   revalidatePath(`/importaciones/${id}`);
 }
 
-export type {
-  FilaSincronizacion,
-  PrevisualizacionSincronizacion,
-  ResultadoSincronizacion,
-};
-
 export async function previsualizarSincronizacion(): Promise<PrevisualizacionSincronizacion> {
   const supabase = await createClient();
   return previsualizarSincronizacionCon(supabase);
@@ -126,7 +120,7 @@ export async function previsualizarSincronizacion(): Promise<PrevisualizacionSin
 export async function confirmarSincronizacion(
   filas: FilaSincronizacion[],
   totalRevisados: number,
-) {
+): Promise<ResultadoSincronizacion> {
   const supabase = await createClient();
   const r = await confirmarSincronizacionCon(supabase, filas, totalRevisados);
   revalidatePath("/importaciones");

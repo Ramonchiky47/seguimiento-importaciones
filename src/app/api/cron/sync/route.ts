@@ -17,12 +17,11 @@ async function handleSync(request: Request) {
     const cronSecretHeader = request.headers.get("x-cron-secret");
     const expectedSecret = process.env.CRON_SECRET;
 
-    if (expectedSecret) {
-      const isBearerValid = authHeader === `Bearer ${expectedSecret}`;
-      const isHeaderValid = cronSecretHeader === expectedSecret;
-      if (!isBearerValid && !isHeaderValid) {
-        return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-      }
+    // Sin CRON_SECRET configurado no se acepta ninguna llamada: escribe con la llave de servicio.
+    const isBearerValid = Boolean(expectedSecret) && authHeader === `Bearer ${expectedSecret}`;
+    const isHeaderValid = Boolean(expectedSecret) && cronSecretHeader === expectedSecret;
+    if (!isBearerValid && !isHeaderValid) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
     const resultado = await ejecutarSincronizacionAutomatica();
