@@ -431,6 +431,20 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
             {op && correo?.datos?.evidencia && (
               <BotonCorreo correo={correo} op={op} />
             )}
+            {op && Boolean(op.seguro) && (
+              <a
+                href={`${CARPETA_SEGUROS}/${encodeURIComponent(String(op.no_booking ?? ""))}.pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Certificado de MySafeLink en OneDrive AV2 › Seguros (se consulta ahí, no se guarda en la app)"
+                className="flex min-h-10 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6Z" />
+                </svg>
+                Seguro
+              </a>
+            )}
             {op && (
               <details className="relative">
                 <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden">
@@ -690,6 +704,10 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
     </dialog>
   );
 }
+
+// Certificados de seguro (MySafeLink), uno por booking (<no_booking>.pdf). Se consultan en
+// OneDrive; la app no los guarda. La carpeta está compartida con las cuentas de AV2.
+const CARPETA_SEGUROS = "https://av2logisticsmx-my.sharepoint.com/personal/ramon_villanueva_av2logistics_com/Documents/Seguros";
 
 type CorreoBooking = {
   fecha_correo: string | null;
