@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { LOGO_SYSMON_ALTO, LOGO_SYSMON_ANCHO, LOGO_SYSMON_PNG_BASE64 } from "@/lib/logoSysmon";
 import type { Importacion, Incidencia } from "@/types/importacion";
 import { FIELD_LABELS, FIELD_SECTIONS } from "@/types/importacion";
 
@@ -103,5 +104,10 @@ export function buildImportacionPdf(row: Importacion, incidencias: Incidencia[] 
     }
   }
 
+  // Logo de SYSMON, pequeño, al pie de cada hoja.
+  for (let p = 1; p <= doc.getNumberOfPages(); p++) {
+    doc.setPage(p);
+    doc.addImage(LOGO_SYSMON_PNG_BASE64, "PNG", pageWidth - marginX - LOGO_SYSMON_ANCHO, pageHeight - 24, LOGO_SYSMON_ANCHO, LOGO_SYSMON_ALTO);
+  }
   return doc;
 }

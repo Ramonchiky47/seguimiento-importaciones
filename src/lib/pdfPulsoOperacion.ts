@@ -4,6 +4,7 @@
 // los puntos de atención arriba para no tener que preguntar.
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 import { LOGO_AV2_PNG_BASE64 } from "@/lib/logoAv2";
+import { LOGO_SYSMON_ALTO, LOGO_SYSMON_ANCHO, LOGO_SYSMON_PNG_BASE64 } from "@/lib/logoSysmon";
 import { diagrama, dias, enEspanol, fecha, corta, limpio, tablaTramos, texto, tramosDelViaje, type DatosEstatus } from "@/lib/pdfEstatusEmbarque";
 import { FASES, type Tarea } from "@/lib/trackNew";
 
@@ -570,5 +571,10 @@ export async function pdfPulsoOperacion(d: DatosPulso): Promise<Uint8Array> {
     const n = `${i + 1} / ${l.paginas.length}`;
     texto(p, n, ANCHO - M - f.widthOfTextAtSize(n, 7), 28, f, 7, GRIS);
   });
+  // Logo de SYSMON, pequeño, al pie de cada hoja.
+  const sysmon = await pdf.embedPng(Uint8Array.from(Buffer.from(LOGO_SYSMON_PNG_BASE64, "base64")));
+  for (const hoja of pdf.getPages()) {
+    hoja.drawImage(sysmon, { x: hoja.getWidth() - 36 - LOGO_SYSMON_ANCHO, y: 8, width: LOGO_SYSMON_ANCHO, height: LOGO_SYSMON_ALTO });
+  }
   return pdf.save();
 }

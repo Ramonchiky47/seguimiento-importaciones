@@ -4,6 +4,7 @@
 // Solo información del embarque: nada de costos ni datos internos.
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { LOGO_AV2_PNG_BASE64 } from "@/lib/logoAv2";
+import { LOGO_SYSMON_ALTO, LOGO_SYSMON_ANCHO, LOGO_SYSMON_PNG_BASE64 } from "@/lib/logoSysmon";
 import type { EventoNaviera } from "@/lib/detalleNaviera";
 
 export type DatosEstatus = {
@@ -341,5 +342,10 @@ export async function pdfEstatusEmbarque(d: DatosEstatus): Promise<Uint8Array> {
   );
   texto(page, "Para cualquier duda sobre su embarque, contacte a su ejecutivo de AV2 Logistics.", 612 / 2, 41, f, 7.5, GRIS, true);
   page.drawRectangle({ x: M - 10, y: 28, width: W + 20, height: 3, color: ROJO });
+  // Logo de SYSMON, pequeño, al pie de cada hoja.
+  const sysmon = await pdf.embedPng(Uint8Array.from(Buffer.from(LOGO_SYSMON_PNG_BASE64, "base64")));
+  for (const hoja of pdf.getPages()) {
+    hoja.drawImage(sysmon, { x: hoja.getWidth() - 36 - LOGO_SYSMON_ANCHO, y: 8, width: LOGO_SYSMON_ANCHO, height: LOGO_SYSMON_ALTO });
+  }
   return pdf.save();
 }

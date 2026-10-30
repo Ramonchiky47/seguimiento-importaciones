@@ -37,6 +37,14 @@ export default function RootLayout({
           Creado por Ing Ramon Villanueva
         </div>
         {children}
+        {/* Logo de SYSMON, pequeño, en todas las páginas. */}
+        <img
+          src="/sysmon.svg"
+          alt="SYSMON"
+          width={54}
+          height={16}
+          className="pointer-events-none fixed bottom-2 right-3 z-40 h-4 w-auto rounded bg-white/80 px-1 py-0.5 opacity-80 shadow-sm"
+        />
       </body>
     </html>
   );
