@@ -44,6 +44,7 @@ type Booking = {
   agente_ext: string | null;
   sitio_origen: string | null;
   sitio_destino: string | null;
+  dias_demora: string | null;
 };
 type Estado = "igual" | "distinto" | "falta_cl" | "sin_dato";
 
@@ -133,6 +134,8 @@ function filas(c: Correo, b: Booking | undefined) {
     { campo: "consignatario", etiqueta: "Consignatario", correo: d.consignatario, cl: b?.consignatario },
     { campo: "direccion", etiqueta: "Dirección", correo: d.direccion, cl: null, sinCampo: true },
     { campo: "notificar", etiqueta: "Notificar", correo: d.notificar, cl: null, sinCampo: true },
+    // Días libres de demora: el número del correo contra los días de demora de Cargolink (0 = sin capturar).
+    { campo: "dias_libres", etiqueta: "Días libres de demora", correo: d.dias_libres_n != null ? String(d.dias_libres_n) : d.dias_libres, cl: b?.dias_demora && Number(b.dias_demora) > 0 ? String(Number(b.dias_demora)) : null, nota: d.dias_libres },
   ];
 }
 
@@ -145,7 +148,7 @@ export default async function InfoCorreosPage() {
   const { data: ops } = ids.length
     ? await supabase
         .from("operaciones_maritima")
-        .select("id_booking, no_booking, cliente, ejecutivo, mbl, contenedores, etd_atd, eta, ata, origen, destino, shipper, consignatario, buque:datos->>buque, viaje:datos->>no_viaje, id_carrier:datos->>buque_carrier, agente_ext:datos->>nameAgenExt, sitio_origen:datos->>sitioOrigenNombre, sitio_destino:datos->>sitioDestinoNombre")
+        .select("id_booking, no_booking, cliente, ejecutivo, mbl, contenedores, etd_atd, eta, ata, origen, destino, shipper, consignatario, buque:datos->>buque, viaje:datos->>no_viaje, id_carrier:datos->>buque_carrier, agente_ext:datos->>nameAgenExt, sitio_origen:datos->>sitioOrigenNombre, sitio_destino:datos->>sitioDestinoNombre, dias_demora:datos->>dias_demora")
         .in("id_booking", ids)
     : { data: [] };
   const carriers = [...new Set((ops ?? []).map((o) => o.id_carrier as string).filter(Boolean))];
