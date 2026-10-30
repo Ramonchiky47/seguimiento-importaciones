@@ -142,7 +142,8 @@ function filas(c: Correo, b: Booking | undefined) {
 export default async function InfoCorreosPage() {
   const supabase = await createClient();
   const permisos = await getMyPermissions();
-  const { data, error } = await supabase.from("info_correos").select("*").order("fecha_correo", { ascending: false }).limit(200);
+  // Por ahora solo FCL: los LCL van con coloader y la naviera no los reconoce.
+  const { data, error } = await supabase.from("info_correos").select("*").like("no_booking", "%-FCL%").order("fecha_correo", { ascending: false }).limit(200);
   const correos = (data ?? []) as Correo[];
   const ids = [...new Set(correos.map((c) => c.id_booking))];
   const { data: ops } = ids.length
