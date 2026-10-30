@@ -232,17 +232,27 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
                       <th scope="col" className={TH}>Naviera</th>
                       <th scope="col" className={TH}>Consultados</th>
                       <th scope="col" className={TH}>Encontrados</th>
+                      <th scope="col" className={TH}>% de respuesta</th>
                       <th scope="col" className={TH}>Estado</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {Object.entries(r.por_naviera).map(([nav, n]) => (
+                    {/* De la naviera que más responde a la que menos (encontrados entre consultados). */}
+                    {Object.entries(r.por_naviera)
+                      .map(([nav, n]) => [nav, n, n.hechos ? Math.round((n.encontrados / n.hechos) * 100) : 0] as const)
+                      .sort((a, b) => b[2] - a[2] || b[1].encontrados - a[1].encontrados)
+                      .map(([nav, n, pct]) => (
                       <tr key={nav} className="align-top">
                         <td className="px-3 py-2 font-semibold">{nombreNaviera(nav)}</td>
                         <td className="px-3 py-2 tabular-nums">
                           {n.hechos} de {n.total}
                         </td>
                         <td className="px-3 py-2 tabular-nums">{n.encontrados}</td>
+                        <td
+                          className={`px-3 py-2 font-semibold tabular-nums ${pct >= 80 ? "text-green-700 dark:text-green-400" : pct >= 50 ? "text-amber-700 dark:text-amber-400" : "text-red-700 dark:text-red-400"}`}
+                        >
+                          {pct}%
+                        </td>
                         <td className={`px-3 py-2 text-sm ${n.estado === "error" ? "font-semibold text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"}`}>
                           {n.estado === "error" ? `Falló: ${n.mensaje ?? ""}` : n.estado === "terminado" ? "✓ Terminó" : n.estado}
                         </td>

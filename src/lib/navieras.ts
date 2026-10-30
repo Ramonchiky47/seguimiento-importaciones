@@ -7,10 +7,10 @@
 // buque_carrier de Cargolink -> naviera con agente de rastreo.
 const POR_CARRIER: Record<string, string> = { "157": "MSC", "1497": "Maersk", "1419": "Yang Ming", "2129": "ZIM", "1387": "ZIM", "271": "Evergreen", "1894": "Evergreen", "29": "CMA CGM", "5": "ONE", "4": "COSCO", "214": "Wan Hai", "31": "Hapag-Lloyd", "3403": "PIL" };
 // Nombres de los agentes de la Mac (tracking_navieras.py), en el orden en que se consultan.
-export const AGENTES_RASTREO = ["MSC", "MAERSK", "YANG MING", "EVERGREEN", "TS LINES", "SINOKOR", "CMA CGM", "ONE", "COSCO", "WAN HAI", "PIL", "ZIM", "HAPAG-LLOYD"];
+export const AGENTES_RASTREO = ["MSC", "MAERSK", "YANG MING", "EVERGREEN", "TS LINES", "SINOKOR", "CMA CGM", "ONE", "COSCO", "WAN HAI", "PIL", "EMIRATES", "ZIM", "HAPAG-LLOYD"];
 export const tituloAgente = (n: string) => (n.length <= 3 ? n : n.charAt(0) + n.slice(1).toLowerCase());
 
-export const NAVIERAS_CON_AGENTE = ["MSC", "Maersk", "Yang Ming", "ZIM", "Evergreen", "CMA CGM", "ONE", "COSCO", "Wan Hai", "Hapag-Lloyd", "TS Lines", "Sinokor", "PIL"];
+export const NAVIERAS_CON_AGENTE = ["MSC", "Maersk", "Yang Ming", "ZIM", "Evergreen", "CMA CGM", "ONE", "COSCO", "Wan Hai", "Hapag-Lloyd", "TS Lines", "Sinokor", "PIL", "Emirates"];
 
 // Prefijos de contenedores propios (los rentados, como TEMU o TGBU, no delatan naviera).
 const CONTENEDORES: [string, string[]][] = [
@@ -25,6 +25,7 @@ const CONTENEDORES: [string, string[]][] = [
   ["CMA CGM", ["CMAU", "CGMU", "APZU"]],
   ["ONE", ["ONEU", "NYKU", "KKFU", "MOLU"]],
   ["Wan Hai", ["WHSU", "WHLU"]],
+  ["Emirates", ["ESDU", "ESPU"]],
 ];
 const MBL_OTRAS: Record<string, string> = {
   ZIMU: "ZIM",
@@ -37,6 +38,9 @@ const MBL_OTRAS: Record<string, string> = {
   ONEY: "ONE",
   PCIU: "PIL",
   SNKO: "Sinokor",
+  // Emirates: BL EMIV… y booking ESL… (Cargolink a veces captura el booking como MBL).
+  EMIV: "Emirates",
+  ESL: "Emirates",
 };
 // Cómo aparece cada naviera en la razón social del proveedor en Cargolink.
 const RAZON_SOCIAL: Record<string, RegExp> = {
@@ -52,6 +56,7 @@ const RAZON_SOCIAL: Record<string, RegExp> = {
   ONE: /OCEAN NETWORK|\bONE\b/i,
   "Wan Hai": /WAN HAI/i,
   "TS Lines": /T\.? ?S\.? LINES/i,
+  Emirates: /EMIRATES|\bESL\b/i,
 };
 
 export function navieraPorReferencia(mbl: string | null | undefined, contenedores: string | null | undefined): string | null {
@@ -118,6 +123,8 @@ export function ligaRastreo(naviera: string | null, mbl: string | null | undefin
       return `https://www.pilship.com/digital-solutions/?tab=customer&id=track-trace&label=containerTandT&module=${/^[A-Z]{4}\d{7}$/.test(ref) || !ref ? "TrackContStatus" : "TrackTraceBL"}&refNo=${ref}`;
     case "Wan Hai":
       return "https://www.wanhai.com/views/cargo_track_v2/tracking_query.xhtml";
+    case "Emirates":
+      return "https://www.emiratesline.com/track/";
     default: {
       const navUpper = (naviera ?? "").toUpperCase();
       if (navUpper.includes("INTERTEAM")) return "https://www.interteam.com.mx/estatus-de-importacion/";
