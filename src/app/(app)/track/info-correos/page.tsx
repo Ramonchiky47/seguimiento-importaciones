@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fechaCorta } from "@/lib/track";
 import { getMyPermissions } from "@/lib/permissions";
 import { RevisarCorreos } from "@/components/RevisarCorreos";
+import { VerCorreo, type Evidencia } from "@/components/VerCorreo";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 // en Cargolink. Cada dato dice si coincide, si es distinto o si falta en Cargolink.
 
 type Cambio = { fecha: string; campo: string; antes: string | null; despues: string };
-type Datos = Record<string, string | null | undefined> & { cambios?: Cambio[] };
+type Datos = Record<string, string | null | undefined> & { cambios?: Cambio[]; evidencia?: Evidencia };
 type Correo = {
   id: number;
   id_booking: number;
@@ -205,12 +206,11 @@ export default async function InfoCorreosPage() {
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   {c.agente_origen ?? "Agente de origen"} · {c.fecha_correo ? fechaCorta(c.fecha_correo) : ""}
-                  {c.liga && (
+                  {/* Extracto guardado (fecha, remitente, destinatarios y renglones con datos): sin entrar al buzón de Ramón. */}
+                  {c.datos.evidencia && (
                     <>
                       {" · "}
-                      <a href={c.liga} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 underline dark:text-blue-400">
-                        Abrir correo
-                      </a>
+                      <VerCorreo evidencia={c.datos.evidencia as unknown as Evidencia} booking={c.no_booking} />
                     </>
                   )}
                 </p>
