@@ -160,9 +160,9 @@ export type ResumenNaviera = {
   transbordos: { lugar: string; fecha: string | null }[] | null;
 };
 
-// Cargolink tiene ATA pero la naviera dice que aún no arriba (ETA posterior):
-// el arribo no está confirmado y manda la naviera.
+// Cargolink tiene ATA pero la naviera no reporta el arribo: sin ATA de la naviera su
+// fecha es estimada aunque ya haya pasado (ONE la marca con "E"). Manda la naviera.
 export function arriboSinConfirmar(ataCargolink: string | null | undefined, n: Pick<ResumenNaviera, "eta_naviera" | "ata_naviera"> | null | undefined): boolean {
   const ata = ataCargolink?.slice(0, 10);
-  return Boolean(ata && n && !n.ata_naviera && n.eta_naviera && n.eta_naviera.slice(0, 10) > ata);
+  return Boolean(ata && n && !n.ata_naviera);
 }
