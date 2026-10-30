@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ESTADOS, explicarPropuestaDias, fechaCorta, type EstadoHito } from "@/lib/track";
 import { NavieraDialog } from "@/components/NavieraDialog";
+import { VerCorreo, type Evidencia } from "@/components/VerCorreo";
 import { ResumenComercialDialog } from "@/components/ResumenComercialDialog";
 import { NAVIERAS_CON_AGENTE, coincideRazonSocial, ligaRastreo, navieraRastreo, nombreNaviera } from "@/lib/navieras";
 import type { ResumenNaviera } from "@/lib/detalleNaviera";
@@ -226,6 +227,8 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   const [idBooking, setIdBooking] = useState<number | null>(null);
   const [op, setOp] = useState<Operacion | null>(null);
   const [hitos, setHitos] = useState<Hito[]>([]);
+  // Último correo del booking que leyó el agente de correos (Track › Info correos).
+  const [correo, setCorreo] = useState<CorreoBooking | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editando, setEditando] = useState<number | null>(null);
@@ -257,11 +260,19 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
           .select("orden, hito, regla, fecha_plan, fecha_hecho, hecho, estado, dias_atraso, valor_real")
           .eq("id_booking", id)
           .order("posicion"),
-      ]).then(([opRes, hitosRes]) => {
+        supabase
+          .from("info_correos")
+          .select("fecha_correo, datos")
+          .eq("id_booking", id)
+          .order("fecha_correo", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]).then(([opRes, hitosRes, correoRes]) => {
         if (idActual.current !== id) return;
         if (opRes.error) setError(opRes.error.message);
         setOp((opRes.data as Operacion | null) ?? null);
         setHitos((hitosRes.data ?? []) as Hito[]);
+        setCorreo((correoRes.data as CorreoBooking | null) ?? null);
         setCargando(false);
       });
   }, []);
@@ -273,6 +284,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
       setIdBooking(id);
       setOp(null);
       setHitos([]);
+      setCorreo(null);
       setError(null);
       setEditando(null);
       setEtapaAbierta(null);
@@ -415,6 +427,9 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                 </svg>
                 Cambio interactivo
               </button>
+            )}
+            {op && correo?.datos?.evidencia && (
+              <BotonCorreo correo={correo} op={op} />
             )}
             {op && (
               <details className="relative">
@@ -673,6 +688,48 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
         </div>
       )}
     </dialog>
+  );
+}
+
+type CorreoBooking = {
+  fecha_correo: string | null;
+  datos: { evidencia?: Evidencia; atd_iso?: string | null; eta_iso?: string | null } | null;
+};
+
+// Correo con instrucciones del booking junto a "Cambio interactivo". Se actualiza solo:
+// el agente de correos (9, 15 y 22 h) reescribe info_correos al encontrar algo nuevo.
+// Si el zarpe o la ETA del correo no coinciden con Cargolink, se marca en ámbar.
+function BotonCorreo({ correo, op }: { correo: CorreoBooking; op: Operacion }) {
+  const d = correo.datos ?? {};
+  const distinta = (deCorreo?: string | null, deCargolink?: unknown) =>
+    Boolean(deCorreo && String(deCargolink ?? "").slice(0, 10) !== deCorreo.slice(0, 10));
+  const cambios = [
+    distinta(d.atd_iso, op.etd_atd) && `zarpe ${fechaCorta(d.atd_iso as string)}`,
+    distinta(d.eta_iso, op.eta) && `ETA ${fechaCorta(d.eta_iso as string)}`,
+  ].filter(Boolean) as string[];
+  const fecha = correo.fecha_correo
+    ? new Date(correo.fecha_correo).toLocaleDateString("es-MX", { timeZone: "America/Mexico_City", day: "numeric", month: "short" })
+    : "";
+  return (
+    <VerCorreo
+      evidencia={d.evidencia as Evidencia}
+      booking={String(op.no_booking ?? "")}
+      className={`flex min-h-10 items-center gap-1.5 rounded-md border px-3 text-sm font-semibold ${
+        cambios.length
+          ? "border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-200"
+          : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+      }`}
+      boton={
+        <>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="m3 7 9 6 9-6" />
+          </svg>
+          Correo {fecha}
+          {cambios.length > 0 && <span className="text-xs font-normal">· trae {cambios.join(" y ")}</span>}
+        </>
+      }
+    />
   );
 }
 

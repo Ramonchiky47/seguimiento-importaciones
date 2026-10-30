@@ -24,13 +24,28 @@ function Fila({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode })
   );
 }
 
-export function VerCorreo({ evidencia, booking }: { evidencia: Evidencia; booking: string }) {
+export function VerCorreo({
+  evidencia,
+  booking,
+  boton,
+  className,
+}: {
+  evidencia: Evidencia;
+  booking: string;
+  // Contenido y estilo del botón (por omisión, la liga "Ver correo").
+  boton?: React.ReactNode;
+  className?: string;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   const msjs = evidencia.mensajes ?? [];
   return (
     <>
-      <button type="button" onClick={() => ref.current?.showModal()} className="font-semibold text-blue-700 underline dark:text-blue-400">
-        Ver correo
+      <button
+        type="button"
+        onClick={() => ref.current?.showModal()}
+        className={className ?? "font-semibold text-blue-700 underline dark:text-blue-400"}
+      >
+        {boton ?? "Ver correo"}
       </button>
       <dialog
         ref={ref}

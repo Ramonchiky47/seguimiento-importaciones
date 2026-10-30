@@ -43,7 +43,7 @@ export default function RootLayout({
           alt="SYSMON"
           width={54}
           height={16}
-          className="pointer-events-none fixed bottom-2 right-3 z-40 h-4 w-auto rounded bg-white/80 px-1 py-0.5 opacity-80 shadow-sm"
+          className="pointer-events-none fixed bottom-2 right-3 z-40 h-5 w-auto rounded border border-yellow-400 bg-white/90 px-1 py-0.5 shadow-sm"
         />
       </body>
     </html>
