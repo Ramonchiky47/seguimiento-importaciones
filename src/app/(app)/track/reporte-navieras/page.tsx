@@ -84,6 +84,28 @@ function Seccion({
   );
 }
 
+const LISTAS = ["pagina", "no_encontrados", "sin_referencia", "aplazadas", "coloader", "bl_naviera", "ata_sin_confirmar"] as const;
+
+// Reemplaza en el reporte base lo de cada naviera que se volvió a consultar sola.
+function combinar(base: Reporte | null, nuevas: Reporte[]): Reporte | null {
+  if (!base) return null;
+  const r: Reporte = { ...base, por_naviera: { ...base.por_naviera } };
+  for (const n of nuevas) {
+    const [nav, avance] = Object.entries(n.por_naviera ?? {})[0] ?? [];
+    if (!nav || !avance) continue;
+    const antes = r.por_naviera?.[nav];
+    r.total += avance.total - (antes?.total ?? 0);
+    r.encontrados += avance.encontrados - (antes?.encontrados ?? 0);
+    r.por_naviera![nav] = avance;
+    for (const k of LISTAS) {
+      const quedan = ((r[k] ?? []) as Fila[]).filter((f) => f.naviera !== nav);
+      const ids = new Set(((n[k] ?? []) as Fila[]).map((f) => f.id_booking));
+      (r as Record<string, unknown>)[k] = [...quedan.filter((f) => !ids.has(f.id_booking)), ...((n[k] ?? []) as Fila[])];
+    }
+  }
+  return r;
+}
+
 const TH = "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400";
 
 export default async function ReporteNavierasPage({ searchParams }: { searchParams: Promise<{ id?: string }> }) {
@@ -98,11 +120,20 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
     .order("inicio", { ascending: false })
     .limit(10);
   const lista = (corridas ?? []) as { id: number; inicio: string; fin: string | null; mensaje: string | null }[];
-  const elegida = lista.find((c) => String(c.id) === id) ?? lista[0];
-  const { data } = elegida
-    ? await supabase.from("rastreo_procesos").select("reporte").eq("id", elegida.id).maybeSingle()
-    : { data: null };
-  const r = (data?.reporte ?? null) as Reporte | null;
+  const { data: reportes } = lista.length
+    ? await supabase.from("rastreo_procesos").select("id, reporte").in("id", lista.map((c) => c.id))
+    : { data: [] };
+  const reporteDe = new Map(((reportes ?? []) as { id: number; reporte: Reporte }[]).map((x) => [x.id, x.reporte]));
+  // "Correr ahora" de una sola naviera deja su propia corrida con solo esa naviera.
+  const soloDe = (cid: number) => {
+    const navs = Object.keys(reporteDe.get(cid)?.por_naviera ?? {});
+    return navs.length === 1 ? navs[0] : null;
+  };
+  const completa = lista.find((c) => !soloDe(c.id));
+  // Sin elegir corrida: la última completa con lo más nuevo de cada naviera consultada después.
+  const elegida = lista.find((c) => String(c.id) === id) ?? completa ?? lista[0];
+  const encima = !id && completa && elegida === completa ? lista.filter((c) => c.inicio > completa.inicio && soloDe(c.id)).reverse() : [];
+  const r = elegida ? combinar(reporteDe.get(elegida.id) ?? null, encima.map((c) => reporteDe.get(c.id)!)) : null;
   // Problemas de página agrupados por naviera.
   const pagina = [...(r?.pagina ?? [])].sort(
     (a, b) => (a.naviera ?? "").localeCompare(b.naviera ?? "") || a.no_booking.localeCompare(b.no_booking),
@@ -166,7 +197,13 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-slate-700 dark:text-slate-300">
-              Rastreo del <strong>{hora(elegida.fin ?? elegida.inicio)}</strong> · {r.encontrados} de {r.total} bookings con información de la naviera.
+              Rastreo del <strong>{hora(elegida.fin ?? elegida.inicio)}</strong>
+              {soloDe(elegida.id) ? ` (solo ${nombreNaviera(soloDe(elegida.id)!)})` : ""} · {r.encontrados} de {r.total} bookings con información de la naviera.
+              {encima.length > 0 && (
+                <span className="block text-xs text-slate-500 dark:text-slate-400">
+                  Con lo consultado después: {encima.map((c) => `${nombreNaviera(soloDe(c.id)!)} (${hora(c.fin ?? c.inicio)})`).join(", ")}.
+                </span>
+              )}
             </p>
             {lista.length > 1 && (
               <nav aria-label="Corridas anteriores" className="flex flex-wrap gap-1 text-xs">
@@ -178,6 +215,7 @@ export default async function ReporteNavierasPage({ searchParams }: { searchPara
                     className={`rounded-md border px-2 py-1 ${c.id === elegida.id ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900" : "border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300"}`}
                   >
                     {hora(c.fin ?? c.inicio)}
+                    {soloDe(c.id) ? ` · ${nombreNaviera(soloDe(c.id)!)}` : ""}
                   </Link>
                 ))}
               </nav>
