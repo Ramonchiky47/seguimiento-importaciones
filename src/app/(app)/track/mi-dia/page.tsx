@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { CreditoBadge } from "@/components/CreditoBadge";
 import { creditoPorBooking } from "@/lib/credito";
+import { TAREA_POR_HITO } from "@/lib/trackNew";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import { RegresarTablero } from "@/components/RegresarTablero";
 import { BuscadorTrack } from "@/components/BuscadorTrack";
@@ -380,10 +381,14 @@ export default async function MiDiaPage({
                         : h.estado === "hoy"
                           ? "Hoy"
                           : e.label;
+                    // Clic en el pendiente: abre su captura en el Interactivo (con la propuesta si la hay).
+                    const tarea = TAREA_POR_HITO[h.orden];
                     return (
-                      <li
-                        key={h.orden}
-                        className="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 sm:grid sm:grid-cols-[minmax(0,9.5rem)_6.5rem_4.5rem_minmax(0,1fr)]"
+                      <li key={h.orden}>
+                      <Link
+                        href={`/track/interactivo/${f.id_booking}${tarea ? `?editar=${tarea}` : ""}`}
+                        title={`Capturar o confirmar ${h.hito}`}
+                        className="group flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 hover:bg-blue-50 sm:grid sm:grid-cols-[minmax(0,9.5rem)_6.5rem_4.5rem_minmax(0,1fr)_auto] dark:hover:bg-slate-800"
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           <span className={`h-2 w-2 shrink-0 rounded-full ${e.barra}`} aria-hidden="true" />
@@ -396,9 +401,11 @@ export default async function MiDiaPage({
                         <span className="whitespace-nowrap text-xs tabular-nums text-slate-700 dark:text-slate-300">
                           {h.fecha_plan ? fechaCorta(h.fecha_plan) : "Sin fecha"}
                         </span>
-                        <span className="truncate text-xs text-slate-400 dark:text-slate-500" title={h.regla}>
-                          {h.regla}
+                        <span className="truncate text-xs text-slate-400 dark:text-slate-500">{h.regla}</span>
+                        <span className="whitespace-nowrap text-xs font-semibold text-blue-700 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 dark:text-blue-400">
+                          Capturar →
                         </span>
+                      </Link>
                       </li>
                     );
                   })}
