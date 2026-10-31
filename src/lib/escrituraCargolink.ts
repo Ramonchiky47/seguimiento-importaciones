@@ -64,6 +64,9 @@ export async function guardarEtapaCon(
   etapaKey: string,
   status: string,
   valores: Record<string, string>,
+  // soloVacios: solo llena lo que en Cargolink está vacío y nunca libera una etapa
+  // finalizada (datos de correos). fuente: de dónde salió el dato, para la bitácora.
+  opciones: { soloVacios?: boolean; fuente?: string } = {},
 ): Promise<ResultadoEtapa> {
   const etapa = ETAPAS_CARGOLINK[etapaKey];
   const accion = etapa?.acciones.find((a) => a.status === status);
@@ -101,7 +104,7 @@ export async function guardarEtapaCon(
       usuario_email: esc.email,
       usuario_nombre: esc.nombre,
       ok,
-      mensaje,
+      mensaje: opciones.fuente ? `${mensaje} · ${opciones.fuente}` : mensaje,
     });
   };
 
@@ -135,6 +138,18 @@ export async function guardarEtapaCon(
     // Etapa finalizada: si ya tiene lo que se pide no hay nada que hacer; si
     // no, se libera (Liberar etapas) para poder corregirla.
     const actual: Record<string, unknown> = { ...booking, ...origen };
+    if (opciones.soloVacios) {
+      if (booking[etapa.mov] === "FINALIZADO") {
+        const msg = `${etapa.label}: ya está finalizada en Cargolink; no se toca.`;
+        await bitacora(false, msg, cambios);
+        return { ok: false, mensaje: msg };
+      }
+      for (const k of Object.keys(cambios)) {
+        const v = String(actual[k] ?? "").trim();
+        if (v && !v.startsWith("0000")) delete cambios[k];
+      }
+      if (Object.keys(cambios).length === 0) return { ok: true, mensaje: `${etapa.label}: Cargolink ya tenía el dato; no se cambió nada.` };
+    }
     const pendientes = Object.entries(cambios).filter(([k, v]) => String(actual[k] ?? "").slice(0, v.length) !== v);
     if (booking[etapa.mov] === "FINALIZADO" && pendientes.length === 0) {
       valoresDespues = valoresAntes;
