@@ -2,6 +2,8 @@ import Link from "next/link";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
+import { CreditoBadge } from "@/components/CreditoBadge";
+import { creditoPorBooking } from "@/lib/credito";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import { FilasTarjetas, type FilaTarjetas } from "@/components/FilasTarjetas";
 import {
@@ -136,6 +138,7 @@ export default async function TableroPage({
   const totalPropuestas = ((propuestasData ?? []) as unknown[]).length;
   const vaciosAtencion = ((vaciosData ?? []) as { estado: string }[]).filter((v) => v.estado !== "en_tiempo").length;
   const r = (data ?? null) as Tablero | null;
+  const credito = await creditoPorBooking(supabase, (r?.acciones ?? []).map((a) => a.id_booking));
   const c = (conteosData ?? null) as ConteosTrack | null;
   const availableEjecutivos = Array.from(
     new Set([SIN_EJECUTIVO, ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((x) => x.ejecutivo), ...ejecutivoRaw]),
@@ -347,6 +350,7 @@ export default async function TableroPage({
                     {a.no_booking}
                   </AbrirOperacionBoton>
                   <span className="min-w-0 max-w-56 truncate text-slate-600 dark:text-slate-400">{a.cliente ?? "—"}</span>
+                  <CreditoBadge si={credito.get(a.id_booking)} />
                   <span className="font-semibold text-slate-900 dark:text-slate-100">
                     {a.accion === "Corregir dato" || a.accion === "Asignar ejecutivo" ? a.accion : `Marcar ${a.accion}`}
                   </span>

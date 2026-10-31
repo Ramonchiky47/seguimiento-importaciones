@@ -3,6 +3,8 @@ import Link from "next/link";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
+import { CreditoBadge } from "@/components/CreditoBadge";
+import { creditoPorBooking } from "@/lib/credito";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import { RegresarTablero } from "@/components/RegresarTablero";
 import { BuscadorTrack } from "@/components/BuscadorTrack";
@@ -154,7 +156,10 @@ export default async function MiDiaPage({
     status_booking: string | null;
   }[];
   const filas = resultado.filas;
-  const cambios = await cambiosComerciales(supabase, filas.map((f) => f.id_booking));
+  const [cambios, credito] = await Promise.all([
+    cambiosComerciales(supabase, filas.map((f) => f.id_booking)),
+    creditoPorBooking(supabase, filas.map((f) => f.id_booking)),
+  ]);
   const totales = NIVELES.map((n) => resultado.conteos[n.key] ?? 0);
   const totalCount = resultado.total;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -362,6 +367,7 @@ export default async function MiDiaPage({
                   >
                     Ver interactivo →
                   </Link>
+                  <CreditoBadge si={credito.get(f.id_booking)} className="mt-1 block w-fit" />
                 </div>
                 <ul className="min-w-0 space-y-1.5">
                   {f.hitos.map((h) => {

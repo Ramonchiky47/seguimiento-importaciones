@@ -7,18 +7,24 @@ import { ESTATUS_OPCIONES, claseFilaEstatus, estatusBooking, mismoNombre } from 
 import { ActualizarMaritimaButton } from "@/components/ActualizarMaritimaButton";
 import { getMyPermissions, obtenerUsuario } from "@/lib/permissions";
 import { actualizarOperacionesMaritima } from "./actions";
+import { tieneCredito } from "@/lib/credito";
 
 // "Actualizar" descarga de Cargolink durante ~3-4 min (ver actions.ts).
 
 // Espejo de Cargolink: Operaciones Importacion > Servicios maritimos. Solo
 // lectura — la tabla operaciones_maritima se llena con una carga desde
 // Cargolink, no se captura desde aquí.
-const COLUMNS = [
+type Columna = { field: string; label: string; select?: string };
+// Días de crédito del cliente (Cargolink: "credito" = "SI"); la celda va en verde o rojo.
+const CREDITO: Columna = { field: "credito", label: "Días de crédito", select: "credito:datos->>credito" };
+
+const COLUMNS: readonly Columna[] = [
   { field: "no_booking", label: "Booking" },
   { field: "fecha", label: "Fecha" },
   { field: "type", label: "Type" },
   { field: "mbl", label: "MBL" },
   { field: "cliente", label: "Cliente" },
+  CREDITO,
   { field: "ejecutivo", label: "Ejecutivo" },
   { field: "servicio", label: "Servicio" },
   { field: "modo_transportacion", label: "Modo de transportación" },
@@ -36,9 +42,32 @@ const COLUMNS = [
   { field: "regreso_vacio", label: "Regreso de vacío" },
   { field: "dias_libres_demora", label: "Días libres de demoras" },
   { field: "dias_demora", label: "Días demora" },
-] as const;
+];
 
-const SORTABLE_FIELDS = new Set<string>(COLUMNS.map((c) => c.field));
+// Como Booking › Concentrado de Cargolink: días de crédito entre Cliente factura e Incoterm.
+const COLUMNS_CONCENTRADO: readonly Columna[] = [
+  { field: "no_booking", label: "Booking" },
+  { field: "fecha", label: "Fecha" },
+  { field: "agente_extranjero", label: "Agente" },
+  { field: "cliente", label: "Cliente servicio" },
+  { field: "consignatario", label: "Cliente factura" },
+  CREDITO,
+  { field: "incoterm", label: "Incoterm" },
+  { field: "transporte", label: "Transporte", select: "transporte:datos->>transporte" },
+  { field: "servicio", label: "Servicio" },
+  { field: "seguro", label: "Seguro" },
+  { field: "type", label: "Type" },
+  { field: "mbl", label: "MBL" },
+  { field: "ejecutivo", label: "Ejecutivo" },
+  { field: "origen", label: "Origen" },
+  { field: "destino", label: "Destino" },
+  { field: "etd_atd", label: "ETD/ATD" },
+  { field: "eta", label: "ETA" },
+  { field: "ata", label: "ATA" },
+];
+
+// Las de datos (crédito, transporte) no se pueden ordenar desde la tabla.
+const SORTABLE_FIELDS = new Set<string>([...COLUMNS, ...COLUMNS_CONCENTRADO].filter((c) => !c.select).map((c) => c.field));
 const TYPE_OPTIONS = ["FCLI", "LCLI", "FCL", "LCL"];
 const PAGE_SIZE = 100;
 
@@ -103,7 +132,10 @@ function sumarDias(fechaIso: string, dias: number): string {
 export async function OperacionesMaritimaVista({
   searchParams,
   enTrack = false,
+  concentrado = false,
 }: {
+  // Concentrado (pestaña junto a Track): columnas como el Concentrado de Cargolink.
+  concentrado?: boolean;
   // Dentro de Track: sin encabezado propio ni segunda ventana de booking
   // (el layout de Track ya la monta).
   enTrack?: boolean;
@@ -120,6 +152,7 @@ export async function OperacionesMaritimaVista({
   }>;
 }) {
   const { q, sort, dir, type, ejecutivo, anio, estatus, tarjeta, page } = await searchParams;
+  const columnas = concentrado ? COLUMNS_CONCENTRADO : COLUMNS;
   const estatusSel = estatusBooking(estatus);
   const supabase = await createClient();
   const myPermissions = await getMyPermissions();
@@ -205,7 +238,11 @@ export async function OperacionesMaritimaVista({
   };
 
   const [{ data, error, count }, ...conteos] = await Promise.all([
-    consulta(`id_booking, sincronizado_at, status_booking, ${COLUMNS.map((c) => c.field).join(", ")}`, { count: "exact" }, tarjetaActiva)
+    consulta(
+      `id_booking, sincronizado_at, status_booking, regreso_vacio, ${columnas.map((c) => c.select ?? c.field).join(", ")}`,
+      { count: "exact" },
+      tarjetaActiva,
+    )
       .order(sortField, { ascending: sortAscending, nullsFirst: false })
       .order("id_booking", { ascending: false })
       .range(from, to),
@@ -311,10 +348,10 @@ export async function OperacionesMaritimaVista({
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
-            Operaciones Marítima
+            {concentrado ? "Concentrado" : "Operaciones Marítima"}
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Cargolink · Operaciones Importación › Servicios marítimos ·{" "}
+            {concentrado ? "Cargolink · Booking › Concentrado" : "Cargolink · Operaciones Importación › Servicios marítimos"} ·{" "}
             <Link href="/track/bitacora" className="font-medium text-blue-700 hover:underline dark:text-blue-400">
               Bitácora de cambios
             </Link>
@@ -406,8 +443,9 @@ export async function OperacionesMaritimaVista({
                 desfasadas de los títulos con un <thead> sticky al desplazar. */}
             <thead>
               <tr>
-                {COLUMNS.map(({ field, label }) => {
+                {columnas.map(({ field, label }) => {
                   const isActive = sortField === field;
+                  const ordenable = SORTABLE_FIELDS.has(field);
                   return (
                     <th
                       key={field}
@@ -417,6 +455,7 @@ export async function OperacionesMaritimaVista({
                           : "z-20 shadow-[inset_0_-1px_0_rgb(203_213_225)] dark:shadow-[inset_0_-1px_0_rgb(51_65_85)]"
                       }`}
                     >
+                      {ordenable ? (
                       <Link
                         href={sortHref(field)}
                         className={`flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100 ${
@@ -428,6 +467,9 @@ export async function OperacionesMaritimaVista({
                           {isActive ? (sortAscending ? "▲" : "▼") : "⇅"}
                         </span>
                       </Link>
+                      ) : (
+                        label
+                      )}
                     </th>
                   );
                 })}
@@ -443,16 +485,26 @@ export async function OperacionesMaritimaVista({
                     "odd:bg-white even:bg-slate-50/70 dark:odd:bg-slate-900 dark:even:bg-slate-900/60"
                   }`}
                 >
-                  {COLUMNS.map(({ field }) => (
+                  {columnas.map(({ field }) => (
                     <td
                       key={field}
                       className={`whitespace-nowrap px-3 py-2 text-slate-700 dark:text-slate-300 ${
+                        field === "credito"
+                          ? tieneCredito(row.credito)
+                            ? "bg-green-500 text-center font-bold text-white! dark:bg-green-700"
+                            : "bg-red-500 text-center font-bold text-white! dark:bg-red-700"
+                          : ""
+                      } ${
                         field === "no_booking"
                           ? `sticky left-0 z-10 bg-inherit font-semibold text-slate-900 dark:text-slate-100 ${COLUMNA_FIJA_BORDE}`
                           : ""
                       } ${field === "dias_libres_demora" || field === "dias_demora" ? "text-center" : ""}`}
                     >
-                      {field === "dias_demora" ? (
+                      {field === "credito" ? (
+                        tieneCredito(row.credito) ? "SÍ" : "NO"
+                      ) : field === "seguro" ? (
+                        row.seguro ? "SÍ" : "NO"
+                      ) : field === "dias_demora" ? (
                         <DiasDemora valor={row[field] as number | null} regresado={row.regreso_vacio !== null} />
                       ) : field === "no_booking" && nombreOperativo && mismoNombre(row.ejecutivo as string | null, nombreOperativo) ? (
                         <span className="inline-flex items-center gap-1.5">
@@ -475,7 +527,7 @@ export async function OperacionesMaritimaVista({
 
               {rows.length === 0 && !error && (
                 <tr>
-                  <td colSpan={COLUMNS.length} className="px-3 py-8 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={columnas.length} className="px-3 py-8 text-center text-slate-400 dark:text-slate-500">
                     No hay operaciones con estos filtros.
                   </td>
                 </tr>
