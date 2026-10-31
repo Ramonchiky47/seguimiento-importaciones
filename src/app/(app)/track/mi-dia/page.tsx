@@ -158,7 +158,8 @@ export default async function MiDiaPage({
   const filas = resultado.filas;
   const [cambios, credito] = await Promise.all([
     cambiosComerciales(supabase, filas.map((f) => f.id_booking)),
-    creditoPorBooking(supabase, filas.map((f) => f.id_booking)),
+    // Pendientes y "Por zarpar" en una sola consulta.
+    creditoPorBooking(supabase, [...filas.map((f) => f.id_booking), ...porZarpar.map((z) => z.id_booking)]),
   ]);
   const totales = NIVELES.map((n) => resultado.conteos[n.key] ?? 0);
   const totalCount = resultado.total;
@@ -465,12 +466,15 @@ export default async function MiDiaPage({
               data-buscar={`${z.no_booking} ${z.cliente ?? ""} ${z.ejecutivo ?? "Sin ejecutivo"}`}
               className={`${claseFilaEstatus(z.status_booking)} grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-x-4 gap-y-1 px-4 py-2.5 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)_auto]`}
             >
-              <AbrirOperacionBoton
-                idBooking={z.id_booking}
-                className="text-left font-mono text-[13px] font-semibold text-blue-700 hover:underline dark:text-blue-400"
-              >
-                {z.no_booking}
-              </AbrirOperacionBoton>
+              <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                <AbrirOperacionBoton
+                  idBooking={z.id_booking}
+                  className="text-left font-mono text-[13px] font-semibold text-blue-700 hover:underline dark:text-blue-400"
+                >
+                  {z.no_booking}
+                </AbrirOperacionBoton>
+                <CreditoBadge si={credito.get(z.id_booking)} />
+              </span>
               <span className="truncate text-slate-600 dark:text-slate-400">{z.cliente ?? "—"}</span>
               {z.ejecutivo ? (
                 <span className="truncate text-xs text-slate-500 dark:text-slate-400">{z.ejecutivo}</span>
