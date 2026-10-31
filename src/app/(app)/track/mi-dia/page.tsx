@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { CreditoBadge } from "@/components/CreditoBadge";
 import { creditoPorBooking } from "@/lib/credito";
-import { TAREA_POR_HITO } from "@/lib/trackNew";
+import { ETAPA_POR_HITO, TAREA_POR_HITO } from "@/lib/trackNew";
+import { CapturaRapida } from "@/components/CapturaRapida";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import { RegresarTablero } from "@/components/RegresarTablero";
 import { BuscadorTrack } from "@/components/BuscadorTrack";
@@ -157,11 +158,24 @@ export default async function MiDiaPage({
     status_booking: string | null;
   }[];
   const filas = resultado.filas;
-  const [cambios, credito] = await Promise.all([
+  const idsFilas = filas.map((f) => f.id_booking);
+  const [cambios, credito, { data: puedeEditar }, { data: correosData }] = await Promise.all([
     cambiosComerciales(supabase, filas.map((f) => f.id_booking)),
     // Pendientes y "Por zarpar" en una sola consulta.
     creditoPorBooking(supabase, [...filas.map((f) => f.id_booking), ...porZarpar.map((z) => z.id_booking)]),
+    supabase.rpc("puedo_editar_cargolink"),
+    // Zarpe, ETA y BL que trajo el correo más reciente de cada booking (Info correos).
+    idsFilas.length
+      ? supabase
+          .from("info_correos")
+          .select("id_booking, fecha_correo, atd:datos->>atd_iso, eta:datos->>eta_iso, mbl:datos->>mbl, hbl:datos->>hbl")
+          .in("id_booking", idsFilas)
+          .order("fecha_correo", { ascending: false })
+      : Promise.resolve({ data: [] }),
   ]);
+  type DatoCorreo = { id_booking: number; fecha_correo: string; atd: string | null; eta: string | null; mbl: string | null; hbl: string | null };
+  const correos = new Map<number, DatoCorreo>();
+  for (const c of (correosData ?? []) as DatoCorreo[]) if (!correos.has(c.id_booking)) correos.set(c.id_booking, c);
   const totales = NIVELES.map((n) => resultado.conteos[n.key] ?? 0);
   const totalCount = resultado.total;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -344,7 +358,7 @@ export default async function MiDiaPage({
               <li
                 data-buscar={`${f.no_booking} ${f.cliente ?? ""} ${f.ejecutivo ?? "Sin ejecutivo"}`}
                 data-seccion={f.seccion}
-                className={`${claseFilaEstatus(f.status_booking)} grid grid-cols-[6px_minmax(0,1fr)_minmax(0,2.2fr)] gap-4 py-3 pr-4 text-sm sm:grid-cols-[6px_minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,0.6fr)]`}
+                className={`${claseFilaEstatus(f.status_booking)} grid grid-cols-[6px_minmax(0,1fr)_minmax(0,2.2fr)] gap-4 py-3 pr-4 text-sm sm:grid-cols-[6px_minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,1.1fr)_minmax(0,0.6fr)]`}
               >
                 <span className={`self-stretch ${peor.barra}`} aria-hidden="true" />
                 <div className="min-w-0">
@@ -381,35 +395,63 @@ export default async function MiDiaPage({
                         : h.estado === "hoy"
                           ? "Hoy"
                           : e.label;
-                    // Clic en el pendiente: abre su captura en el Interactivo (con la propuesta si la hay).
-                    const tarea = TAREA_POR_HITO[h.orden];
+                    const correo = correos.get(f.id_booking);
+                    const etapaKey = ETAPA_POR_HITO[h.orden] ?? null;
+                    // Propuesta del correo para el zarpe y la ETA.
+                    const propuesta =
+                      etapaKey === "atd" && correo?.atd
+                        ? { fecha: correo.atd, fuente: "correo" }
+                        : etapaKey === "eta" && correo?.eta
+                          ? { fecha: correo.eta, fuente: "correo" }
+                          : null;
                     return (
                       <li key={h.orden}>
-                      <Link
-                        href={`/track/interactivo/${f.id_booking}${tarea ? `?editar=${tarea}` : ""}`}
-                        title={`Capturar o confirmar ${h.hito}`}
-                        className="group flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 hover:bg-blue-50 sm:grid sm:grid-cols-[minmax(0,9.5rem)_6.5rem_4.5rem_minmax(0,1fr)_auto] dark:hover:bg-slate-800"
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className={`h-2 w-2 shrink-0 rounded-full ${e.barra}`} aria-hidden="true" />
-                          <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{h.hito}</span>
-                        </span>
-                        <span className={`whitespace-nowrap text-xs font-bold tabular-nums ${e.pill.split(" ").filter((c) => c.includes("text-")).join(" ")}`}>
-                          <span className="sr-only">{e.label}: </span>
-                          {corto}
-                        </span>
-                        <span className="whitespace-nowrap text-xs tabular-nums text-slate-700 dark:text-slate-300">
-                          {h.fecha_plan ? fechaCorta(h.fecha_plan) : "Sin fecha"}
-                        </span>
-                        <span className="truncate text-xs text-slate-400 dark:text-slate-500">{h.regla}</span>
-                        <span className="whitespace-nowrap text-xs font-semibold text-blue-700 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 dark:text-blue-400">
-                          Capturar →
-                        </span>
-                      </Link>
+                        <CapturaRapida
+                          idBooking={f.id_booking}
+                          etapaKey={etapaKey}
+                          tarea={TAREA_POR_HITO[h.orden] ?? null}
+                          hito={h.hito}
+                          corto={corto}
+                          colorTexto={e.pill.split(" ").filter((c) => c.includes("text-")).join(" ")}
+                          colorPunto={e.barra}
+                          fecha={h.fecha_plan}
+                          regla={h.regla}
+                          propuesta={propuesta}
+                          puedeEditar={puedeEditar === true}
+                        />
                       </li>
                     );
                   })}
                 </ul>
+                {/* Lo que trajo el correo más reciente: zarpe, ETA y BL (Info correos). */}
+                {(() => {
+                  const c = correos.get(f.id_booking);
+                  const difEta = Boolean(c?.eta && f.eta && c.eta !== f.eta.slice(0, 10));
+                  return (
+                    <div className="col-span-2 col-start-2 self-start sm:col-span-1 sm:col-start-auto">
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Correo{c ? ` · ${fechaCorta(c.fecha_correo.slice(0, 10))}` : ""}
+                      </p>
+                      {c ? (
+                        <dl className="grid grid-cols-[3rem_minmax(0,1fr)] gap-x-2 gap-y-0.5 rounded-lg border border-slate-200 bg-white/80 px-2.5 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900/60">
+                          <dt className="text-slate-500">Zarpe</dt>
+                          <dd className="tabular-nums text-slate-900 dark:text-slate-100">{c.atd ? fechaCorta(c.atd) : "—"}</dd>
+                          <dt className="text-slate-500">ETA</dt>
+                          <dd className={`tabular-nums ${difEta ? "font-bold text-amber-700 dark:text-amber-400" : "text-slate-900 dark:text-slate-100"}`} title={difEta ? `Cargolink: ${fechaCorta(f.eta)}` : undefined}>
+                            {c.eta ? fechaCorta(c.eta) : "—"}
+                            {difEta && " ≠ CL"}
+                          </dd>
+                          <dt className="text-slate-500">BL</dt>
+                          <dd className="truncate font-mono text-[11px] text-slate-900 dark:text-slate-100" title={c.mbl ?? c.hbl ?? undefined}>
+                            {c.mbl ?? c.hbl ?? "—"}
+                          </dd>
+                        </dl>
+                      ) : (
+                        <p className="rounded-lg border border-dashed border-slate-200 px-2.5 py-1.5 text-xs text-slate-400 dark:border-slate-700">Sin correo</p>
+                      )}
+                    </div>
+                  );
+                })()}
                 <p
                   className={`hidden truncate text-xs sm:block ${f.ejecutivo ? "text-slate-500 dark:text-slate-400" : "font-bold text-red-700 dark:text-red-400"}`}
                 >

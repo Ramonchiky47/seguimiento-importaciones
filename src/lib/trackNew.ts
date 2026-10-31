@@ -66,6 +66,11 @@ const TAREAS: { id: string; fase: FaseClave; label: string; hito?: number; mov?:
 ];
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+// Hito de Track (orden) -> etapa de Cargolink con que se captura (captura rápida de Mi día).
+export const ETAPA_POR_HITO: Record<number, string> = Object.fromEntries(
+  TAREAS.filter((t) => t.hito && t.editar).map((t) => [t.hito as number, t.editar as string]),
+);
+
 // Hito de Track (orden) -> tarea del Interactivo que lo captura (Mi día abre ahí la captura).
 export const TAREA_POR_HITO: Record<number, string> = Object.fromEntries(
   TAREAS.filter((t) => t.hito && t.editar).map((t) => [t.hito as number, t.id]),
