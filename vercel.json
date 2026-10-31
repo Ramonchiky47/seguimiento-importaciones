@@ -1,8 +1,28 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["sfo1"],
+  "regions": [
+    "sfo1"
+  ],
   "crons": [
-    { "path": "/api/cron/importaciones", "schedule": "0 20 * * *" },
-    { "path": "/api/cron/importaciones", "schedule": "0 1 * * *" }
+    {
+      "path": "/api/cron/importaciones",
+      "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/cron/importaciones",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/aplicar-correos",
+      "schedule": "40 15 * * *"
+    },
+    {
+      "path": "/api/cron/aplicar-correos",
+      "schedule": "40 21 * * *"
+    },
+    {
+      "path": "/api/cron/aplicar-correos",
+      "schedule": "40 4 * * *"
+    }
   ]
 }
