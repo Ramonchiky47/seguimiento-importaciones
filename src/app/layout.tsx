@@ -30,21 +30,12 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <InactivityLogout />
-        <div
-          style={{ fontFamily: "Calibri, sans-serif" }}
-          className="w-full py-0.5 text-center text-[6px] text-slate-400 dark:text-slate-600"
-        >
-          Creado por Ing Ramon Villanueva
+        {/* Logo de SYSMON arriba a la derecha de todas las páginas, con la firma a su lado. */}
+        <div className="flex w-full items-center justify-end gap-2 bg-white px-4 py-1 dark:bg-slate-950">
+          <span className="text-[11px] italic text-slate-500 dark:text-slate-400">By Ing Ramon Villanueva</span>
+          <img src="/sysmon.svg" alt="SYSMON" width={81} height={24} className="h-6 w-auto" />
         </div>
         {children}
-        {/* Logo de SYSMON, pequeño, en todas las páginas. */}
-        <img
-          src="/sysmon.svg"
-          alt="SYSMON"
-          width={54}
-          height={16}
-          className="pointer-events-none fixed bottom-2 right-3 z-40 h-5 w-auto rounded border border-yellow-400 bg-white/90 px-1 py-0.5 shadow-sm"
-        />
       </body>
     </html>
   );
