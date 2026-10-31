@@ -61,7 +61,7 @@ export function VerCorreo({
         aria-label={`Correo de ${booking}`}
         style={{ left: pos.x, top: pos.y }}
         onKeyDown={(e) => e.key === "Escape" && ref.current?.close()}
-        className="fixed z-[60] m-0 flex max-h-[85vh] min-h-48 w-[min(620px,calc(100vw-16px))] min-w-72 resize flex-col overflow-hidden rounded-xl border border-slate-300 bg-white p-0 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        className="fixed z-[60] m-0 hidden open:flex max-h-[85vh] min-h-48 w-[min(620px,calc(100vw-16px))] min-w-72 resize flex-col overflow-hidden rounded-xl border border-slate-300 bg-white p-0 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
       >
         <div
           title="Arrastra para mover la ventana"
