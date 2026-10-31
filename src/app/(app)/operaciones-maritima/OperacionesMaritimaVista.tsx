@@ -44,30 +44,8 @@ const COLUMNS: readonly Columna[] = [
   { field: "dias_demora", label: "Días demora" },
 ];
 
-// Como Booking › Concentrado de Cargolink: días de crédito entre Cliente factura e Incoterm.
-const COLUMNS_CONCENTRADO: readonly Columna[] = [
-  { field: "no_booking", label: "Booking" },
-  { field: "fecha", label: "Fecha" },
-  { field: "agente_extranjero", label: "Agente" },
-  { field: "cliente", label: "Cliente servicio" },
-  { field: "consignatario", label: "Cliente factura" },
-  CREDITO,
-  { field: "incoterm", label: "Incoterm" },
-  { field: "transporte", label: "Transporte", select: "transporte:datos->>transporte" },
-  { field: "servicio", label: "Servicio" },
-  { field: "seguro", label: "Seguro" },
-  { field: "type", label: "Type" },
-  { field: "mbl", label: "MBL" },
-  { field: "ejecutivo", label: "Ejecutivo" },
-  { field: "origen", label: "Origen" },
-  { field: "destino", label: "Destino" },
-  { field: "etd_atd", label: "ETD/ATD" },
-  { field: "eta", label: "ETA" },
-  { field: "ata", label: "ATA" },
-];
-
-// Las de datos (crédito, transporte) no se pueden ordenar desde la tabla.
-const SORTABLE_FIELDS = new Set<string>([...COLUMNS, ...COLUMNS_CONCENTRADO].filter((c) => !c.select).map((c) => c.field));
+// Las de datos (crédito) no se pueden ordenar desde la tabla.
+const SORTABLE_FIELDS = new Set<string>(COLUMNS.filter((c) => !c.select).map((c) => c.field));
 const TYPE_OPTIONS = ["FCLI", "LCLI", "FCL", "LCL"];
 const PAGE_SIZE = 100;
 
@@ -132,10 +110,7 @@ function sumarDias(fechaIso: string, dias: number): string {
 export async function OperacionesMaritimaVista({
   searchParams,
   enTrack = false,
-  concentrado = false,
 }: {
-  // Concentrado (pestaña junto a Track): columnas como el Concentrado de Cargolink.
-  concentrado?: boolean;
   // Dentro de Track: sin encabezado propio ni segunda ventana de booking
   // (el layout de Track ya la monta).
   enTrack?: boolean;
@@ -152,7 +127,7 @@ export async function OperacionesMaritimaVista({
   }>;
 }) {
   const { q, sort, dir, type, ejecutivo, anio, estatus, tarjeta, page } = await searchParams;
-  const columnas = concentrado ? COLUMNS_CONCENTRADO : COLUMNS;
+  const columnas = COLUMNS;
   const estatusSel = estatusBooking(estatus);
   const supabase = await createClient();
   const myPermissions = await getMyPermissions();
@@ -348,10 +323,10 @@ export async function OperacionesMaritimaVista({
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
-            {concentrado ? "Concentrado" : "Operaciones Marítima"}
+            Operaciones Marítima
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            {concentrado ? "Cargolink · Booking › Concentrado" : "Cargolink · Operaciones Importación › Servicios marítimos"} ·{" "}
+            Cargolink · Operaciones Importación › Servicios marítimos ·{" "}
             <Link href="/track/bitacora" className="font-medium text-blue-700 hover:underline dark:text-blue-400">
               Bitácora de cambios
             </Link>
@@ -502,8 +477,6 @@ export async function OperacionesMaritimaVista({
                     >
                       {field === "credito" ? (
                         tieneCredito(row.credito) ? "SÍ" : "NO"
-                      ) : field === "seguro" ? (
-                        row.seguro ? "SÍ" : "NO"
                       ) : field === "dias_demora" ? (
                         <DiasDemora valor={row[field] as number | null} regresado={row.regreso_vacio !== null} />
                       ) : field === "no_booking" && nombreOperativo && mismoNombre(row.ejecutivo as string | null, nombreOperativo) ? (
