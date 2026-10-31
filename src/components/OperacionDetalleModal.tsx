@@ -3,9 +3,11 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { ESTADOS, explicarPropuestaDias, fechaCorta, type EstadoHito } from "@/lib/track";
+import { ESTADOS, explicarPropuestaDias, fechaCorta, hoyMexico, type EstadoHito } from "@/lib/track";
 import { NavieraDialog } from "@/components/NavieraDialog";
 import { VerCorreo, type Evidencia } from "@/components/VerCorreo";
+import { PropuestoCelda } from "@/components/PropuestoCelda";
+import { cargolinkDeHito, propuestosPorHito, type NavieraPropuesto } from "@/lib/propuestoHito";
 import { ResumenComercialDialog } from "@/components/ResumenComercialDialog";
 import { NAVIERAS_CON_AGENTE, coincideRazonSocial, ligaRastreo, navieraRastreo, nombreNaviera } from "@/lib/navieras";
 import type { ResumenNaviera } from "@/lib/detalleNaviera";
@@ -229,6 +231,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   const [hitos, setHitos] = useState<Hito[]>([]);
   // Último correo del booking que leyó el agente de correos (Track › Info correos).
   const [correo, setCorreo] = useState<CorreoBooking | null>(null);
+  const [navieraProp, setNavieraProp] = useState<NavieraPropuesto>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editando, setEditando] = useState<number | null>(null);
@@ -245,6 +248,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   // quedó desactualizada: se recarga al cerrar la ventana.
   const huboCambios = useRef(false);
   const router = useRouter();
+  const propuestos = propuestosPorHito(correo?.datos ?? null, navieraProp, hoyMexico());
 
   const cerrar = useCallback(() => {
     dialogRef.current?.close();
@@ -267,12 +271,14 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
           .order("fecha_correo", { ascending: false })
           .limit(1)
           .maybeSingle(),
-      ]).then(([opRes, hitosRes, correoRes]) => {
+        supabase.from("tracking_naviera").select("ok, eta_naviera, ata_naviera").eq("id_booking", id).maybeSingle(),
+      ]).then(([opRes, hitosRes, correoRes, navRes]) => {
         if (idActual.current !== id) return;
         if (opRes.error) setError(opRes.error.message);
         setOp((opRes.data as Operacion | null) ?? null);
         setHitos((hitosRes.data ?? []) as Hito[]);
         setCorreo((correoRes.data as CorreoBooking | null) ?? null);
+        setNavieraProp((navRes.data as NavieraPropuesto) ?? null);
         setCargando(false);
       });
   }, []);
@@ -285,6 +291,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
       setOp(null);
       setHitos([]);
       setCorreo(null);
+      setNavieraProp(null);
       setError(null);
       setEditando(null);
       setEtapaAbierta(null);
@@ -557,6 +564,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                             <th scope="col" className="px-4 py-2 font-semibold">Hito</th>
                             <th scope="col" className="px-3 py-2 font-semibold">Compromiso</th>
                             <th scope="col" className="px-3 py-2 font-semibold">Real</th>
+                            <th scope="col" className="px-3 py-2 font-semibold" title="Según el último correo o la naviera">Propuesto</th>
                             <th scope="col" className="px-3 py-2 font-semibold">Estado</th>
                             <th scope="col" className="px-4 py-2 font-semibold">Etapa en Cargolink</th>
                           </tr>
@@ -580,6 +588,9 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                                 <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fechaCorta(h.fecha_plan)}</td>
                                 <td className="whitespace-nowrap px-3 py-2 tabular-nums">
                                   {h.valor_real ?? (h.hecho ? fechaCorta(h.fecha_hecho) : "—")}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <PropuestoCelda items={propuestos[h.orden]} real={cargolinkDeHito(h.orden, op)} />
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-2">
                                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.pill}`}>
@@ -610,7 +621,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                               </tr>
                               {editando === h.orden && etapa && op && (
                                 <tr>
-                                  <td colSpan={5} className="bg-slate-50 px-4 py-3 dark:bg-slate-800/50">
+                                  <td colSpan={6} className="bg-slate-50 px-4 py-3 dark:bg-slate-800/50">
                                     {etapa.filas ? (
                                       <EditorTransbordo
                                         etapa={etapa}
@@ -711,7 +722,7 @@ const CARPETA_SEGUROS = "https://av2logisticsmx-my.sharepoint.com/personal/ramon
 
 type CorreoBooking = {
   fecha_correo: string | null;
-  datos: { evidencia?: Evidencia; atd_iso?: string | null; eta_iso?: string | null } | null;
+  datos: { evidencia?: Evidencia; atd_iso?: string | null; eta_iso?: string | null; mbl?: string | null; hbl?: string | null } | null;
 };
 
 // Correo con instrucciones del booking junto a "Cambio interactivo". Se actualiza solo:

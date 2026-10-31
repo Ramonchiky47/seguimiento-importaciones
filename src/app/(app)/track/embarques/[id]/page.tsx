@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ESTADOS, fechaCorta, hoyMexico, type EstadoHito } from "@/lib/track";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
+import { PropuestoCelda } from "@/components/PropuestoCelda";
+import { cargolinkDeHito, propuestosPorHito, type CorreoPropuesto, type NavieraPropuesto } from "@/lib/propuestoHito";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +27,7 @@ export default async function EmbarqueTrackPage({ params }: { params: Promise<{ 
   if (!Number.isFinite(idBooking)) notFound();
 
   const supabase = await createClient();
-  const [{ data: op }, { data: hitosData }, { data: track }] = await Promise.all([
+  const [{ data: op }, { data: hitosData }, { data: track }, { data: correo }, { data: naviera }] = await Promise.all([
     supabase.from("operaciones_maritima_vista").select("*").eq("id_booking", idBooking).maybeSingle(),
     supabase
       .from("track_hitos")
@@ -33,12 +35,21 @@ export default async function EmbarqueTrackPage({ params }: { params: Promise<{ 
       .eq("id_booking", idBooking)
       .order("posicion"),
     supabase.from("track_embarques").select("etapa, semaforo").eq("id_booking", idBooking).maybeSingle(),
+    supabase
+      .from("info_correos")
+      .select("datos")
+      .eq("id_booking", idBooking)
+      .order("fecha_correo", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("tracking_naviera").select("ok, eta_naviera, ata_naviera").eq("id_booking", idBooking).maybeSingle(),
   ]);
   if (!op) notFound();
 
   const o = op as Record<string, string | number | null>;
   const hitos = (hitosData ?? []) as Hito[];
   const semaforo = (track?.semaforo ?? null) as EstadoHito | null;
+  const propuestos = propuestosPorHito((correo?.datos ?? null) as CorreoPropuesto, (naviera ?? null) as NavieraPropuesto, hoyMexico());
 
   // Medidor de días libres: del ATA al último día libre.
   const libres = Number(o.dias_libres_demora) || 0;
@@ -100,7 +111,7 @@ export default async function EmbarqueTrackPage({ params }: { params: Promise<{ 
         <section className="min-w-0 flex-[999_1_560px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
             <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-50">Hitos del embarque</h2>
-            <span className="text-xs text-slate-500 dark:text-slate-400">Compromiso = regla · Real = marcado en Cargolink</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">Compromiso = regla · Real = marcado en Cargolink · Propuesto = según correo o naviera</span>
           </div>
           {hitos.length === 0 ? (
             <p className="px-4 py-8 text-sm text-slate-500">
@@ -113,6 +124,7 @@ export default async function EmbarqueTrackPage({ params }: { params: Promise<{ 
                   <th scope="col" className="px-4 py-2 font-semibold">Hito</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Compromiso</th>
                   <th scope="col" className="px-3 py-2 font-semibold">Real</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">Propuesto</th>
                   <th scope="col" className="px-4 py-2 font-semibold">Estado</th>
                 </tr>
               </thead>
@@ -127,6 +139,9 @@ export default async function EmbarqueTrackPage({ params }: { params: Promise<{ 
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{fechaCorta(h.fecha_plan)}</td>
                       <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{h.valor_real ?? (h.hecho ? fechaCorta(h.fecha_hecho) : "—")}</td>
+                      <td className="px-3 py-2.5">
+                        <PropuestoCelda items={propuestos[h.orden]} real={cargolinkDeHito(h.orden, o)} />
+                      </td>
                       <td className="whitespace-nowrap px-4 py-2.5">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.pill}`}>
                           {e.label}
