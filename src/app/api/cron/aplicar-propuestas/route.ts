@@ -103,8 +103,10 @@ export async function GET(request: Request) {
     if (!fechasTipo.includes(p.tipo) || !base || !/^\d{4}-\d{2}-\d{2}/.test(p.valor ?? "")) return false;
     return Date.parse(p.valor.slice(0, 10)) < Date.parse(base) - 15 * 86400000;
   };
+  // Una ATA solo es arribo si ya pasó: con fecha futura el buque no ha llegado (es una ETA estimada).
+  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
   const lista = todas.filter((p) =>
-    deOtroViaje(p)
+    deOtroViaje(p) || (p.tipo === "ata_naviera" && p.valor.slice(0, 10) > hoy)
       ? false
       : p.tipo === "eta_naviera_info"
         ? liberable(p, limites.get(p.id_booking))

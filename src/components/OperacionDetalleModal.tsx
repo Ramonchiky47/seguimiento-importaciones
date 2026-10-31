@@ -2492,7 +2492,16 @@ export function NavieraSeccion({
           <div className="min-w-0">
             <dt className="text-xs text-slate-500 dark:text-slate-400">ATA según {naviera}</dt>
             <dd className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t.ata_naviera ? fechaCorta(t.ata_naviera) : "Aún no arriba"}</dd>
-            <dd>{t.ata_naviera && dif(difAta, ata)}</dd>
+            <dd>
+              {t.ata_naviera ? (
+                dif(difAta, ata)
+              ) : ata ? (
+                // El buque no ha llegado: la ATA de Cargolink es anticipada; lo que hay es una ETA estimada.
+                <span className="text-xs font-semibold text-sky-800 dark:text-sky-300">
+                  ETA estimada {fechaCorta(t.eta_naviera)} · ATA de Cargolink {fechaCorta(ata)} anticipada
+                </span>
+              ) : null}
+            </dd>
           </div>
           <div className="min-w-0">
             <dt className="text-xs text-slate-500 dark:text-slate-400">Puerto de descarga</dt>

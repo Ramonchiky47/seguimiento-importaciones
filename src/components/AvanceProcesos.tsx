@@ -26,6 +26,17 @@ const NOMBRE = { bookings: "Carga de bookings (Cargolink)", navieras: "Rastreo d
 // Navieras con agente, en el orden del rastreo (como las guardan los agentes).
 // Sin señales en este tiempo, se da por detenido (la Mac se apagó o se durmió).
 const SIN_SENAL_MIN = 20;
+// Las que piden captcha o una ventana abierta por una persona: sin marcar de inicio.
+const CON_CAPTCHA = ["WAN HAI", "EMIRATES", "HAPAG-LLOYD"];
+const CLAVE_ELEGIDAS = "rastreo-navieras-elegidas";
+
+function elegidasGuardadas(): string[] {
+  try {
+    const x = JSON.parse(localStorage.getItem(CLAVE_ELEGIDAS) ?? "null");
+    if (Array.isArray(x)) return x.filter((n) => AGENTES_RASTREO.includes(n));
+  } catch {}
+  return AGENTES_RASTREO.filter((n) => !CON_CAPTCHA.includes(n));
+}
 
 const hora = (iso: string) =>
   new Date(iso).toLocaleString("es-MX", { timeZone: "America/Mexico_City", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -48,8 +59,9 @@ async function leer(): Promise<Proceso[]> {
 
 function Medidor({ p, ahora, onPedido, esAdmin }: { p: Proceso; ahora: number; onPedido: () => void; esAdmin: boolean }) {
   const [pedido, setPedido] = useState<{ cargando: boolean; texto: string | null }>({ cargando: false, texto: null });
-  // Rastreo de navieras: todas o solo una.
-  const [naviera, setNaviera] = useState("");
+  // Rastreo de navieras: lista con casillas para elegir cuáles correr (y evitar las de captcha).
+  const [eligiendo, setEligiendo] = useState(false);
+  const [elegidas, setElegidas] = useState<string[]>([]);
   const detenido = p.estado === "corriendo" && ahora - Date.parse(p.actualizado_at) > SIN_SENAL_MIN * 60000;
   const pct = p.estado === "terminado" ? 100 : p.total ? Math.min(100, Math.round((100 * p.hechos) / p.total)) : 0;
   const color =
@@ -62,50 +74,47 @@ function Medidor({ p, ahora, onPedido, esAdmin }: { p: Proceso; ahora: number; o
       : p.estado === "error"
         ? `Falló ${hora(p.fin ?? p.actualizado_at)}: ${p.mensaje ?? ""}`
         : `Terminó ${hora(p.fin ?? p.actualizado_at)}${p.mensaje ? ` · ${p.mensaje}` : ""}`;
+  // elegidas vacía o con todas: corrida completa.
+  const pedir = async (navs: string[]) => {
+    setPedido({ cargando: true, texto: null });
+    setEligiendo(false);
+    const parcial = p.proceso === "navieras" && navs.length > 0 && navs.length < AGENTES_RASTREO.length;
+    if (p.proceso === "navieras") {
+      try {
+        localStorage.setItem(CLAVE_ELEGIDAS, JSON.stringify(navs));
+      } catch {}
+    }
+    const supabase = createClient();
+    const { data, error } = parcial
+      ? await supabase.rpc("solicitar_rastreo_naviera", { p_naviera: navs.join(",") })
+      : await supabase.rpc("solicitar_proceso", { p_proceso: p.proceso });
+    const r = String(data ?? "");
+    setPedido({
+      cargando: false,
+      texto: error
+        ? `No se pudo pedir: ${error.message}`
+        : r === "corriendo"
+          ? "Ya está corriendo."
+          : r === "pendiente"
+            ? "Ya estaba pedido: arranca en menos de 1 minuto."
+            : `Pedido${parcial ? ` (${navs.map(tituloAgente).join(", ")})` : ""}: SYSMON lo arranca en menos de 1 minuto.`,
+    });
+    if (!error) onPedido();
+  };
   return (
     <div className="min-w-0 flex-1 basis-64">
       <div className="flex items-center justify-between gap-2 text-xs">
         <span className="font-semibold text-slate-800 dark:text-slate-100">{NOMBRE[p.proceso]}</span>
         <span className="flex items-center gap-2">
           {/* "Correr ahora": solo administradores (la base también lo valida). */}
-          {esAdmin && (p.estado !== "corriendo" || detenido) && p.proceso === "navieras" && (
-            <select
-              value={naviera}
-              onChange={(e) => setNaviera(e.target.value)}
-              aria-label="Naviera a actualizar"
-              className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[11px] text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
-            >
-              <option value="">Todas</option>
-              {AGENTES_RASTREO.map((n) => (
-                <option key={n} value={n}>
-                  {tituloAgente(n)}
-                </option>
-              ))}
-            </select>
-          )}
           {esAdmin && (p.estado !== "corriendo" || detenido) && (
             <button
               type="button"
               disabled={pedido.cargando}
-              onClick={async () => {
-                setPedido({ cargando: true, texto: null });
-                const supabase = createClient();
-                const { data, error } =
-                  p.proceso === "navieras" && naviera
-                    ? await supabase.rpc("solicitar_rastreo_naviera", { p_naviera: naviera })
-                    : await supabase.rpc("solicitar_proceso", { p_proceso: p.proceso });
-                const r = String(data ?? "");
-                setPedido({
-                  cargando: false,
-                  texto: error
-                    ? `No se pudo pedir: ${error.message}`
-                    : r === "corriendo"
-                      ? "Ya está corriendo."
-                      : r === "pendiente"
-                        ? "Ya estaba pedido: arranca en menos de 1 minuto."
-                        : `Pedido${p.proceso === "navieras" && naviera ? ` (solo ${tituloAgente(naviera)})` : ""}: la Mac lo arranca en menos de 1 minuto.`,
-                });
-                if (!error) onPedido();
+              onClick={() => {
+                if (p.proceso !== "navieras") return void pedir([]);
+                setElegidas(elegidasGuardadas());
+                setEligiendo((x) => !x);
               }}
               className="rounded border border-slate-300 px-2 py-0.5 font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
             >
@@ -115,6 +124,50 @@ function Medidor({ p, ahora, onPedido, esAdmin }: { p: Proceso; ahora: number; o
           <span className="tabular-nums text-slate-500 dark:text-slate-400">{pct} %</span>
         </span>
       </div>
+      {eligiendo && (
+        <fieldset className="mt-2 rounded-lg border border-slate-300 bg-white p-3 text-xs shadow-sm dark:border-slate-600 dark:bg-slate-900">
+          <legend className="px-1 font-semibold text-slate-800 dark:text-slate-100">¿Qué navieras correr?</legend>
+          <p className="mb-2 text-[11px] text-slate-500 dark:text-slate-400">
+            Las marcadas con captcha necesitan su ventana abierta en SYSMON; déjalas sin marcar si nadie la va a atender.
+          </p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+            {AGENTES_RASTREO.map((n) => (
+              <label key={n} className="flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={elegidas.includes(n)}
+                  onChange={(e) => setElegidas((x) => (e.target.checked ? [...x, n] : x.filter((y) => y !== n)))}
+                />
+                {tituloAgente(n)}
+                {CON_CAPTCHA.includes(n) && <span className="rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">captcha</span>}
+              </label>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => setElegidas([...AGENTES_RASTREO])} className="rounded border border-slate-300 px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+              Todas
+            </button>
+            <button type="button" onClick={() => setElegidas(AGENTES_RASTREO.filter((n) => !CON_CAPTCHA.includes(n)))} className="rounded border border-slate-300 px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+              Sin captcha
+            </button>
+            <button type="button" onClick={() => setElegidas([])} className="rounded border border-slate-300 px-2 py-0.5 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+              Ninguna
+            </button>
+            <span className="flex-1" />
+            <button type="button" onClick={() => setEligiendo(false)} className="rounded px-2 py-0.5 text-slate-600 hover:underline dark:text-slate-300">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={elegidas.length === 0}
+              onClick={() => pedir(AGENTES_RASTREO.filter((n) => elegidas.includes(n)))}
+              className="rounded bg-slate-900 px-3 py-1 font-semibold text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
+            >
+              Correr {elegidas.length === AGENTES_RASTREO.length ? "todas" : `${elegidas.length} ${elegidas.length === 1 ? "naviera" : "navieras"}`}
+            </button>
+          </div>
+        </fieldset>
+      )}
       <div
         role="progressbar"
         aria-label={NOMBRE[p.proceso]}
