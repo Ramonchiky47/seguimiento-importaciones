@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 // Extracto del correo del que salieron los datos (Track › Info correos): fecha en que se
 // recibió, remitente, destinatarios y solo los renglones con los datos. Así los operativos lo
@@ -38,11 +38,20 @@ export function VerCorreo({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const msjs = evidencia.mensajes ?? [];
+  // Ventana flotante (no bloquea la pantalla): se arrastra desde el encabezado para
+  // ponerla junto a lo capturado y compararlo.
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const arrastre = useRef<{ dx: number; dy: number } | null>(null);
+  const abrir = () => {
+    const ancho = Math.min(620, window.innerWidth - 16);
+    setPos({ x: Math.max(8, window.innerWidth - ancho - 24), y: 72 });
+    ref.current?.show();
+  };
   return (
     <>
       <button
         type="button"
-        onClick={() => ref.current?.showModal()}
+        onClick={abrir}
         className={className ?? "font-semibold text-blue-700 underline dark:text-blue-400"}
       >
         {boton ?? "Ver correo"}
@@ -50,25 +59,43 @@ export function VerCorreo({
       <dialog
         ref={ref}
         aria-label={`Correo de ${booking}`}
-        className="w-[min(760px,95vw)] rounded-xl p-0 shadow-2xl backdrop:bg-slate-900/50 dark:bg-slate-900"
-        onClick={(e) => e.target === ref.current && ref.current?.close()}
+        style={{ left: pos.x, top: pos.y }}
+        onKeyDown={(e) => e.key === "Escape" && ref.current?.close()}
+        className="fixed z-[60] m-0 flex max-h-[85vh] min-h-48 w-[min(620px,calc(100vw-16px))] min-w-72 resize flex-col overflow-hidden rounded-xl border border-slate-300 bg-white p-0 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+        <div
+          title="Arrastra para mover la ventana"
+          onPointerDown={(e) => {
+            if ((e.target as HTMLElement).closest("button")) return;
+            arrastre.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            const a = arrastre.current;
+            if (!a) return;
+            setPos({
+              x: Math.min(Math.max(e.clientX - a.dx, 0), window.innerWidth - 80),
+              y: Math.min(Math.max(e.clientY - a.dy, 0), window.innerHeight - 40),
+            });
+          }}
+          onPointerUp={() => (arrastre.current = null)}
+          className="flex cursor-move touch-none select-none items-start justify-between gap-3 border-b border-slate-200 bg-slate-100 px-5 py-3 dark:border-slate-800 dark:bg-slate-800"
+        >
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Correo · {booking}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Correo · {booking} · ✥ arrastra para mover</p>
             <h3 className="text-base font-bold text-slate-900 dark:text-slate-50">{evidencia.asunto}</h3>
           </div>
           <button type="button" onClick={() => ref.current?.close()} aria-label="Cerrar" className="rounded-md px-2 text-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
             ×
           </button>
         </div>
-        <dl className="space-y-1 bg-slate-50 px-5 py-3 dark:bg-slate-800/40">
+        <dl className="max-h-40 shrink-0 space-y-1 overflow-y-auto bg-slate-50 px-5 py-3 dark:bg-slate-800/40">
           <Fila etiqueta="Recibido" valor={<b>{fechaHora(evidencia.recibido)}</b>} />
           <Fila etiqueta="De" valor={evidencia.de} />
           <Fila etiqueta="Para" valor={(evidencia.para ?? []).join("; ")} />
           {(evidencia.cc ?? []).length > 0 && <Fila etiqueta="CC" valor={(evidencia.cc ?? []).join("; ")} />}
         </dl>
-        <div className="max-h-[60vh] space-y-3 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
           {msjs.length === 0 && <p className="text-sm text-slate-500">El correo no trae renglones con datos del embarque.</p>}
           {msjs.map((m, i) => (
             <section key={i} className="rounded-lg border border-slate-200 dark:border-slate-700">
