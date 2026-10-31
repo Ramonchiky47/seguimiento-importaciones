@@ -54,7 +54,7 @@ export function TrackTabs({ asignaEjecutivos = false }: { asignaEjecutivos?: boo
               aria-current={es ? "true" : undefined}
               className={`whitespace-nowrap rounded-t-md px-4 py-2 text-sm font-bold transition-colors ${
                 es
-                  ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50"
+                  ? "bg-slate-900 text-white dark:bg-black dark:text-white"
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-slate-100"
               }`}
             >
@@ -74,7 +74,7 @@ export function TrackTabs({ asignaEjecutivos = false }: { asignaEjecutivos?: boo
                 aria-current={activa ? "page" : undefined}
                 className={`whitespace-nowrap border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
                   activa
-                    ? "border-[#c65a1f] text-slate-900 dark:text-slate-50"
+                    ? "rounded-t-md border-[#c65a1f] bg-slate-900 text-white dark:bg-black dark:text-white"
                     : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
                 }`}
               >
