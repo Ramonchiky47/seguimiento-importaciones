@@ -45,6 +45,9 @@ const COLUMNS: readonly Columna[] = [
 ];
 
 // Las de datos (crédito) no se pueden ordenar desde la tabla.
+// Fechas y números: centrados y con dígitos del mismo ancho (título y celda igual).
+const CENTRADAS = new Set(["fecha", "etd_atd", "eta", "ata", "revalidacion", "telex_house_bl", "telex_master_bl", "regreso_vacio", "dias_libres_demora", "dias_demora", "type", "incoterm", "credito"]);
+
 const SORTABLE_FIELDS = new Set<string>(COLUMNS.filter((c) => !c.select).map((c) => c.field));
 const TYPE_OPTIONS = ["FCLI", "LCLI", "FCL", "LCL"];
 const PAGE_SIZE = 100;
@@ -433,7 +436,7 @@ export async function OperacionesMaritimaVista({
                       {ordenable ? (
                       <Link
                         href={sortHref(field)}
-                        className={`flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100 ${
+                        className={`flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-100 ${CENTRADAS.has(field) ? "justify-center" : ""} ${
                           isActive ? "text-slate-800 dark:text-slate-100" : ""
                         }`}
                       >
@@ -473,7 +476,7 @@ export async function OperacionesMaritimaVista({
                         field === "no_booking"
                           ? `sticky left-0 z-10 bg-inherit font-semibold text-slate-900 dark:text-slate-100 ${COLUMNA_FIJA_BORDE}`
                           : ""
-                      } ${field === "dias_libres_demora" || field === "dias_demora" ? "text-center" : ""}`}
+                      } ${CENTRADAS.has(field) ? "text-center tabular-nums" : ""}`}
                     >
                       {field === "credito" ? (
                         tieneCredito(row.credito) ? "SÍ" : "NO"

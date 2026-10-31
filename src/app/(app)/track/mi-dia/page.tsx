@@ -375,15 +375,19 @@ export default async function MiDiaPage({
                     return (
                       <li
                         key={h.orden}
-                        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-slate-200 bg-white/70 px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-900/60"
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-slate-200 bg-white/70 px-2.5 py-1.5 sm:grid sm:grid-cols-[minmax(0,9.5rem)_9rem_6.5rem_minmax(0,1fr)] dark:border-slate-700 dark:bg-slate-900/60"
                       >
-                        <span className="min-w-36 font-semibold text-slate-900 dark:text-slate-100">{h.hito}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.pill}`}>
+                        {/* Columnas fijas: hito, estado, fecha y regla quedan alineados entre renglones. */}
+                        <span className="truncate font-semibold text-slate-900 dark:text-slate-100">{h.hito}</span>
+                        <span className={`justify-self-start whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${e.pill}`}>
                           {e.label}
                           {h.dias_atraso ? ` · ${h.dias_atraso} d` : ""}
                         </span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">
-                          {h.fecha_plan ? `Compromiso ${fechaCorta(h.fecha_plan)}` : "Sin fecha compromiso"} · {h.regla}
+                        <span className="whitespace-nowrap text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">
+                          {h.fecha_plan ? fechaCorta(h.fecha_plan) : "Sin fecha"}
+                        </span>
+                        <span className="truncate text-xs text-slate-500 dark:text-slate-400" title={h.regla}>
+                          {h.regla}
                         </span>
                       </li>
                     );

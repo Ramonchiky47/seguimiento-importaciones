@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { guardarEtapaCargolink, guardarTransbordosCargolink } from "@/app/(app)/operaciones-maritima/actions";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
@@ -141,11 +142,97 @@ const CONFIANZA: Record<Propuesta["confianza"], { label: string; clase: string }
 };
 
 const clave = (p: Propuesta) => `${p.tipo}:${p.id_booking}`;
+const claveGrupo = (t: { tipo: string; estimada?: boolean }) => `${t.tipo}${t.estimada ? "-estimada" : ""}`;
+
+// Última corrida del rastreo de navieras (tarjeta del resumen).
+export type ResumenRastreo = { encontrados: number; total: number; cuando: string; corriendo: boolean; fallaron: string[] };
+
+const horaCorta = (iso: string) =>
+  new Date(iso).toLocaleString("es-MX", { timeZone: "America/Mexico_City", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+
+// Resumen arriba: una tarjeta por grupo con cuántas hay, para qué es y si se aplica sola
+// (confianza alta, 8:00 y 14:00) o necesita a una persona; "Revisar" baja a su sección.
+function Resumen({ propuestas, rastreo }: { propuestas: Propuesta[]; rastreo: ResumenRastreo | null }) {
+  const tarjetas = TIPOS.map((t) => {
+    const lista = propuestas.filter((p) => (t.estimada ? esEstimada(p) : p.tipo === t.tipo && !esEstimada(p)));
+    const solas = lista.filter((p) => p.confianza === "alta" && !soloAviso(p)).length;
+    return { t, n: lista.length, solas };
+  }).filter((x) => x.n > 0);
+  if (tarjetas.length === 0 && !rastreo) return null;
+  const etiqueta = "rounded px-2 py-0.5 text-xs font-bold";
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {tarjetas.map(({ t, n, solas }) => (
+        <div key={claveGrupo(t)} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-50">{t.titulo}</h3>
+            <span className="text-lg font-extrabold tabular-nums text-slate-900 dark:text-slate-50">{n}</span>
+          </div>
+          <p className="line-clamp-3 text-xs text-slate-600 dark:text-slate-400">{t.ayuda}</p>
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
+            {t.estimada ? (
+              <span className={`${etiqueta} bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200`}>Estimada</span>
+            ) : solas === n ? (
+              <span className={`${etiqueta} bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300`}>Se aplica solo</span>
+            ) : solas > 0 ? (
+              <span className={`${etiqueta} bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200`}>
+                {solas} solas · {n - solas} a revisar
+              </span>
+            ) : (
+              <span className={`${etiqueta} bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200`}>Necesita a una persona</span>
+            )}
+            <a
+              href={`#grupo-${claveGrupo(t)}`}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+            >
+              Revisar {n}
+            </a>
+          </div>
+        </div>
+      ))}
+      {rastreo && (
+        <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-50">Reporte de navieras</h3>
+            <span className="text-lg font-extrabold tabular-nums text-slate-900 dark:text-slate-50">
+              {rastreo.encontrados}/{rastreo.total}
+            </span>
+          </div>
+          <p className="text-xs text-slate-600 dark:text-slate-400">
+            {rastreo.corriendo ? "Rastreo corriendo ahora." : `Rastreo del ${horaCorta(rastreo.cuando)}: ${rastreo.encontrados} de ${rastreo.total} encontrados.`}
+            {rastreo.fallaron.length > 0 && ` ${rastreo.fallaron.join(", ")} no respondieron (captcha o ventana cerrada).`}
+          </p>
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
+            {rastreo.fallaron.length > 0 ? (
+              <span className={`${etiqueta} bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200`}>Abrir ventanas en SYSMON</span>
+            ) : (
+              <span className={`${etiqueta} bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300`}>Todas respondieron</span>
+            )}
+            <Link
+              href="/track/reporte-navieras"
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+            >
+              Ver reporte
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 // ATA anticipada (la naviera aún no arriba): no se puede dejar vacía desde la app.
 const soloAviso = (p: Propuesta) =>
   Boolean(TIPOS.find((t) => t.tipo === p.tipo)?.soloAviso) || esEstimada(p);
 
-export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas: Propuesta[]; puedeEditar: boolean }) {
+export function PropuestasPorConfirmar({
+  propuestas,
+  puedeEditar,
+  rastreo = null,
+}: {
+  propuestas: Propuesta[];
+  puedeEditar: boolean;
+  rastreo?: ResumenRastreo | null;
+}) {
   const router = useRouter();
   // Por default solo las de confianza alta quedan marcadas.
   const [marcadas, setMarcadas] = useState<Record<string, boolean>>(() =>
@@ -192,9 +279,12 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
 
   if (propuestas.length === 0) {
     return (
+      <>
+      <Resumen propuestas={propuestas} rastreo={rastreo} />
       <p className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
         No hay propuestas por confirmar con estos filtros.
       </p>
+      </>
     );
   }
 
@@ -203,6 +293,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
 
   return (
     <div className="space-y-4">
+      <Resumen propuestas={propuestas} rastreo={rastreo} />
       <div className="sticky top-14 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <p className="text-sm text-slate-700 dark:text-slate-300">
           <strong>{pendientes.length}</strong> propuestas · <strong>{seleccion.length}</strong> seleccionadas · nada se guarda hasta confirmar
@@ -252,7 +343,7 @@ export function PropuestasPorConfirmar({ propuestas, puedeEditar }: { propuestas
         const abiertas = lista.filter((p) => !resultado[clave(p)]?.ok && !soloAviso(p));
         const todas = abiertas.length > 0 && abiertas.every((p) => marcadas[clave(p)]);
         return (
-          <section key={`${t.tipo}${t.estimada ? "-estimada" : ""}`} aria-labelledby={`tipo-${t.tipo}${t.estimada ? "-estimada" : ""}`} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <section key={claveGrupo(t)} id={`grupo-${claveGrupo(t)}`} aria-labelledby={`tipo-${t.tipo}${t.estimada ? "-estimada" : ""}`} className="scroll-mt-28 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
               <div>
                 <h2 id={`tipo-${t.tipo}${t.estimada ? "-estimada" : ""}`} className="text-base font-bold text-slate-900 dark:text-slate-50">

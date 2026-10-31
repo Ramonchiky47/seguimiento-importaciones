@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
-import { PropuestasPorConfirmar, type Propuesta } from "@/components/PropuestasPorConfirmar";
+import { PropuestasPorConfirmar, type Propuesta, type ResumenRastreo } from "@/components/PropuestasPorConfirmar";
+import { tituloAgente } from "@/lib/navieras";
 import { VaciosPorConfirmar, type VacioPendiente } from "@/components/VaciosPorConfirmar";
 import {
   EJECUTIVO_TODOS,
@@ -28,7 +29,7 @@ export default async function PropuestasPage({
   const estatusSel = estatusBooking(estatus, ESTATUS_TRACK);
   const atdSel = periodoAtd(atd);
   const supabase = await createClient();
-  const [{ data, error }, { data: puedeEditar }, { data: ejecutivosData }, { data: vaciosData }] = await Promise.all([
+  const [{ data, error }, { data: puedeEditar }, { data: ejecutivosData }, { data: vaciosData }, { data: rastreoData }] = await Promise.all([
     supabase.rpc("track_propuestas_v2", {
       p_ejecutivos: ejecutivoRaw.length > 0 ? ejecutivoRaw : null,
       p_estatus: estatusSel.codigos,
@@ -41,7 +42,25 @@ export default async function PropuestasPage({
       p_estatus: estatusSel.codigos,
       p_atd: atdSel.codigos,
     }),
+    // Última corrida del rastreo de navieras, para la tarjeta "Reporte de navieras".
+    supabase
+      .from("rastreo_procesos")
+      .select("estado, total, mensaje, fin, actualizado_at, por_naviera:reporte->por_naviera")
+      .eq("proceso", "navieras")
+      .order("inicio", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
+  const r = rastreoData as { estado: string; total: number | null; mensaje: string | null; fin: string | null; actualizado_at: string; por_naviera: Record<string, { estado: string; encontrados: number }> | null } | null;
+  const rastreo: ResumenRastreo | null = r
+    ? {
+        encontrados: Number(/^(\d+)/.exec(r.mensaje ?? "")?.[1] ?? 0),
+        total: r.total ?? 0,
+        cuando: r.fin ?? r.actualizado_at,
+        corriendo: r.estado === "corriendo",
+        fallaron: Object.entries(r.por_naviera ?? {}).filter(([, n]) => n.estado === "error").map(([nav]) => tituloAgente(nav)),
+      }
+    : null;
   const availableEjecutivos = Array.from(
     new Set([SIN_EJECUTIVO, ...((ejecutivosData ?? []) as { ejecutivo: string }[]).map((x) => x.ejecutivo), ...ejecutivoRaw]),
   ).sort((a, b) => (a === SIN_EJECUTIVO ? -1 : b === SIN_EJECUTIVO ? 1 : a.localeCompare(b, "es")));
@@ -64,7 +83,7 @@ export default async function PropuestasPage({
       </div>
       {error && <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">Error al cargar: {error.message}</p>}
       <VaciosPorConfirmar vacios={(vaciosData ?? []) as VacioPendiente[]} puedeEditar={puedeEditar === true} />
-      <PropuestasPorConfirmar propuestas={(data ?? []) as Propuesta[]} puedeEditar={puedeEditar === true} />
+      <PropuestasPorConfirmar propuestas={(data ?? []) as Propuesta[]} puedeEditar={puedeEditar === true} rastreo={rastreo} />
     </main>
   );
 }

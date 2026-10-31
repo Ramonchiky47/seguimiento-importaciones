@@ -342,21 +342,26 @@ export default async function TableroPage({
             </div>
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
               {r.acciones.map((a) => (
-                <li key={a.id_booking} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                <li
+                  key={a.id_booking}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm odd:bg-white even:bg-slate-50/70 lg:grid lg:grid-cols-[9.5rem_minmax(0,13rem)_8.5rem_minmax(0,11rem)_minmax(0,1fr)_minmax(0,9rem)] dark:odd:bg-slate-900 dark:even:bg-slate-900/60"
+                >
                   <AbrirOperacionBoton
                     idBooking={a.id_booking}
                     className="font-mono text-[13px] font-semibold text-blue-700 hover:underline dark:text-blue-400"
                   >
                     {a.no_booking}
                   </AbrirOperacionBoton>
-                  <span className="min-w-0 max-w-56 truncate text-slate-600 dark:text-slate-400">{a.cliente ?? "—"}</span>
-                  <CreditoBadge si={credito.get(a.id_booking)} />
+                  <span className="min-w-0 max-w-56 truncate text-slate-600 dark:text-slate-400" title={a.cliente ?? undefined}>{a.cliente ?? "—"}</span>
+                  <CreditoBadge si={credito.get(a.id_booking)} className="justify-self-start" />
                   <span className="font-semibold text-slate-900 dark:text-slate-100">
                     {a.accion === "Corregir dato" || a.accion === "Asignar ejecutivo" ? a.accion : `Marcar ${a.accion}`}
                   </span>
-                  <span className={`font-medium ${CLASE_PRIORIDAD[a.prioridad] ?? ""}`}>{a.detalle}</span>
-                  {a.otras > 0 && <span className="text-xs text-slate-500">+{a.otras} más</span>}
-                  <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">{a.operativo}</span>
+                  <span className={`font-medium tabular-nums ${CLASE_PRIORIDAD[a.prioridad] ?? ""}`}>
+                    {a.detalle}
+                    {a.otras > 0 && <span className="ml-2 text-xs font-normal text-slate-500">+{a.otras} más</span>}
+                  </span>
+                  <span className="ml-auto truncate text-xs text-slate-500 lg:ml-0 lg:text-right dark:text-slate-400">{a.operativo}</span>
                 </li>
               ))}
               {r.acciones.length === 0 && <li className="px-4 py-6 text-center text-sm text-slate-500">Nada pendiente. 🎉</li>}
