@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SISTEMA, guardarEtapaCon } from "@/lib/escrituraCargolink";
-import { cambiosDesdeCorreo, fuenteCorreo, type Cambio, type CorreoInfo, type OperacionCl, type Rechazo } from "@/lib/correoACargolink";
+import { cambiosDesdeCorreo, fuenteCorreo, type Cambio, type CorreoInfo, type NavieraConfirma, type OperacionCl, type Rechazo } from "@/lib/correoACargolink";
+import { detalleNaviera } from "@/lib/detalleNaviera";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -33,7 +34,7 @@ export async function GET(request: Request) {
   const ids = [...correos.keys()];
 
   const ops = new Map<number, OperacionCl>();
-  const navEta = new Map<number, string | null>();
+  const navs = new Map<number, NavieraConfirma>();
   for (let i = 0; i < ids.length; i += 200) {
     const lote = ids.slice(i, i + 200);
     const [{ data: o }, { data: t }] = await Promise.all([
@@ -43,10 +44,17 @@ export async function GET(request: Request) {
           "id_booking, fecha, etd_atd, eta, mbl, buque:datos->>buque, no_viaje:datos->>no_viaje, hbl:datos->>no_agentes, mov_atd:datos->>his_mov_atd, mov_eta:datos->>his_mov_eta, mov_origen:datos->>his_mov_origen",
         )
         .in("id_booking", lote),
-      supabase.from("tracking_naviera").select("id_booking, eta_naviera").eq("ok", true).in("id_booking", lote),
+      supabase.from("tracking_naviera").select("id_booking, naviera, eta_naviera, respuesta").eq("ok", true).in("id_booking", lote),
     ]);
     for (const x of (o ?? []) as OperacionCl[]) ops.set(x.id_booking, x);
-    for (const x of (t ?? []) as { id_booking: number; eta_naviera: string | null }[]) navEta.set(x.id_booking, x.eta_naviera);
+    for (const x of (t ?? []) as { id_booking: number; naviera: string; eta_naviera: string | null; respuesta: unknown }[]) {
+      const det = detalleNaviera(x.naviera, x.respuesta);
+      // Zarpes: fechas de carga o salida del buque que ya ocurrieron.
+      const zarpes = (det?.eventos ?? [])
+        .filter((e) => e.real && e.fecha && /load|depart|zarpe|sail|cargado|on board/i.test(e.evento) && !/empty|vac/i.test(e.evento))
+        .map((e) => e.fecha as string);
+      navs.set(x.id_booking, { eta: x.eta_naviera, zarpes: [...new Set(zarpes)], buque: det?.buque ?? null });
+    }
   }
 
   // MBL / HBL que ya usa otro booking (un BL copiado de otro correo no se pasa).
@@ -73,7 +81,7 @@ export async function GET(request: Request) {
   for (const c of correos.values()) {
     const op = ops.get(c.id_booking);
     if (!op) continue;
-    const r = cambiosDesdeCorreo(c, op, navEta.get(c.id_booking) ?? null, usadosPorOtro(c.id_booking), hoy);
+    const r = cambiosDesdeCorreo(c, op, navs.get(c.id_booking) ?? null, usadosPorOtro(c.id_booking), hoy);
     if (r.cambios.length || r.rechazos.length) plan.push({ id_booking: c.id_booking, no_booking: c.no_booking, fuente: fuenteCorreo(c), ...r });
   }
   const conCambios = plan.filter((p) => p.cambios.length);
