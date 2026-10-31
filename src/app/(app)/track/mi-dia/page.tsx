@@ -369,24 +369,33 @@ export default async function MiDiaPage({
                   </Link>
                   <CreditoBadge si={credito.get(f.id_booking)} className="mt-1 block w-fit" />
                 </div>
-                <ul className="min-w-0 space-y-1.5">
+                <ul className="min-w-0 divide-y divide-slate-100 self-start rounded-lg border border-slate-200 bg-white/80 dark:divide-slate-800 dark:border-slate-700 dark:bg-slate-900/60">
                   {f.hitos.map((h) => {
                     const e = ESTADOS[h.estado] ?? ESTADOS.en_tiempo;
+                    // Texto corto del estado; el color lo da el punto.
+                    const corto =
+                      h.estado === "atrasado" && h.dias_atraso
+                        ? `${h.dias_atraso} d tarde`
+                        : h.estado === "hoy"
+                          ? "Hoy"
+                          : e.label;
                     return (
                       <li
                         key={h.orden}
-                        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-slate-200 bg-white/70 px-2.5 py-1.5 sm:grid sm:grid-cols-[minmax(0,9.5rem)_9rem_6.5rem_minmax(0,1fr)] dark:border-slate-700 dark:bg-slate-900/60"
+                        className="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 sm:grid sm:grid-cols-[minmax(0,9.5rem)_6.5rem_4.5rem_minmax(0,1fr)]"
                       >
-                        {/* Columnas fijas: hito, estado, fecha y regla quedan alineados entre renglones. */}
-                        <span className="truncate font-semibold text-slate-900 dark:text-slate-100">{h.hito}</span>
-                        <span className={`justify-self-start whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${e.pill}`}>
-                          {e.label}
-                          {h.dias_atraso ? ` · ${h.dias_atraso} d` : ""}
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className={`h-2 w-2 shrink-0 rounded-full ${e.barra}`} aria-hidden="true" />
+                          <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{h.hito}</span>
                         </span>
-                        <span className="whitespace-nowrap text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">
+                        <span className={`whitespace-nowrap text-xs font-bold tabular-nums ${e.pill.split(" ").filter((c) => c.includes("text-")).join(" ")}`}>
+                          <span className="sr-only">{e.label}: </span>
+                          {corto}
+                        </span>
+                        <span className="whitespace-nowrap text-xs tabular-nums text-slate-700 dark:text-slate-300">
                           {h.fecha_plan ? fechaCorta(h.fecha_plan) : "Sin fecha"}
                         </span>
-                        <span className="truncate text-xs text-slate-500 dark:text-slate-400" title={h.regla}>
+                        <span className="truncate text-xs text-slate-400 dark:text-slate-500" title={h.regla}>
                           {h.regla}
                         </span>
                       </li>
