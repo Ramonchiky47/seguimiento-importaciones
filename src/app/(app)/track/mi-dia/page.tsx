@@ -7,6 +7,7 @@ import { CreditoBadge } from "@/components/CreditoBadge";
 import { creditoPorBooking } from "@/lib/credito";
 import { ETAPA_POR_HITO, TAREA_POR_HITO } from "@/lib/trackNew";
 import { CapturaRapida } from "@/components/CapturaRapida";
+import { CapturaDelCorreo, type DatosDelCorreo } from "@/components/CapturaDelCorreo";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import { RegresarTablero } from "@/components/RegresarTablero";
 import { BuscadorTrack } from "@/components/BuscadorTrack";
@@ -158,7 +159,7 @@ export default async function MiDiaPage({
     status_booking: string | null;
   }[];
   const filas = resultado.filas;
-  const idsFilas = filas.map((f) => f.id_booking);
+  const idsFilas = [...filas.map((f) => f.id_booking), ...porZarpar.map((z) => z.id_booking)];
   const [cambios, credito, { data: puedeEditar }, { data: correosData }] = await Promise.all([
     cambiosComerciales(supabase, filas.map((f) => f.id_booking)),
     // Pendientes y "Por zarpar" en una sola consulta.
@@ -168,12 +169,12 @@ export default async function MiDiaPage({
     idsFilas.length
       ? supabase
           .from("info_correos")
-          .select("id_booking, fecha_correo, atd:datos->>atd_iso, eta:datos->>eta_iso, mbl:datos->>mbl, hbl:datos->>hbl")
+          .select("id_booking, fecha_correo, atd:datos->>atd_iso, eta:datos->>eta_iso, mbl:datos->>mbl, hbl:datos->>hbl, evidencia:datos->evidencia")
           .in("id_booking", idsFilas)
           .order("fecha_correo", { ascending: false })
       : Promise.resolve({ data: [] }),
   ]);
-  type DatoCorreo = { id_booking: number; fecha_correo: string; atd: string | null; eta: string | null; mbl: string | null; hbl: string | null };
+  type DatoCorreo = DatosDelCorreo & { id_booking: number; hbl: string | null };
   const correos = new Map<number, DatoCorreo>();
   for (const c of (correosData ?? []) as DatoCorreo[]) if (!correos.has(c.id_booking)) correos.set(c.id_booking, c);
   const totales = NIVELES.map((n) => resultado.conteos[n.key] ?? 0);
@@ -531,6 +532,14 @@ export default async function MiDiaPage({
                 <span className="truncate text-xs font-bold text-red-700 dark:text-red-400">Sin ejecutivo</span>
               )}
               <span className="text-xs text-slate-500 dark:text-slate-400">Booking {fechaCorta(z.fecha)}</span>
+              {correos.get(z.id_booking) && (
+                <CapturaDelCorreo
+                  idBooking={z.id_booking}
+                  noBooking={z.no_booking}
+                  correo={correos.get(z.id_booking)!}
+                  puedeEditar={puedeEditar === true}
+                />
+              )}
             </li>
           ))}
           {porZarpar.length === 0 && (
