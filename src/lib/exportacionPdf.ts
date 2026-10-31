@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import { LOGO_SYSMON_ALTO, LOGO_SYSMON_ANCHO, LOGO_SYSMON_PNG_BASE64 } from "@/lib/logoSysmon";
+import { FIRMA_SYSMON, LOGO_SYSMON_ALTO, LOGO_SYSMON_ANCHO, LOGO_SYSMON_PNG_BASE64 } from "@/lib/logoSysmon";
 import type { Exportacion, Incidencia } from "@/types/exportacion";
 import { FIELD_LABELS, FIELD_SECTIONS } from "@/types/exportacion";
 
@@ -104,10 +104,16 @@ export function buildExportacionPdf(row: Exportacion, incidencias: Incidencia[] 
     }
   }
 
-  // Logo de SYSMON, pequeño, al pie de cada hoja.
+  // Logo de SYSMON arriba a la derecha de cada hoja (margen superior, antes del título) y la firma a su lado.
   for (let p = 1; p <= doc.getNumberOfPages(); p++) {
     doc.setPage(p);
-    doc.addImage(LOGO_SYSMON_PNG_BASE64, "PNG", pageWidth - marginX - LOGO_SYSMON_ANCHO, pageHeight - 24, LOGO_SYSMON_ANCHO, LOGO_SYSMON_ALTO);
+    const x = pageWidth - marginX - LOGO_SYSMON_ANCHO;
+    doc.addImage(LOGO_SYSMON_PNG_BASE64, "PNG", x, 8, LOGO_SYSMON_ANCHO, LOGO_SYSMON_ALTO);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(6.5);
+    doc.setTextColor(110, 110, 110);
+    doc.text(FIRMA_SYSMON, x - 5, 20, { align: "right" });
+    doc.setTextColor(30, 30, 30);
   }
   return doc;
 }
