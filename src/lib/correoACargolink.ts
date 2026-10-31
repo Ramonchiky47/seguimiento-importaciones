@@ -30,7 +30,7 @@ export type OperacionCl = {
   mov_origen: string | null;
 };
 // Lo que reporta la naviera (tracking_naviera, ya leído con detalleNaviera).
-export type NavieraConfirma = { eta: string | null; zarpes: string[]; buque: string | null } | null;
+export type NavieraConfirma = { naviera: string; eta: string | null; zarpes: string[]; buque: string | null } | null;
 export type Cambio = { etapa: "atd" | "eta" | "origen"; valores: Record<string, string>; detalle: string };
 export type Rechazo = { campo: string; valor: string; motivo: string };
 
@@ -79,9 +79,11 @@ function inestable(datos: Record<string, unknown>, campo: string): boolean {
 const vacio = (v: string | null | undefined) => !v || !v.trim() || v.startsWith("0000");
 const texto = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
-// MBL de la naviera (prefijo SCAC o solo números); los de consolidadoras (SXZLC…,
-// SZTS…, ESL…) no son el BL de la naviera.
-const MBL = /^((MEDU|MSCU|MAEU|SUDU|MRKU|COSU|ZIMU|EGLV|ONEY|HLCU|HDMU|CMDU|YMJA|OOLU|WHLC|PCIU|EMIV|SMLM|KMTU|SNKO)[A-Z0-9]{6,14}|\d{9,12})$/;
+// MBL de la naviera (prefijo SCAC); los de consolidadoras (SXZLC…, SZTS…, ESL…) no
+// son el BL de la naviera. Solo números: únicamente los de Maersk (9 dígitos) con
+// buque o naviera Maersk; los demás (741650…) no se pueden confirmar.
+const MBL = /^((MEDU|MSCU|MAEU|SUDU|MRKU|COSU|ZIMU|EGLV|ONEY|HLCU|HDMU|CMDU|YMJA|OOLU|WHLC|PCIU|EMIV|SMLM|KMTU|SNKO)[A-Z0-9]{6,14}|\d{9})$/;
+const MAERSK = /MAERSK|\bMCC\b|SEALAND|SEA-LAND/;
 const nombre = (b: string) => b.toUpperCase().replace(/[^A-Z]/g, "");
 const HBL = /^[A-Z]{2,5}\d{6,14}$/;
 // Nombre del buque (solo letras) y viaje (con algún número): "TS NANSHA 2609E",
@@ -125,7 +127,11 @@ export function cambiosDesdeCorreo(
   if (etaTxt && vacio(op.eta)) {
     const base = op.etd_atd?.slice(0, 10) ?? atd;
     const validas = lecturas(etaTxt).filter((f) => base && f > base && f <= sumarDias(base, 75));
+    const atdCorreo = texto(d.atd_iso);
     if (!base) no("ETA", etaTxt, "Sin zarpe (ATD) para validar la fecha.");
+    else if (op.etd_atd && /^\d{4}-\d{2}-\d{2}$/.test(atdCorreo) && atdCorreo !== op.etd_atd.slice(0, 10)) {
+      no("ETA", etaTxt, `El correo trae otro zarpe (${atdCorreo}) que Cargolink (${op.etd_atd.slice(0, 10)}).`);
+    }
     else if (op.mov_eta === "FINALIZADO") no("ETA", etaTxt, "La etapa ya está finalizada en Cargolink.");
     else if (inestable(d, "eta")) no("ETA", etaTxt, "La fecha cambia de ida y vuelta en la cadena de correos.");
     else if (validas.length !== 1) no("ETA", etaTxt, "Sin fecha completa, fuera de rango o se puede leer de dos formas.");
@@ -156,7 +162,9 @@ export function cambiosDesdeCorreo(
     const mbl = texto(d.mbl).toUpperCase();
     if (mbl && vacio(op.mbl)) {
       if (!MBL.test(mbl)) no("MBL", mbl, "No es un BL de naviera (trae varios, texto o es de consolidadora).");
-      else if (usados.mbl.has(mbl)) no("MBL", mbl, "Ese MBL ya está en otro booking de Cargolink.");
+      else if (/^\d+$/.test(mbl) && !MAERSK.test(`${nav?.naviera ?? ""} ${nav?.buque ?? ""} ${texto(d.buque)} ${op.buque ?? ""}`.toUpperCase())) {
+        no("MBL", mbl, "Número sin prefijo de naviera y el buque no es de Maersk: no se puede confirmar.");
+      } else if (usados.mbl.has(mbl)) no("MBL", mbl, "Ese MBL ya está en otro booking de Cargolink.");
       else if (inestable(d, "mbl")) no("MBL", mbl, "Cambia de ida y vuelta en la cadena de correos.");
       else {
         origen.no_control = mbl;
