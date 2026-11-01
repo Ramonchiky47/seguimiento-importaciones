@@ -31,7 +31,7 @@ const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "o
 export function fechaCorta(iso: string | null | undefined): string {
   if (!iso) return "—";
   const [y, m, d] = iso.slice(0, 10).split("-");
-  if (!y || !m || !d) return "—";
+  if (!y || !m || !d || !MESES[Number(m) - 1]) return "—";
   return `${d} ${MESES[Number(m) - 1]}`;
 }
 

@@ -13,8 +13,11 @@ type Campo = { id: string; label: string; etapa: string; campo: string; tipo: "d
 // Vínculo con lo que trajo el correo (zarpe, ETA, BL). Al darle clic abre los campos ya
 // llenos para capturarlos en Cargolink: mismo guardado que el Interactivo (Bitácora, sin
 // notificar). El BL va en Origen (número de control) y solo se guarda, sin finalizar.
-export function CapturaDelCorreo({ idBooking, noBooking, correo, puedeEditar }: { idBooking: number; noBooking: string; correo: DatosDelCorreo; puedeEditar: boolean }) {
+export function CapturaDelCorreo({ idBooking, noBooking, correo: original, puedeEditar }: { idBooking: number; noBooking: string; correo: DatosDelCorreo; puedeEditar: boolean }) {
   const router = useRouter();
+  // Fechas que el agente leyó mal (p. ej. "2026-28-10") no se muestran ni se proponen.
+  const valida = (f: string | null) => (f && !Number.isNaN(Date.parse(`${f.slice(0, 10)}T12:00:00Z`)) && /^\d{4}-(0[1-9]|1[0-2])-\d{2}/.test(f) ? f : null);
+  const correo = { ...original, atd: valida(original.atd), eta: valida(original.eta) };
   const campos: Campo[] = [
     ...(correo.atd ? [{ id: "atd", label: "Zarpe (ATD)", etapa: "atd", campo: "fecha_atd", tipo: "date" as const, inicial: correo.atd, finalizar: true }] : []),
     ...(correo.eta ? [{ id: "eta", label: "ETA", etapa: "eta", campo: "buque_eta", tipo: "date" as const, inicial: correo.eta, finalizar: true }] : []),
@@ -36,6 +39,7 @@ export function CapturaDelCorreo({ idBooking, noBooking, correo, puedeEditar }: 
 
   return (
     <div className="col-span-full">
+      <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
         onClick={() => setAbierto((x) => !x)}
@@ -53,6 +57,15 @@ export function CapturaDelCorreo({ idBooking, noBooking, correo, puedeEditar }: 
         <span className="truncate">Correo del {fechaCorta(correo.fecha_correo.slice(0, 10))}: {resumen}</span>
         <span aria-hidden="true">{abierto ? "▴" : "▾"}</span>
       </button>
+      {correo.evidencia && (
+        <VerCorreo
+          evidencia={correo.evidencia}
+          booking={noBooking}
+          boton="Ver correo"
+          className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-slate-500 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+        />
+      )}
+      </div>
       {abierto && (
         <div className="mt-2 space-y-2 rounded-lg border border-blue-200 bg-blue-50/50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
           {campos.map((c) => {
@@ -102,7 +115,6 @@ export function CapturaDelCorreo({ idBooking, noBooking, correo, puedeEditar }: 
             );
           })}
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            {correo.evidencia && <VerCorreo evidencia={correo.evidencia} booking={noBooking} />}
             {!puedeEditar && <span className="text-slate-500">Solo los editores de Cargolink pueden guardar.</span>}
           </div>
         </div>
