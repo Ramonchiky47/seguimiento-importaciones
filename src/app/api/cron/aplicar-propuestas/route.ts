@@ -45,16 +45,28 @@ const ataCorregible = (p: Propuesta) =>
   Boolean(p.nav_ata && p.valor && p.nav_ata.slice(0, 10) === p.valor.slice(0, 10)) &&
   (!p.ata_cargolink || Math.abs(diasEntre(p.ata_cargolink, p.valor)) <= MAX_DIAS_LIBERAR);
 
+// De dónde salió cada propuesta, para la bitácora ("Origen del cambio").
+const FUENTE: Record<string, string> = {
+  eta_naviera: "rastreo de la naviera (ETA)",
+  eta_naviera_info: "rastreo de la naviera (ETA; se liberó la etapa)",
+  ata_naviera: "rastreo de la naviera (arribo)",
+  ata_naviera_info: "rastreo de la naviera (arribo; se liberó la etapa)",
+  eta: "ATD + tránsito típico de la naviera (regla de Track)",
+  eta_finalizar: "ya arribó o la naviera confirma la misma ETA",
+  dias: "días libres del booking (regla de Track)",
+};
+
 function aplicar(p: Propuesta): Promise<ResultadoEtapa> {
   const esc = { supabase: createAdminClient(), ...SISTEMA };
+  const op = { fuente: FUENTE[p.tipo] ?? "propuesta automática de Track" };
   // Igual que "Revisar y confirmar" en la pantalla.
-  if (p.tipo === "eta_naviera_info") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor });
-  if (p.tipo === "ata_naviera_info") return guardarEtapaCon(esc, p.id_booking, "ata", "FINALIZADO", { fecha_ata: p.valor });
-  if (p.tipo === "eta_naviera" || p.tipo === "eta") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor });
-  if (p.tipo === "ata_naviera") return guardarEtapaCon(esc, p.id_booking, "ata", "EDICION", { fecha_ata: p.valor });
-  if (p.tipo === "eta_finalizar") return guardarEtapaCon(esc, p.id_booking, "eta", "FINALIZADO", { buque_eta: p.valor });
+  if (p.tipo === "eta_naviera_info") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor }, op);
+  if (p.tipo === "ata_naviera_info") return guardarEtapaCon(esc, p.id_booking, "ata", "FINALIZADO", { fecha_ata: p.valor }, op);
+  if (p.tipo === "eta_naviera" || p.tipo === "eta") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor }, op);
+  if (p.tipo === "ata_naviera") return guardarEtapaCon(esc, p.id_booking, "ata", "EDICION", { fecha_ata: p.valor }, op);
+  if (p.tipo === "eta_finalizar") return guardarEtapaCon(esc, p.id_booking, "eta", "FINALIZADO", { buque_eta: p.valor }, op);
   if (p.tipo === "transbordo") return guardarTransbordosCon(esc, p.id_booking, "NO_APLICA", []);
-  return guardarEtapaCon(esc, p.id_booking, "ata", "EDICION", { dias_demora: p.valor });
+  return guardarEtapaCon(esc, p.id_booking, "ata", "EDICION", { dias_demora: p.valor }, op);
 }
 
 export async function GET(request: Request) {

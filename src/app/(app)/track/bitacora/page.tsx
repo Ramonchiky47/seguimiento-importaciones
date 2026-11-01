@@ -202,7 +202,7 @@ export default async function BitacoraPage({
         <table className="min-w-full text-sm">
           <thead className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
             <tr>
-              {["Fecha y hora", "Usuario", "Correo", "Booking", "Tipo de transacción", "Tenía", "Cambió a", "Resultado"].map((h) => (
+              {["Fecha y hora", "Usuario", "Correo", "Booking", "Tipo de transacción", "Origen del cambio", "Tenía", "Cambió a", "Resultado"].map((h) => (
                 <th key={h} scope="col" className="whitespace-nowrap px-3 py-2.5 font-semibold">
                   {h}
                 </th>
@@ -245,6 +245,9 @@ export default async function BitacoraPage({
                             : (accion?.label ?? r.accion)}
                     </p>
                   </td>
+                  <td className="max-w-72 px-3 py-2.5 text-xs">
+                    <OrigenCambio r={r} />
+                  </td>
                   <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">
                     {r.valores_antes || r.estatus_antes
                       ? describir(r.etapa, r.estatus_antes, r.valores_antes).map((l) => <p key={l}>{l}</p>)
@@ -281,7 +284,7 @@ export default async function BitacoraPage({
             })}
             {registros.length === 0 && !error && (
               <tr>
-                <td colSpan={8} className="px-3 py-10 text-center text-slate-500">
+                <td colSpan={9} className="px-3 py-10 text-center text-slate-500">
                   No hay cambios registrados con estos filtros.
                 </td>
               </tr>
@@ -314,4 +317,28 @@ export default async function BitacoraPage({
       )}
     </main>
   );
+}
+
+// De dónde salió el cambio: lo que el sistema anotó en el mensaje ("· Fuente: …"),
+// o, si no lo anotó, quién lo hizo.
+function OrigenCambio({ r }: { r: Registro }) {
+  const [antes, fuente] = (r.mensaje ?? "").split(" · Fuente: ");
+  if (fuente) {
+    const correo = fuente.match(/^correo del (\d{4}-\d{2}-\d{2})(?: de (.+?))?(?: · "(.*)")?$/);
+    // Lo que decía el correo tal cual (p. ej. buque "MAERSK ESMERALDAS/642E").
+    const textoCorreo = [...antes.matchAll(/\(correo: "([^"]*)"\)/g)].map((m) => m[1]);
+    if (correo) {
+      return (
+        <div className="space-y-0.5">
+          <p className="font-semibold text-blue-800 dark:text-blue-300">Correo del {fechaCorta(correo[1])}</p>
+          {correo[2] && <p className="text-slate-600 dark:text-slate-400">De: {correo[2]}</p>}
+          {correo[3] && <p className="italic text-slate-600 dark:text-slate-400">&ldquo;{correo[3]}&rdquo;</p>}
+          {textoCorreo.length > 0 && <p className="text-slate-500 dark:text-slate-400">Decía: {textoCorreo.join(" · ")}</p>}
+        </div>
+      );
+    }
+    return <p className="font-semibold text-violet-800 dark:text-violet-300">{fuente.charAt(0).toUpperCase() + fuente.slice(1)}</p>;
+  }
+  if (r.usuario_email === "sistema") return <p className="text-slate-600 dark:text-slate-400">Propuesta automática de Track</p>;
+  return <p className="text-slate-600 dark:text-slate-400">Captura en la app</p>;
 }
