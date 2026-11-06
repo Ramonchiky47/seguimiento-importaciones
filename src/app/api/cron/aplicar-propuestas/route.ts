@@ -20,7 +20,9 @@ export const maxDuration = 300;
 // con la de la naviera, si difiere 30 días o menos. La ATA anticipada (la
 // naviera aún no arriba) no se puede dejar vacía: sigue a mano.
 const PRESUPUESTO_MS = 260_000;
-const TIPOS = ["eta_naviera", "ata_naviera", "transbordo", "eta", "eta_finalizar", "dias", "eta_naviera_info", "ata_naviera_info"];
+// Indicación de Ramón (6 nov): la Aplicación por sistema solo guarda (EDICION), nunca "Guardar y finalizar".
+// Por eso "eta_finalizar" (solo finalizaba la ETA) ya no se aplica sola: queda para el operativo.
+const TIPOS = ["eta_naviera", "ata_naviera", "transbordo", "eta", "dias", "eta_naviera_info", "ata_naviera_info"];
 const MAX_DIAS_LIBERAR = 30;
 
 type Propuesta = {
@@ -61,10 +63,10 @@ function aplicar(p: Propuesta): Promise<ResultadoEtapa> {
   const op = { fuente: FUENTE[p.tipo] ?? "propuesta automática de Track" };
   // Igual que "Revisar y confirmar" en la pantalla.
   if (p.tipo === "eta_naviera_info") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor }, op);
-  if (p.tipo === "ata_naviera_info") return guardarEtapaCon(esc, p.id_booking, "ata", "FINALIZADO", { fecha_ata: p.valor }, op);
+  if (p.tipo === "ata_naviera_info") return guardarEtapaCon(esc, p.id_booking, "ata", "EDICION", { fecha_ata: p.valor }, op);
   if (p.tipo === "eta_naviera" || p.tipo === "eta") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor }, op);
   if (p.tipo === "ata_naviera") return guardarEtapaCon(esc, p.id_booking, "ata", "EDICION", { fecha_ata: p.valor }, op);
-  if (p.tipo === "eta_finalizar") return guardarEtapaCon(esc, p.id_booking, "eta", "FINALIZADO", { buque_eta: p.valor }, op);
+  if (p.tipo === "eta_finalizar") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor }, op);
   if (p.tipo === "transbordo") return guardarTransbordosCon(esc, p.id_booking, "NO_APLICA", []);
   return guardarEtapaCon(esc, p.id_booking, "ata", "EDICION", { dias_demora: p.valor }, op);
 }
