@@ -60,7 +60,8 @@ const FUENTE: Record<string, string> = {
 
 function aplicar(p: Propuesta): Promise<ResultadoEtapa> {
   const esc = { supabase: createAdminClient(), ...SISTEMA };
-  const op = { fuente: FUENTE[p.tipo] ?? "propuesta automática de Track" };
+  // "Fuente: " para que la bitácora lo muestre en "Origen del cambio".
+  const op = { fuente: `Fuente: ${FUENTE[p.tipo] ?? "propuesta automática de Track"}` };
   // Igual que "Revisar y confirmar" en la pantalla.
   if (p.tipo === "eta_naviera_info") return guardarEtapaCon(esc, p.id_booking, "eta", "EDICION", { buque_eta: p.valor }, op);
   if (p.tipo === "ata_naviera_info") return guardarEtapaCon(esc, p.id_booking, "ata", "EDICION", { fecha_ata: p.valor }, op);
