@@ -561,7 +561,8 @@ export function CapturaSalida({
   const atdH = hitos.find((x) => x.orden === 1);
   const etdIni = fecha(datos.fecha_estimada);
   const atdIni = fecha(op.etd_atd);
-  const [etd, setEtd] = useState(etdIni);
+  // Ramón (9 nov): sin ETD capturado y con ATD, el ETD toma la fecha del ATD (se guarda en Origen al guardar).
+  const [etd, setEtd] = useState(etdIni || atdIni);
   const [atd, setAtd] = useState(atdIni);
   const [finAtd, setFinAtd] = useState(false);
   const { guardar, error, pending } = useGuardar(idBooking, String(op.no_booking ?? ""), onGuardado);
@@ -593,7 +594,7 @@ export function CapturaSalida({
           valor={etd}
           onCambiar={setEtd}
           cierre={{ mov: datos.his_mov_origen, cambio: etd !== etdIni, marcado: false, onCambiar: () => {}, soloEstatus: true }}
-          ayuda="Se guarda en la etapa Origen (sin finalizar)."
+          ayuda={!etdIni && atdIni ? "No estaba capturado: se propone la fecha del ATD. Se guarda en Origen (sin finalizar)." : "Se guarda en la etapa Origen (sin finalizar)."}
         />
         <CampoFecha
           label="② ATD - POL (zarpe real)"

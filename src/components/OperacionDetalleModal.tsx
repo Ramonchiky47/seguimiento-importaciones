@@ -348,6 +348,8 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   // Agrupación en viñetas (Ramón, 9 nov). Salida = ETD - POL + ATD - POL (arriba).
   const GRUPO_HITO: Record<number, string> = { 11: "Transito", 2: "Transito", 3: "Transito", 4: "Transito", 5: "Transito", 6: "Transito", 7: "Arribo", 8: "Arribo", 9: "Arribo", 10: "Arribo" };
   const etdIso = /^\d{4}-\d{2}-\d{2}/.test(datos.fecha_estimada ?? "") && !datos.fecha_estimada.startsWith("0000") ? datos.fecha_estimada.slice(0, 10) : null;
+  // Sin ETD capturado pero con ATD: se muestra la fecha del ATD (Ramón, 9 nov).
+  const etdMostrar = etdIso ?? (typeof op?.etd_atd === "string" && /^\d{4}-\d{2}-\d{2}/.test(op.etd_atd) ? op.etd_atd.slice(0, 10) : null);
   const atdHito = hitos.find((h) => h.hito === "ATD");
   const estadoEtd: EstadoHito = (() => {
     if (atdHito?.hecho) return "hecho";
@@ -677,7 +679,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                                       <span className="font-semibold text-slate-900 dark:text-slate-100">ETD - POL</span>
                                       <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">Estimado de salida</span>
                                     </td>
-                                    <td className={`whitespace-nowrap px-3 py-1 tabular-nums ${fondoEtapa(movOrigen, Boolean(etdIso))}`}>{fechaCorta(etdIso)}</td>
+                                    <td className={`whitespace-nowrap px-3 py-1 tabular-nums ${fondoEtapa(movOrigen, Boolean(etdIso))}`} title={etdIso ? undefined : etdMostrar ? "Sin ETD capturado: se toma la fecha del ATD" : undefined}>{fechaCorta(etdMostrar)}{!etdIso && etdMostrar ? " =ATD" : ""}</td>
                                     <td className={`whitespace-nowrap px-3 py-1 tabular-nums ${fondoEtapa(datos.his_mov_atd, Boolean(atdHito?.hecho))}`}>{atdHito?.hecho ? fechaCorta(atdHito.fecha_hecho) : "—"}</td>
                                     <td className="px-3 py-2 text-slate-400">—</td>
                                     <td className="whitespace-nowrap px-3 py-1">

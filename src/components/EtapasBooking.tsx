@@ -62,7 +62,8 @@ export function EtapasBooking({
   const hoy = hoyMexico();
   const ata = fecha(op.ata) || null;
   const datos = (op.datos ?? {}) as Record<string, string>;
-  const etd = fecha(datos.fecha_estimada);
+  // Sin ETD capturado pero con ATD: el ETD es la misma fecha del ATD (Ramón, 9 nov).
+  const etd = fecha(datos.fecha_estimada) || fecha(op.etd_atd);
 
   const tarjetas = (Object.keys(ORDENES) as Etapa[]).map((et) => {
     const hs = ORDENES[et].map((o) => hitos.find((h) => h.orden === o)).filter((h): h is HitoEtapa => Boolean(h) && h!.estado !== "no_aplica");
