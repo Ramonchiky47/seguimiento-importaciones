@@ -7,6 +7,7 @@ import { ESTADOS, explicarPropuestaDias, fechaCorta, hoyMexico, type EstadoHito 
 import { NavieraDialog } from "@/components/NavieraDialog";
 import { VerCorreo, type Evidencia } from "@/components/VerCorreo";
 import { PropuestoCelda } from "@/components/PropuestoCelda";
+import { CapturaArribo, CapturaTransito, resumenGrupo, semaforo } from "@/components/CapturaGrupo";
 import { cargolinkDeHito, propuestosPorHito, type NavieraPropuesto } from "@/lib/propuestoHito";
 import { ResumenComercialDialog } from "@/components/ResumenComercialDialog";
 import { NAVIERAS_CON_AGENTE, coincideRazonSocial, ligaRastreo, navieraRastreo, nombreNaviera } from "@/lib/navieras";
@@ -321,6 +322,8 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   // ETD - POL (pedido de Ramón, 9 nov): fecha estimada de salida que se captura en
   // la etapa Origen de Cargolink. Se muestra antes de ATD; solo informativo para Track.
   const ORDEN_ETD = -1;
+  const ORDEN_TRANSITO = -2;
+  const ORDEN_ARRIBO = -3;
   // Agrupación en viñetas (Ramón, 9 nov). Salida = ETD - POL + ATD - POL (arriba).
   const GRUPO_HITO: Record<number, string> = { 11: "Transito", 2: "Transito", 3: "Transito", 4: "Transito", 5: "Transito", 6: "Transito", 7: "Arribo", 8: "Arribo", 9: "Arribo", 10: "Arribo" };
   const etdIso = /^\d{4}-\d{2}-\d{2}/.test(datos.fecha_estimada ?? "") && !datos.fecha_estimada.startsWith("0000") ? datos.fecha_estimada.slice(0, 10) : null;
@@ -590,6 +593,8 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                             const abreGrupo = Boolean(grupo) && GRUPO_HITO[hitos[i - 1]?.orden] !== grupo;
                             const vineta = h === atdHito || Boolean(grupo);
                             const e = ESTADOS[h.estado] ?? ESTADOS.en_tiempo;
+                            // Semáforo por fecha límite en Tránsito y Arribo (días libres y vacío conservan su estado).
+                            const sem = op && [2, 3, 4, 5, 6, 7, 8].includes(h.orden) && h.orden !== 2 ? semaforo(h, (op.ata as string | null) ?? null) : null;
                             const etapa = ETAPAS_CARGOLINK[ETAPA_POR_HITO[h.orden]];
                             const movEtapa = etapa ? datos[etapa.mov] : undefined;
                             // Finalizada: se puede corregir si Cargolink permite liberarla.
@@ -598,12 +603,53 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                             const estEtapa = movEtapa ? ESTATUS_ETAPA[movEtapa] : undefined;
                             return (
                               <Fragment key={h.orden}>
-                              {abreGrupo && (
+                              {abreGrupo && op && (
+                                <>
                                 <tr className="bg-slate-50/60 dark:bg-slate-800/40">
-                                  <td colSpan={6} className="px-4 pb-0.5 pt-2 text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
-                                    {grupo}
+                                  <td colSpan={6} className="px-4 pb-1 pt-2">
+                                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                      <span className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">{grupo}</span>
+                                      {(grupo === "Transito" || grupo === "Arribo") && (
+                                        <span className={`text-xs font-semibold ${resumenGrupo(grupo, op).clase}`}>{resumenGrupo(grupo, op).texto}</span>
+                                      )}
+                                      {puedeEditar && (grupo === "Transito" || grupo === "Arribo") && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setAviso(null);
+                                            const k = grupo === "Transito" ? ORDEN_TRANSITO : ORDEN_ARRIBO;
+                                            setEditando(editando === k ? null : k);
+                                          }}
+                                          className="ml-auto rounded-md bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900"
+                                        >
+                                          {editando === (grupo === "Transito" ? ORDEN_TRANSITO : ORDEN_ARRIBO) ? "Cerrar captura" : `Capturar ${grupo === "Transito" ? "tránsito" : "arribo"}`}
+                                        </button>
+                                      )}
+                                    </span>
                                   </td>
                                 </tr>
+                                {editando === (grupo === "Transito" ? ORDEN_TRANSITO : grupo === "Arribo" ? ORDEN_ARRIBO : NaN) && (
+                                  <tr>
+                                    <td colSpan={6} className="bg-slate-50 px-4 py-3 dark:bg-slate-800/50">
+                                      {(() => {
+                                        const props = {
+                                          op,
+                                          idBooking,
+                                          hitos,
+                                          onCancelar: () => setEditando(null),
+                                          onGuardado: (mensaje: string) => {
+                                            huboCambios.current = true;
+                                            setEditando(null);
+                                            setAviso(mensaje);
+                                            cargar(idBooking);
+                                          },
+                                        };
+                                        return grupo === "Transito" ? <CapturaTransito {...props} /> : <CapturaArribo {...props} />;
+                                      })()}
+                                    </td>
+                                  </tr>
+                                )}
+                                </>
                               )}
                               {h === atdHito && (
                                 <>
@@ -681,10 +727,14 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                                   <PropuestoCelda items={propuestos[h.orden]} real={cargolinkDeHito(h.orden, op)} />
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-2">
-                                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.pill}`}>
-                                    {e.label}
-                                    {h.dias_atraso ? ` · ${h.dias_atraso} d` : ""}
-                                  </span>
+                                  {sem ? (
+                                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${sem.clase}`}>{sem.label}</span>
+                                  ) : (
+                                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.pill}`}>
+                                      {e.label}
+                                      {h.dias_atraso ? ` · ${h.dias_atraso} d` : ""}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="whitespace-nowrap px-4 py-2">
                                   <span className="flex items-center gap-2">
