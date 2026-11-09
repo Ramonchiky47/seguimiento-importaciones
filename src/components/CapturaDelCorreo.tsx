@@ -6,7 +6,7 @@ import { guardarEtapaCargolink } from "@/app/(app)/operaciones-maritima/actions"
 import { VerCorreo, type Evidencia } from "@/components/VerCorreo";
 import { fechaCorta } from "@/lib/track";
 
-export type DatosDelCorreo = { fecha_correo: string; atd: string | null; eta: string | null; mbl: string | null; evidencia: Evidencia | null };
+export type DatosDelCorreo = { fecha_correo: string; atd: string | null; etd?: string | null; eta: string | null; mbl: string | null; evidencia: Evidencia | null };
 
 type Campo = { id: string; label: string; etapa: string; campo: string; tipo: "date" | "text"; inicial: string; finalizar: boolean };
 
@@ -17,9 +17,13 @@ export function CapturaDelCorreo({ idBooking, noBooking, correo: original, puede
   const router = useRouter();
   // Fechas que el agente leyó mal (p. ej. "2026-28-10") no se muestran ni se proponen.
   const valida = (f: string | null) => (f && !Number.isNaN(Date.parse(`${f.slice(0, 10)}T12:00:00Z`)) && /^\d{4}-(0[1-9]|1[0-2])-\d{2}/.test(f) ? f : null);
-  const correo = { ...original, atd: valida(original.atd), eta: valida(original.eta) };
+  const correo = { ...original, atd: valida(original.atd), etd: valida(original.etd ?? null), eta: valida(original.eta) };
   const campos: Campo[] = [
-    ...(correo.atd ? [{ id: "atd", label: "Zarpe (ATD)", etapa: "atd", campo: "fecha_atd", tipo: "date" as const, inicial: correo.atd, finalizar: true }] : []),
+    // Ramón (9 nov): ETD = salida ESTIMADA (va a Origen, solo se guarda); ATD = zarpe real, solo si el correo dice ATD.
+    ...(correo.atd ? [{ id: "atd", label: "Zarpe real (ATD)", etapa: "atd", campo: "fecha_atd", tipo: "date" as const, inicial: correo.atd, finalizar: true }] : []),
+    ...(correo.etd && !correo.atd
+      ? [{ id: "etd", label: "ETD - POL (salida estimada · se guarda en Origen)", etapa: "origen", campo: "fecha_estimada", tipo: "date" as const, inicial: correo.etd, finalizar: false }]
+      : []),
     ...(correo.eta ? [{ id: "eta", label: "ETA", etapa: "eta", campo: "buque_eta", tipo: "date" as const, inicial: correo.eta, finalizar: true }] : []),
     ...(correo.mbl ? [{ id: "bl", label: "BL (MBL)", etapa: "origen", campo: "no_control", tipo: "text" as const, inicial: correo.mbl, finalizar: false }] : []),
   ];
@@ -35,7 +39,7 @@ export function CapturaDelCorreo({ idBooking, noBooking, correo: original, puede
     if (r.ok) router.refresh();
   };
 
-  const resumen = campos.map((c) => `${c.id === "atd" ? "Zarpe" : c.id === "eta" ? "ETA" : "BL"} ${c.tipo === "date" ? fechaCorta(c.inicial) : c.inicial}`).join(" · ");
+  const resumen = campos.map((c) => `${c.id === "atd" ? "Zarpe (ATD)" : c.id === "etd" ? "ETD" : c.id === "eta" ? "ETA" : "BL"} ${c.tipo === "date" ? fechaCorta(c.inicial) : c.inicial}`).join(" · ");
 
   return (
     <div className="col-span-full">

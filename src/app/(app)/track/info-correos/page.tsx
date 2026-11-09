@@ -33,6 +33,7 @@ type Booking = {
   mbl: string | null;
   contenedores: string | null;
   etd_atd: string | null;
+  fecha_estimada: string | null;
   eta: string | null;
   ata: string | null;
   origen: string | null;
@@ -123,7 +124,8 @@ function filas(c: Correo, b: Booking | undefined) {
     { campo: "portador", etiqueta: "Portador (naviera)", correo: d.portador, cl: b?.carrier },
     { campo: "buque", etiqueta: "Buque", correo: d.buque?.replace(/\s+\S*\d\S*$/, ""), cl: b?.buque },
     { campo: "viaje", etiqueta: "Viaje", correo: d.buque?.match(/\s(\S*\d\S*)$/)?.[1].replace(/^V\.?/, ""), cl: b?.viaje },
-    { campo: "atd", etiqueta: "ATD (fecha de zarpe)", correo: d.atd_iso, cl: atdCl, fecha: true },
+    { campo: "atd", etiqueta: "ATD (zarpe real)", correo: d.atd_iso, cl: atdCl, fecha: true },
+    { campo: "etd", etiqueta: "ETD (salida estimada)", correo: d.etd_iso, cl: b?.fecha_estimada ?? null, fecha: true },
     { campo: "eta", etiqueta: b?.ata ? "ETA vs ATA de Cargolink" : "ETA (fecha estimada de llegada)", correo: d.eta_iso, cl: etaCl, fecha: true },
     { campo: "pol", etiqueta: "Origen (POL)", correo: d.pol, cl: b?.sitio_origen || b?.origen },
     { campo: "pod", etiqueta: "Puerto de descarga (POD)", correo: d.pod, cl: b?.sitio_destino || b?.destino },
@@ -150,7 +152,7 @@ export default async function InfoCorreosPage() {
   const { data: ops } = ids.length
     ? await supabase
         .from("operaciones_maritima")
-        .select("id_booking, no_booking, cliente, ejecutivo, mbl, contenedores, etd_atd, eta, ata, origen, destino, shipper, consignatario, buque:datos->>buque, viaje:datos->>no_viaje, id_carrier:datos->>buque_carrier, agente_ext:datos->>nameAgenExt, sitio_origen:datos->>sitioOrigenNombre, sitio_destino:datos->>sitioDestinoNombre, dias_demora:datos->>dias_demora")
+        .select("id_booking, no_booking, cliente, ejecutivo, mbl, contenedores, etd_atd, fecha_estimada:datos->>fecha_estimada, eta, ata, origen, destino, shipper, consignatario, buque:datos->>buque, viaje:datos->>no_viaje, id_carrier:datos->>buque_carrier, agente_ext:datos->>nameAgenExt, sitio_origen:datos->>sitioOrigenNombre, sitio_destino:datos->>sitioDestinoNombre, dias_demora:datos->>dias_demora")
         .in("id_booking", ids)
     : { data: [] };
   const carriers = [...new Set((ops ?? []).map((o) => o.id_carrier as string).filter(Boolean))];

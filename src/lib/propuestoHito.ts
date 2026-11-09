@@ -22,8 +22,7 @@ export function propuestosPorHito(correo: CorreoPropuesto, naviera: NavieraPropu
   if (correo?.atd_iso) poner(1, fecha(correo.atd_iso, "Correo"));
   if (nav?.eta_naviera) poner(2, fecha(nav.eta_naviera, "Naviera"));
   if (correo?.eta_iso && correo.eta_iso.slice(0, 10) !== nav?.eta_naviera?.slice(0, 10)) poner(2, fecha(correo.eta_iso, "Correo"));
-  if (correo?.hbl) poner(4, { valor: correo.hbl, fuente: "Correo" });
-  if (correo?.mbl) poner(5, { valor: correo.mbl, fuente: "Correo" });
+  // Telex: el número de BL del correo no es la fecha del telex (Ramón, 9 nov); no se propone ahí.
   // ATA a futuro: el buque aún no llega, es una ETA estimada.
   if (nav?.ata_naviera) poner(7, fecha(nav.ata_naviera, "Naviera", nav.ata_naviera.slice(0, 10) > hoy ? "estimada" : undefined));
   return r;

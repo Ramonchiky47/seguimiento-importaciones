@@ -165,11 +165,11 @@ export default async function MiDiaPage({
     // Pendientes y "Por zarpar" en una sola consulta.
     creditoPorBooking(supabase, [...filas.map((f) => f.id_booking), ...porZarpar.map((z) => z.id_booking)]),
     supabase.rpc("puedo_editar_cargolink"),
-    // Zarpe, ETA y BL que trajo el correo más reciente de cada booking (Info correos).
+    // Zarpe real (ATD), salida estimada (ETD), ETA y BL que trajo el correo más reciente de cada booking (Info correos).
     idsFilas.length
       ? supabase
           .from("info_correos")
-          .select("id_booking, fecha_correo, atd:datos->>atd_iso, eta:datos->>eta_iso, mbl:datos->>mbl, hbl:datos->>hbl, evidencia:datos->evidencia")
+          .select("id_booking, fecha_correo, atd:datos->>atd_iso, etd:datos->>etd_iso, eta:datos->>eta_iso, mbl:datos->>mbl, hbl:datos->>hbl, evidencia:datos->evidencia")
           .in("id_booking", idsFilas)
           .order("fecha_correo", { ascending: false })
       : Promise.resolve({ data: [] }),
