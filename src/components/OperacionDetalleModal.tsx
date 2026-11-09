@@ -57,7 +57,7 @@ const FASES_CARGOLINK: { fase: string; etapas: { label: string; clave: string }[
     ],
   },
   {
-    fase: "Tránsito",
+    fase: "Transito",
     etapas: [
       { label: "ATD", clave: "atd" },
       { label: "Aviso ATD", clave: "aviso_atd" },
@@ -321,6 +321,8 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   // ETD - POL (pedido de Ramón, 9 nov): fecha estimada de salida que se captura en
   // la etapa Origen de Cargolink. Se muestra antes de ATD; solo informativo para Track.
   const ORDEN_ETD = -1;
+  // Agrupación en viñetas (Ramón, 9 nov). Salida = ETD - POL + ATD - POL (arriba).
+  const GRUPO_HITO: Record<number, string> = { 11: "Transito", 2: "Transito", 3: "Transito", 4: "Transito", 5: "Transito", 6: "Transito" };
   const etdIso = /^\d{4}-\d{2}-\d{2}/.test(datos.fecha_estimada ?? "") && !datos.fecha_estimada.startsWith("0000") ? datos.fecha_estimada.slice(0, 10) : null;
   const atdHito = hitos.find((h) => h.hito === "ATD");
   const estadoEtd: EstadoHito = (() => {
@@ -583,7 +585,10 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                          {hitos.map((h) => {
+                          {hitos.map((h, i) => {
+                            const grupo = GRUPO_HITO[h.orden];
+                            const abreGrupo = Boolean(grupo) && GRUPO_HITO[hitos[i - 1]?.orden] !== grupo;
+                            const vineta = h === atdHito || Boolean(grupo);
                             const e = ESTADOS[h.estado] ?? ESTADOS.en_tiempo;
                             const etapa = ETAPAS_CARGOLINK[ETAPA_POR_HITO[h.orden]];
                             const movEtapa = etapa ? datos[etapa.mov] : undefined;
@@ -593,6 +598,13 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                             const estEtapa = movEtapa ? ESTATUS_ETAPA[movEtapa] : undefined;
                             return (
                               <Fragment key={h.orden}>
+                              {abreGrupo && (
+                                <tr className="bg-slate-50/60 dark:bg-slate-800/40">
+                                  <td colSpan={6} className="px-4 pb-0.5 pt-2 text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                                    {grupo}
+                                  </td>
+                                </tr>
+                              )}
                               {h === atdHito && (
                                 <>
                                   <tr className="bg-slate-50/60 dark:bg-slate-800/40">
@@ -656,8 +668,8 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                                 </>
                               )}
                               <tr className={h.estado === "no_aplica" ? "opacity-50" : ""}>
-                                <td className={h === atdHito ? "py-2 pl-8 pr-4" : "px-4 py-2"}>
-                                  {h === atdHito && <span aria-hidden className="mr-2 text-slate-400">•</span>}
+                                <td className={vineta ? "py-2 pl-8 pr-4" : "px-4 py-2"}>
+                                  {vineta && <span aria-hidden className="mr-2 text-slate-400">•</span>}
                                   <span className="font-semibold text-slate-900 dark:text-slate-100">{h === atdHito ? "ATD - POL" : h.hito}</span>
                                   <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">{h.regla}</span>
                                 </td>
