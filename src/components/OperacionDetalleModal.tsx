@@ -318,6 +318,19 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   }, [cargar]);
 
   const datos = (op?.datos ?? {}) as Record<string, string>;
+  // ETD - POL (pedido de Ramón, 9 nov): fecha estimada de salida que se captura en
+  // la etapa Origen de Cargolink. Se muestra antes de ATD; solo informativo para Track.
+  const ORDEN_ETD = -1;
+  const etdIso = /^\d{4}-\d{2}-\d{2}/.test(datos.fecha_estimada ?? "") && !datos.fecha_estimada.startsWith("0000") ? datos.fecha_estimada.slice(0, 10) : null;
+  const atdHito = hitos.find((h) => h.hito === "ATD");
+  const estadoEtd: EstadoHito = (() => {
+    if (atdHito?.hecho) return "hecho";
+    if (!etdIso) return "falta_dato";
+    const dias = Math.round((Date.parse(etdIso) - Date.parse(hoyMexico())) / 86400000);
+    return dias < 0 ? "atrasado" : dias === 0 ? "hoy" : dias <= 3 ? "pronto" : "en_tiempo";
+  })();
+  const etapaOrigen = ETAPAS_CARGOLINK.origen;
+  const movOrigen = datos[etapaOrigen.mov];
   const diasDemora = op?.dias_demora as number | null | undefined;
   const regresado = Boolean(op?.regreso_vacio);
   const demoraTexto =
@@ -580,6 +593,62 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                             const estEtapa = movEtapa ? ESTATUS_ETAPA[movEtapa] : undefined;
                             return (
                               <Fragment key={h.orden}>
+                              {h === atdHito && (
+                                <>
+                                  <tr>
+                                    <td className="px-4 py-2">
+                                      <span className="font-semibold text-slate-900 dark:text-slate-100">ETD - POL</span>
+                                      <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">Estimado de salida</span>
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fechaCorta(etdIso)}</td>
+                                    <td className="whitespace-nowrap px-3 py-2 tabular-nums">{atdHito?.hecho ? fechaCorta(atdHito.fecha_hecho) : "—"}</td>
+                                    <td className="px-3 py-2 text-slate-400">—</td>
+                                    <td className="whitespace-nowrap px-3 py-2">
+                                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ESTADOS[estadoEtd].pill}`}>{ESTADOS[estadoEtd].label}</span>
+                                    </td>
+                                    <td className="whitespace-nowrap px-4 py-2">
+                                      <span className="flex items-center gap-2">
+                                        <span
+                                          title="Se captura en la etapa Origen"
+                                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ESTATUS_ETAPA[movOrigen]?.clase ?? "text-slate-500 ring-1 ring-slate-200 dark:ring-slate-700"}`}
+                                        >
+                                          Origen · {ESTATUS_ETAPA[movOrigen]?.label ?? "Sin comenzar"}
+                                        </span>
+                                        {puedeEditar && movOrigen !== "NO_APLICA" && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setAviso(null);
+                                              setEditando(editando === ORDEN_ETD ? null : ORDEN_ETD);
+                                            }}
+                                            aria-expanded={editando === ORDEN_ETD}
+                                            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                                          >
+                                            {editando === ORDEN_ETD ? "Cerrar" : "Editar"}
+                                          </button>
+                                        )}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                  {editando === ORDEN_ETD && op && (
+                                    <tr>
+                                      <td colSpan={6} className="bg-slate-50 px-4 py-3 dark:bg-slate-800/50">
+                                        <EditorEtapa
+                                          etapa={etapaOrigen}
+                                          op={op}
+                                          idBooking={idBooking}
+                                          onGuardado={(mensaje) => {
+                                            huboCambios.current = true;
+                                            setEditando(null);
+                                            setAviso(mensaje);
+                                            cargar(idBooking);
+                                          }}
+                                        />
+                                      </td>
+                                    </tr>
+                                  )}
+                                </>
+                              )}
                               <tr className={h.estado === "no_aplica" ? "opacity-50" : ""}>
                                 <td className="px-4 py-2">
                                   <span className="font-semibold text-slate-900 dark:text-slate-100">{h.hito}</span>
