@@ -5,8 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { TrackEjecutivoFilter } from "@/components/TrackEjecutivoFilter";
 import { CreditoBadge } from "@/components/CreditoBadge";
 import { creditoPorBooking } from "@/lib/credito";
-import { ETAPA_POR_HITO, TAREA_POR_HITO } from "@/lib/trackNew";
-import { CapturaRapida } from "@/components/CapturaRapida";
+import { EtapasBooking, type HitoEtapa } from "@/components/EtapasBooking";
+import { propuestosPorHito, type NavieraPropuesto } from "@/lib/propuestoHito";
 import { CapturaDelCorreo, type DatosDelCorreo } from "@/components/CapturaDelCorreo";
 import { AbrirOperacionBoton } from "@/components/OperacionDetalleModal";
 import { RegresarTablero } from "@/components/RegresarTablero";
@@ -28,6 +28,7 @@ import {
   periodoAtd,
   PERIODO_ATD_OPCIONES,
   fechaCorta,
+  hoyMexico,
   type EstadoHito,
 } from "@/lib/track";
 
@@ -160,7 +161,8 @@ export default async function MiDiaPage({
   }[];
   const filas = resultado.filas;
   const idsFilas = [...filas.map((f) => f.id_booking), ...porZarpar.map((z) => z.id_booking)];
-  const [cambios, credito, { data: puedeEditar }, { data: correosData }] = await Promise.all([
+  const idsPend = filas.map((f) => f.id_booking);
+  const [cambios, credito, { data: puedeEditar }, { data: correosData }, { data: hitosData }, { data: opsData }, { data: navData }] = await Promise.all([
     cambiosComerciales(supabase, filas.map((f) => f.id_booking)),
     // Pendientes y "Por zarpar" en una sola consulta.
     creditoPorBooking(supabase, [...filas.map((f) => f.id_booking), ...porZarpar.map((z) => z.id_booking)]),
@@ -173,7 +175,38 @@ export default async function MiDiaPage({
           .in("id_booking", idsFilas)
           .order("fecha_correo", { ascending: false })
       : Promise.resolve({ data: [] }),
+    // Mi día por etapas (Ramón, 9 nov): todos los hitos y lo que piden las ventanas de captura.
+    idsPend.length
+      ? supabase
+          .from("track_hitos")
+          .select("id_booking, orden, hito, regla, fecha_plan, fecha_hecho, hecho, estado, dias_atraso")
+          .in("id_booking", idsPend)
+      : Promise.resolve({ data: [] }),
+    idsPend.length
+      ? supabase
+          .from("operaciones_maritima_vista")
+          .select(
+            "id_booking, no_booking, eta, ata, etd_atd, telex_house_bl, telex_master_bl, revalidacion, regreso_vacio, dias_libres_demora, fecha_estimada:datos->>fecha_estimada, his_mov_origen:datos->>his_mov_origen, his_mov_atd:datos->>his_mov_atd, his_mov_eta:datos->>his_mov_eta, his_mov_hbl_telex:datos->>his_mov_hbl_telex, his_mov_mbl_telex:datos->>his_mov_mbl_telex, his_mov_rev:datos->>his_mov_rev, his_mov_ata:datos->>his_mov_ata, his_mov_entrega_vacio:datos->>his_mov_entrega_vacio",
+          )
+          .in("id_booking", idsPend)
+      : Promise.resolve({ data: [] }),
+    idsPend.length
+      ? supabase.from("tracking_naviera").select("id_booking, ok, eta_naviera, ata_naviera").in("id_booking", idsPend)
+      : Promise.resolve({ data: [] }),
   ]);
+  const hitosPorBooking = new Map<number, HitoEtapa[]>();
+  for (const h of (hitosData ?? []) as (HitoEtapa & { id_booking: number })[]) {
+    if (!hitosPorBooking.has(h.id_booking)) hitosPorBooking.set(h.id_booking, []);
+    hitosPorBooking.get(h.id_booking)!.push(h);
+  }
+  const DATOS_OP = ["fecha_estimada", "his_mov_origen", "his_mov_atd", "his_mov_eta", "his_mov_hbl_telex", "his_mov_mbl_telex", "his_mov_rev", "his_mov_ata", "his_mov_entrega_vacio"];
+  const opsPorBooking = new Map<number, Record<string, unknown> & { datos: Record<string, string> }>();
+  for (const o of (opsData ?? []) as Record<string, unknown>[]) {
+    opsPorBooking.set(Number(o.id_booking), { ...o, datos: Object.fromEntries(DATOS_OP.map((k) => [k, (o[k] as string) ?? ""])) });
+  }
+  const navPorBooking = new Map<number, NavieraPropuesto>();
+  for (const n of (navData ?? []) as (NonNullable<NavieraPropuesto> & { id_booking: number })[]) navPorBooking.set(n.id_booking, n);
+
   type DatoCorreo = DatosDelCorreo & { id_booking: number; hbl: string | null };
   const correos = new Map<number, DatoCorreo>();
   for (const c of (correosData ?? []) as DatoCorreo[]) if (!correos.has(c.id_booking)) correos.set(c.id_booking, c);
@@ -359,9 +392,9 @@ export default async function MiDiaPage({
               <li
                 data-buscar={`${f.no_booking} ${f.cliente ?? ""} ${f.ejecutivo ?? "Sin ejecutivo"}`}
                 data-seccion={f.seccion}
-                className={`${claseFilaEstatus(f.status_booking)} grid grid-cols-[6px_minmax(0,1fr)_minmax(0,2.2fr)] gap-4 overflow-hidden rounded-xl border border-slate-300 py-3 pr-4 dark:border-slate-600 text-sm sm:grid-cols-[6px_minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,1.1fr)_minmax(0,0.6fr)]`}
+                className={`${claseFilaEstatus(f.status_booking)} grid grid-cols-[6px_minmax(0,1fr)] gap-x-4 gap-y-2 overflow-hidden rounded-xl border border-slate-300 py-3 pr-4 dark:border-slate-600 text-sm sm:grid-cols-[6px_minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,0.6fr)]`}
               >
-                <span className={`self-stretch ${peor.barra}`} aria-hidden="true" />
+                <span className={`row-span-4 self-stretch sm:row-span-2 ${peor.barra}`} aria-hidden="true" />
                 <div className="min-w-0">
                   <AbrirOperacionBoton
                     idBooking={f.id_booking}
@@ -386,50 +419,12 @@ export default async function MiDiaPage({
                   </Link>
                   <CreditoBadge si={credito.get(f.id_booking)} className="mt-1 block w-fit" />
                 </div>
-                <ul className="min-w-0 divide-y divide-slate-100 self-start rounded-lg border border-slate-200 bg-white/80 dark:divide-slate-800 dark:border-slate-700 dark:bg-slate-900/60">
-                  {f.hitos.map((h) => {
-                    const e = ESTADOS[h.estado] ?? ESTADOS.en_tiempo;
-                    // Texto corto del estado; el color lo da el punto.
-                    const corto =
-                      h.estado === "atrasado" && h.dias_atraso
-                        ? `${h.dias_atraso} d tarde`
-                        : h.estado === "hoy"
-                          ? "Hoy"
-                          : e.label;
-                    const correo = correos.get(f.id_booking);
-                    const etapaKey = ETAPA_POR_HITO[h.orden] ?? null;
-                    // Propuesta del correo para el zarpe y la ETA.
-                    const propuesta =
-                      etapaKey === "atd" && correo?.atd
-                        ? { fecha: correo.atd, fuente: "correo" }
-                        : etapaKey === "eta" && correo?.eta
-                          ? { fecha: correo.eta, fuente: "correo" }
-                          : null;
-                    return (
-                      <li key={h.orden}>
-                        <CapturaRapida
-                          idBooking={f.id_booking}
-                          etapaKey={etapaKey}
-                          tarea={TAREA_POR_HITO[h.orden] ?? null}
-                          hito={h.hito}
-                          corto={corto}
-                          colorTexto={e.pill.split(" ").filter((c) => c.includes("text-")).join(" ")}
-                          colorPunto={e.barra}
-                          fecha={h.fecha_plan}
-                          regla={h.regla}
-                          propuesta={propuesta}
-                          puedeEditar={puedeEditar === true}
-                        />
-                      </li>
-                    );
-                  })}
-                </ul>
                 {/* Lo que trajo el correo más reciente: zarpe, ETA y BL (Info correos). */}
                 {(() => {
                   const c = correos.get(f.id_booking);
                   const difEta = Boolean(c?.eta && f.eta && c.eta !== f.eta.slice(0, 10));
                   return (
-                    <div className="col-span-2 col-start-2 self-start sm:col-span-1 sm:col-start-auto">
+                    <div className="col-start-2 self-start sm:col-start-auto">
                       <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Correo{c ? ` · ${fechaCorta(c.fecha_correo.slice(0, 10))}` : ""}
                       </p>
@@ -458,6 +453,22 @@ export default async function MiDiaPage({
                 >
                   {f.ejecutivo ?? "Sin ejecutivo"}
                 </p>
+                <div className="col-start-2 min-w-0 sm:col-span-3">
+                  {opsPorBooking.get(f.id_booking) ? (
+                    <EtapasBooking
+                      op={opsPorBooking.get(f.id_booking)!}
+                      hitos={hitosPorBooking.get(f.id_booking) ?? []}
+                      puedeEditar={puedeEditar === true}
+                      propuestos={propuestosPorHito(
+                        correos.get(f.id_booking) ? { atd_iso: correos.get(f.id_booking)!.atd, eta_iso: correos.get(f.id_booking)!.eta } : null,
+                        navPorBooking.get(f.id_booking) ?? null,
+                        hoyMexico(),
+                      )}
+                    />
+                  ) : (
+                    <p className="text-xs text-slate-500">Sin datos de etapas.</p>
+                  )}
+                </div>
               </li>
               </Fragment>
             );

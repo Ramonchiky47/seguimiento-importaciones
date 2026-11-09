@@ -49,6 +49,7 @@ export function semaforo(h: HitoGrupo, ata: string | null, hoy = hoyMexico()): S
   if (h.orden === 8 && !ata && !h.hecho) return { label: "Al arribar", clase: S.gris, nivel: 0 };
   if (h.estado === "no_aplica") return { label: "No aplica", clase: S.gris, nivel: 0 };
   if (h.hecho) return { label: h.fecha_hecho ? `Hecho · ${fechaCorta(h.fecha_hecho)}` : "Hecho", clase: S.hecho, nivel: 0 };
+  if (h.estado === "falta_dato") return { label: "Falta dato", clase: S.proximo, nivel: 2 };
   if (ata && CRITICOS.has(h.orden)) return { label: "Crítico · ya arribó", clase: S.critico, nivel: 4 };
   if (!h.fecha_plan) return { label: h.orden === 8 ? "Al arribar" : "Sin fecha (falta ETA)", clase: S.gris, nivel: 0 };
   const d = dias(h.fecha_plan, hoy);
@@ -99,7 +100,7 @@ function CampoFecha({
   ayuda?: string;
   propuestas?: Propuesto[];
   // Estatus de la etapa en Cargolink y casilla "Guardar y finalizar".
-  cierre?: { mov: string | undefined; cambio: boolean; marcado: boolean; onCambiar: (b: boolean) => void };
+  cierre?: { mov: string | undefined; cambio: boolean; marcado: boolean; onCambiar: (b: boolean) => void; soloEstatus?: boolean };
 }) {
   const utiles = (propuestas ?? []).filter((p) => p.fecha && p.nota !== "estimada");
   const est = cierre ? (ESTATUS[cierre.mov ?? ""] ?? ESTATUS[""]) : null;
@@ -157,7 +158,7 @@ function CampoFecha({
       {cierre && est && (
         <span className="flex flex-wrap items-center gap-2 text-[11px]">
           <span className={`rounded-full px-2 py-0.5 font-bold ${est.clase}`}>Cargolink: {est.label}</span>
-          {cierre.mov === "FINALIZADO" && !cierre.cambio ? (
+          {cierre.soloEstatus ? null : cierre.mov === "FINALIZADO" && !cierre.cambio ? (
             <span className="text-slate-500 dark:text-slate-400">ya finalizada</span>
           ) : cierre.mov !== "NO_APLICA" ? (
             <label className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-100">
@@ -441,6 +442,12 @@ export function CapturaArribo({
   const [aviso, setAviso] = useState(false);
   const [finAta, setFinAta] = useState(false);
   const movAta = ((op.datos ?? {}) as Record<string, string>).his_mov_ata;
+  // Regreso de vacío (Ramón, 9 nov: entra en la captura de arribo).
+  const vacioIni = fecha(op.regreso_vacio);
+  const [vacio, setVacio] = useState(vacioIni);
+  const [finVacio, setFinVacio] = useState(false);
+  const movVacio = ((op.datos ?? {}) as Record<string, string>).his_mov_entrega_vacio;
+  const conVacio = h(10) ? h(10)!.estado !== "no_aplica" : false;
   const avisoHecho = Boolean(h(8)?.hecho);
   const { guardar, error, pending } = useGuardar(idBooking, String(op.no_booking ?? ""), onGuardado);
   const semAta = h(7) ? semaforo(h(7)!, ataIni || null) : undefined;
@@ -468,6 +475,15 @@ export function CapturaArribo({
     }
     if (aviso && !avisoHecho) pasos.push({ etapa: "aviso_ata", status: "NO", valores: {}, texto: "Aviso de ATA finalizado (sin notificar)" });
     const adv: string[] = [];
+    if (conVacio) {
+      const cambioV = Boolean(vacio) && vacio !== vacioIni;
+      const finV = finVacio && !(movVacio === "FINALIZADO" && !cambioV);
+      if (cambioV || finV) {
+        if (!vacio) adv.push("Regreso de vacío: para finalizar hace falta la fecha.");
+        else pasos.push({ etapa: "vacio", status: finV ? "FINALIZADO" : "EDICION", valores: { fecha_maniobra_entrega: vacio }, texto: `Regreso de vacío ${fechaCorta(vacio)}${finV ? " y finalizar" : ""}` });
+      }
+      if (vacio && vacio > hoyMexico()) adv.push(`Regreso de vacío con fecha futura (${fechaCorta(vacio)}).`);
+    }
     if (ata && ata > hoyMexico()) adv.push(`ATA con fecha futura (${fechaCorta(ata)}): el ATA es la fecha real de arribo.`);
     if (aviso && !ata) adv.push("Se finaliza el Aviso de ATA sin fecha de ATA.");
     if (ata && !diasLibres) adv.push("Sin días libres de demora: captúralos para calcular el último día libre.");
@@ -504,6 +520,89 @@ export function CapturaArribo({
           onCambiar={setAviso}
           sem={semAviso}
           ayuda="Límite: el día del arribo. Banco e instrucciones se editan en su renglón."
+        />
+        {conVacio && (
+          <CampoFecha
+            label="③ Regreso de vacío"
+            valor={vacio}
+            onCambiar={setVacio}
+            sem={h(10) ? semaforo(h(10)!, ataIni || null) : undefined}
+            cierre={{ mov: movVacio, cambio: Boolean(vacio) && vacio !== vacioIni, marcado: finVacio, onCambiar: setFinVacio }}
+            ayuda={`Límite: último día libre${h(10)?.fecha_plan ? ` (${fechaCorta(h(10)?.fecha_plan)})` : ""}`}
+          />
+        )}
+      </div>
+      <Botones pending={pending} onGuardar={enviar} onCancelar={onCancelar} />
+      {error && (
+        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function CapturaSalida({
+  op,
+  idBooking,
+  hitos,
+  onGuardado,
+  onCancelar,
+  propuestos,
+}: {
+  op: Op;
+  idBooking: number;
+  hitos: HitoGrupo[];
+  onGuardado: (mensaje: string) => void;
+  onCancelar: () => void;
+  propuestos?: Record<number, Propuesto[]>;
+}) {
+  const datos = (op.datos ?? {}) as Record<string, string>;
+  const atdH = hitos.find((x) => x.orden === 1);
+  const etdIni = fecha(datos.fecha_estimada);
+  const atdIni = fecha(op.etd_atd);
+  const [etd, setEtd] = useState(etdIni);
+  const [atd, setAtd] = useState(atdIni);
+  const [finAtd, setFinAtd] = useState(false);
+  const { guardar, error, pending } = useGuardar(idBooking, String(op.no_booking ?? ""), onGuardado);
+  const enviar = () => {
+    const pasos: Paso[] = [];
+    const adv: string[] = [];
+    if (etd && etd !== etdIni) pasos.push({ etapa: "origen", status: "EDICION", valores: { fecha_estimada: etd }, texto: `ETD - POL ${fechaCorta(etd)} (Origen)` });
+    const cambio = Boolean(atd) && atd !== atdIni;
+    const fin = finAtd && !(datos.his_mov_atd === "FINALIZADO" && !cambio);
+    if (cambio || fin) {
+      if (!atd) adv.push("ATD: para finalizar hace falta la fecha.");
+      else pasos.push({ etapa: "atd", status: fin ? "FINALIZADO" : "EDICION", valores: { fecha_atd: atd }, texto: `ATD - POL ${fechaCorta(atd)}${fin ? " y finalizar" : ""}` });
+    }
+    if (atd && atd > hoyMexico()) adv.push(`ATD con fecha futura (${fechaCorta(atd)}): el ATD es el zarpe real; si es estimado va en ETD.`);
+    if (cambio && datos.his_mov_atd === "FINALIZADO" && !fin) adv.push("ATD estaba finalizada en Cargolink: se reabre para corregirla y queda en edición.");
+    guardar(pasos, adv);
+  };
+  return (
+    <div className="space-y-4">
+      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+        Captura de salida <span className="font-normal text-slate-500 dark:text-slate-400">· solo se guarda lo que cambies, sin notificar al cliente</span>
+      </p>
+      <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+        <b>ETD</b> es la salida estimada (se guarda en Origen). <b>ATD</b> es el zarpe real: captúralo cuando el buque ya salió. Un campo vacío no se toca.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <CampoFecha
+          label="① ETD - POL (salida estimada)"
+          valor={etd}
+          onCambiar={setEtd}
+          cierre={{ mov: datos.his_mov_origen, cambio: etd !== etdIni, marcado: false, onCambiar: () => {}, soloEstatus: true }}
+          ayuda="Se guarda en la etapa Origen (sin finalizar)."
+        />
+        <CampoFecha
+          label="② ATD - POL (zarpe real)"
+          valor={atd}
+          onCambiar={setAtd}
+          sem={atdH ? semaforo(atdH, null) : undefined}
+          propuestas={propuestos?.[1]}
+          cierre={{ mov: datos.his_mov_atd, cambio: Boolean(atd) && atd !== atdIni, marcado: finAtd, onCambiar: setFinAtd }}
+          ayuda="Zarpe del buque en el puerto de origen."
         />
       </div>
       <Botones pending={pending} onGuardar={enviar} onCancelar={onCancelar} />
