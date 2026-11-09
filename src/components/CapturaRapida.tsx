@@ -74,7 +74,7 @@ export function CapturaRapida({
       <span className="truncate text-xs text-slate-400 dark:text-slate-500">{regla}</span>
       {/* Botón siempre visible, con borde, para que se vea que el renglón se captura. */}
       <span
-        className={`justify-self-end whitespace-nowrap rounded-md border px-2.5 py-0.5 text-xs font-semibold ${
+        className={`justify-self-end whitespace-nowrap rounded-md border px-2.5 py-0 text-xs leading-5 font-semibold ${
           abierto
             ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
             : "border-blue-300 bg-white text-blue-700 group-hover:border-blue-600 group-hover:bg-blue-600 group-hover:text-white dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300"
@@ -85,7 +85,7 @@ export function CapturaRapida({
     </>
   );
   const claseFila =
-    "group flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 text-left hover:bg-blue-50 sm:grid sm:grid-cols-[minmax(0,9.5rem)_6.5rem_4.5rem_minmax(0,1fr)_auto] dark:hover:bg-slate-800";
+    "group flex w-full flex-wrap items-center gap-x-3 gap-y-0 px-3 py-0.5 text-left leading-tight hover:bg-blue-50 sm:grid sm:grid-cols-[minmax(0,9.5rem)_6.5rem_4.5rem_minmax(0,1fr)_auto] dark:hover:bg-slate-800";
 
   // Sin permiso de escribir en Cargolink o etapa compleja: abre la captura completa.
   if (!puedeEditar || !simple) {
