@@ -8,7 +8,7 @@
 // Todo se guarda en Cargolink sin notificar al cliente; las fechas quedan en
 // edición. Los avisos solo cuentan como hechos al finalizarse (sin notificar).
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { fechaCorta, hoyMexico } from "@/lib/track";
 import { guardarEtapaCargolink } from "@/app/(app)/operaciones-maritima/actions";
 
@@ -408,5 +408,40 @@ export function CapturaArribo({
         </p>
       )}
     </div>
+  );
+}
+
+// Ventana emergente propia para las capturas de Tránsito y Arribo (Ramón, 9 nov):
+// se abre encima del detalle para no confundirla con la tabla de hitos.
+export function VentanaCaptura({ titulo, onCerrar, children }: { titulo: string; onCerrar: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = ref.current;
+    if (d && !d.open) d.showModal();
+    return () => d?.close();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      onClose={onCerrar}
+      onCancel={(e) => {
+        e.preventDefault();
+        onCerrar();
+      }}
+      className="m-auto w-[min(56rem,calc(100vw-2rem))] max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-900/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+    >
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3 dark:border-slate-700 dark:bg-slate-900">
+        <h2 className="text-base font-semibold">{titulo}</h2>
+        <button
+          type="button"
+          onClick={onCerrar}
+          aria-label="Cerrar"
+          className="rounded-md px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+          ×
+        </button>
+      </div>
+      <div className="px-5 py-4">{children}</div>
+    </dialog>
   );
 }

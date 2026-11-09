@@ -7,7 +7,7 @@ import { ESTADOS, explicarPropuestaDias, fechaCorta, hoyMexico, type EstadoHito 
 import { NavieraDialog } from "@/components/NavieraDialog";
 import { VerCorreo, type Evidencia } from "@/components/VerCorreo";
 import { PropuestoCelda } from "@/components/PropuestoCelda";
-import { CapturaArribo, CapturaTransito, resumenGrupo, semaforo } from "@/components/CapturaGrupo";
+import { CapturaArribo, CapturaTransito, VentanaCaptura, resumenGrupo, semaforo } from "@/components/CapturaGrupo";
 import { cargolinkDeHito, propuestosPorHito, type NavieraPropuesto } from "@/lib/propuestoHito";
 import { ResumenComercialDialog } from "@/components/ResumenComercialDialog";
 import { NAVIERAS_CON_AGENTE, coincideRazonSocial, ligaRastreo, navieraRastreo, nombreNaviera } from "@/lib/navieras";
@@ -239,6 +239,8 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   // Etapa de Cargolink abierta en la ventana de detalle (clave his_mov_*).
   const [etapaAbierta, setEtapaAbierta] = useState<{ clave: string; label: string; n: number } | null>(null);
   const [pdfNotArribo, setPdfNotArribo] = useState(false);
+  // Etapas en Cargolink: en ventana aparte para dejar limpia la pantalla (Ramón, 9 nov).
+  const [verEtapas, setVerEtapas] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   // Estado del refresco contra Cargolink al abrir la ventana.
   const [refresco, setRefresco] = useState<{ estado: "cargando" | "ok" | "error"; mensaje: string } | null>(null);
@@ -296,6 +298,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
       setError(null);
       setEditando(null);
       setEtapaAbierta(null);
+      setVerEtapas(false);
       setAviso(null);
       setCargando(true);
       dialogRef.current?.showModal();
@@ -323,6 +326,9 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   // la etapa Origen de Cargolink. Se muestra antes de ATD; solo informativo para Track.
   const ORDEN_ETD = -1;
   const ORDEN_TRANSITO = -2;
+  // Cada etapa en su propio recuadro (Ramón, 9 nov).
+  const SECCIONES_HITOS = ["Salida", "Transito", "Arribo", "Otros"];
+  const seccionHito = (h: { orden: number; hito: string }) => (h.hito === "ATD" ? "Salida" : (GRUPO_HITO[h.orden] ?? "Otros"));
   const ORDEN_ARRIBO = -3;
   // Agrupación en viñetas (Ramón, 9 nov). Salida = ETD - POL + ATD - POL (arriba).
   const GRUPO_HITO: Record<number, string> = { 11: "Transito", 2: "Transito", 3: "Transito", 4: "Transito", 5: "Transito", 6: "Transito", 7: "Arribo", 8: "Arribo", 9: "Arribo", 10: "Arribo" };
@@ -575,8 +581,19 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                       Fuera de seguimiento activo: creada hace más de 180 días o con el vacío ya devuelto.
                     </p>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-sm">
+                    <div className="space-y-3 overflow-x-auto p-3">
+                      {SECCIONES_HITOS.filter((sec) => hitos.some((h) => seccionHito(h) === sec)).map((sec, iSec) => (
+                      <div key={sec} className="min-w-[56rem] overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                      <table className="w-full table-fixed text-sm">
+                        <colgroup>
+                          <col className="w-[34%]" />
+                          <col className="w-[10%]" />
+                          <col className="w-[10%]" />
+                          <col className="w-[13%]" />
+                          <col className="w-[15%]" />
+                          <col className="w-[18%]" />
+                        </colgroup>
+                        {iSec === 0 && (
                         <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                           <tr>
                             <th scope="col" className="px-4 py-2 font-semibold">Hito</th>
@@ -587,8 +604,10 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                             <th scope="col" className="px-4 py-2 font-semibold">Etapa en Cargolink</th>
                           </tr>
                         </thead>
+                        )}
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                           {hitos.map((h, i) => {
+                            if (seccionHito(h) !== sec) return null;
                             const grupo = GRUPO_HITO[h.orden];
                             const abreGrupo = Boolean(grupo) && GRUPO_HITO[hitos[i - 1]?.orden] !== grupo;
                             const vineta = h === atdHito || Boolean(grupo);
@@ -628,27 +647,6 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                                     </span>
                                   </td>
                                 </tr>
-                                {editando === (grupo === "Transito" ? ORDEN_TRANSITO : grupo === "Arribo" ? ORDEN_ARRIBO : NaN) && (
-                                  <tr>
-                                    <td colSpan={6} className="bg-slate-50 px-4 py-3 dark:bg-slate-800/50">
-                                      {(() => {
-                                        const props = {
-                                          op,
-                                          idBooking,
-                                          hitos,
-                                          onCancelar: () => setEditando(null),
-                                          onGuardado: (mensaje: string) => {
-                                            huboCambios.current = true;
-                                            setEditando(null);
-                                            setAviso(mensaje);
-                                            cargar(idBooking);
-                                          },
-                                        };
-                                        return grupo === "Transito" ? <CapturaTransito {...props} /> : <CapturaArribo {...props} />;
-                                      })()}
-                                    </td>
-                                  </tr>
-                                )}
                                 </>
                               )}
                               {h === atdHito && (
@@ -793,15 +791,46 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                           })}
                         </tbody>
                       </table>
+                      </div>
+                      ))}
+                      {op && (editando === ORDEN_TRANSITO || editando === ORDEN_ARRIBO) && (
+                        <VentanaCaptura
+                          titulo={`${editando === ORDEN_TRANSITO ? "Captura de tránsito" : "Captura de arribo"} · ${String(op.no_booking ?? "")}`}
+                          onCerrar={() => setEditando(null)}
+                        >
+                          {(() => {
+                            const props = {
+                              op,
+                              idBooking,
+                              hitos,
+                              onCancelar: () => setEditando(null),
+                              onGuardado: (mensaje: string) => {
+                                huboCambios.current = true;
+                                setEditando(null);
+                                setAviso(mensaje);
+                                cargar(idBooking);
+                              },
+                            };
+                            return editando === ORDEN_TRANSITO ? <CapturaTransito {...props} /> : <CapturaArribo {...props} />;
+                          })()}
+                        </VentanaCaptura>
+                      )}
                     </div>
                   )}
                 </section>
 
-                <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50">Etapas en Cargolink</h3>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">En el orden de Cargolink · fecha = cuándo se marcó</span>
-                  </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setVerEtapas(true)}
+                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    Ver etapas en Cargolink
+                  </button>
+                </div>
+                {verEtapas && (
+                <VentanaCaptura titulo={`Etapas en Cargolink · ${String(op.no_booking ?? "")}`} onCerrar={() => setVerEtapas(false)}>
+                  <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">En el orden de Cargolink · fecha = cuándo se marcó · clic en una etapa para ver sus datos</p>
                   <div className="space-y-4">
                     {FASES_CARGOLINK.map((fase, iFase) => {
                       const inicio = FASES_CARGOLINK.slice(0, iFase).reduce((n, f) => n + f.etapas.length, 0);
@@ -844,7 +873,8 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                       );
                     })}
                   </div>
-                </section>
+                </VentanaCaptura>
+                )}
               </>
             )}
           </div>
