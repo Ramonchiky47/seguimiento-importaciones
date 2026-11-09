@@ -595,8 +595,14 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                               <Fragment key={h.orden}>
                               {h === atdHito && (
                                 <>
+                                  <tr className="bg-slate-50/60 dark:bg-slate-800/40">
+                                    <td colSpan={6} className="px-4 pb-0.5 pt-2 text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                                      Salida
+                                    </td>
+                                  </tr>
                                   <tr>
-                                    <td className="px-4 py-2">
+                                    <td className="py-2 pl-8 pr-4">
+                                      <span aria-hidden className="mr-2 text-slate-400">•</span>
                                       <span className="font-semibold text-slate-900 dark:text-slate-100">ETD - POL</span>
                                       <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">Estimado de salida</span>
                                     </td>
@@ -650,8 +656,9 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                                 </>
                               )}
                               <tr className={h.estado === "no_aplica" ? "opacity-50" : ""}>
-                                <td className="px-4 py-2">
-                                  <span className="font-semibold text-slate-900 dark:text-slate-100">{h.hito === "ATD" ? "ATD - POL" : h.hito}</span>
+                                <td className={h === atdHito ? "py-2 pl-8 pr-4" : "px-4 py-2"}>
+                                  {h === atdHito && <span aria-hidden className="mr-2 text-slate-400">•</span>}
+                                  <span className="font-semibold text-slate-900 dark:text-slate-100">{h === atdHito ? "ATD - POL" : h.hito}</span>
                                   <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">{h.regla}</span>
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fechaCorta(h.fecha_plan)}</td>
