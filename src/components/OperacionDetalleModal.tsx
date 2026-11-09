@@ -277,7 +277,13 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
         supabase.from("tracking_naviera").select("ok, eta_naviera, ata_naviera").eq("id_booking", id).maybeSingle(),
       ]).then(([opRes, hitosRes, correoRes, navRes]) => {
         if (idActual.current !== id) return;
-        if (opRes.error) setError(opRes.error.message);
+        // Sin sesión válida en el navegador la base responde "permission denied" (401).
+        if (opRes.error)
+          setError(
+            /permission denied|JWT/i.test(opRes.error.message)
+              ? "Tu sesión expiró. Recarga la página (F5) y, si sigue, vuelve a iniciar sesión."
+              : opRes.error.message,
+          );
         setOp((opRes.data as Operacion | null) ?? null);
         setHitos((hitosRes.data ?? []) as Hito[]);
         setCorreo((correoRes.data as CorreoBooking | null) ?? null);
