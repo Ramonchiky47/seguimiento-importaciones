@@ -110,7 +110,21 @@ function CampoFecha({
         {sem && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${sem.clase}`}>{sem.label}</span>}
       </span>
       <span className="flex gap-1">
-        <input type="date" aria-label={label} value={valor} onChange={(e) => onCambiar(e.target.value)} className={claseInput} />
+        <input
+          type="date"
+          aria-label={label}
+          value={valor}
+          onChange={(e) => onCambiar(e.target.value)}
+          className={`${claseInput} ${
+            cierre && valor && !cierre.cambio
+              ? cierre.mov === "FINALIZADO"
+                ? "border-green-300 bg-green-50! dark:border-green-800 dark:bg-green-950/40!"
+                : cierre.mov === "EDICION"
+                  ? "border-blue-300 bg-blue-50! dark:border-blue-800 dark:bg-blue-950/40!"
+                  : ""
+              : ""
+          }`}
+        />
         <button
           type="button"
           onClick={() => onCambiar(hoyMexico())}

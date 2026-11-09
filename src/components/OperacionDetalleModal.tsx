@@ -222,6 +222,15 @@ type Hito = {
   valor_real: string | null;
 };
 
+// Celda de fecha según la etapa en Cargolink (Ramón, 9 nov): verde claro = finalizada,
+// azul claro = guardada en edición.
+export function fondoEtapa(mov: string | undefined, hayValor = true): string {
+  if (!hayValor) return "";
+  if (mov === "FINALIZADO") return "bg-green-50 dark:bg-green-950/40";
+  if (mov === "EDICION") return "bg-blue-50 dark:bg-blue-950/40";
+  return "";
+}
+
 function texto(v: unknown): string {
   return v === null || v === undefined || v === "" ? "—" : String(v);
 }
@@ -668,8 +677,8 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                                       <span className="font-semibold text-slate-900 dark:text-slate-100">ETD - POL</span>
                                       <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">Estimado de salida</span>
                                     </td>
-                                    <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fechaCorta(etdIso)}</td>
-                                    <td className="whitespace-nowrap px-3 py-2 tabular-nums">{atdHito?.hecho ? fechaCorta(atdHito.fecha_hecho) : "—"}</td>
+                                    <td className={`whitespace-nowrap px-3 py-2 tabular-nums ${fondoEtapa(movOrigen, Boolean(etdIso))}`}>{fechaCorta(etdIso)}</td>
+                                    <td className={`whitespace-nowrap px-3 py-2 tabular-nums ${fondoEtapa(datos.his_mov_atd, Boolean(atdHito?.hecho))}`}>{atdHito?.hecho ? fechaCorta(atdHito.fecha_hecho) : "—"}</td>
                                     <td className="px-3 py-2 text-slate-400">—</td>
                                     <td className="whitespace-nowrap px-3 py-2">
                                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ESTADOS[estadoEtd].pill}`}>{ESTADOS[estadoEtd].label}</span>
@@ -724,7 +733,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                                   <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">{h.regla}</span>
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fechaCorta(h.fecha_plan)}</td>
-                                <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                                <td className={`whitespace-nowrap px-3 py-2 tabular-nums ${fondoEtapa(movEtapa, Boolean(h.valor_real ?? (h.hecho && h.fecha_hecho)))}`}>
                                   {h.valor_real ?? (h.hecho ? fechaCorta(h.fecha_hecho) : "—")}
                                 </td>
                                 <td className="px-3 py-2">
