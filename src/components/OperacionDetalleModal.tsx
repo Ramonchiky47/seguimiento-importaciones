@@ -322,7 +322,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
   // la etapa Origen de Cargolink. Se muestra antes de ATD; solo informativo para Track.
   const ORDEN_ETD = -1;
   // Agrupación en viñetas (Ramón, 9 nov). Salida = ETD - POL + ATD - POL (arriba).
-  const GRUPO_HITO: Record<number, string> = { 11: "Transito", 2: "Transito", 3: "Transito", 4: "Transito", 5: "Transito", 6: "Transito" };
+  const GRUPO_HITO: Record<number, string> = { 11: "Transito", 2: "Transito", 3: "Transito", 4: "Transito", 5: "Transito", 6: "Transito", 7: "Arribo", 8: "Arribo", 9: "Arribo", 10: "Arribo" };
   const etdIso = /^\d{4}-\d{2}-\d{2}/.test(datos.fecha_estimada ?? "") && !datos.fecha_estimada.startsWith("0000") ? datos.fecha_estimada.slice(0, 10) : null;
   const atdHito = hitos.find((h) => h.hito === "ATD");
   const estadoEtd: EstadoHito = (() => {
