@@ -716,7 +716,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                               <tr className={h.estado === "no_aplica" ? "opacity-50" : ""}>
                                 <td className={vineta ? "py-2 pl-8 pr-4" : "px-4 py-2"}>
                                   {vineta && <span aria-hidden className="mr-2 text-slate-400">•</span>}
-                                  <span className="font-semibold text-slate-900 dark:text-slate-100">{h === atdHito ? "ATD - POL" : h.hito}</span>
+                                  <span className="font-semibold text-slate-900 dark:text-slate-100">{h === atdHito ? "ATD - POL" : h.orden === 7 || h.orden === 8 ? `${h.hito} - POD` : h.hito}</span>
                                   <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">{h.regla}</span>
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fechaCorta(h.fecha_plan)}</td>

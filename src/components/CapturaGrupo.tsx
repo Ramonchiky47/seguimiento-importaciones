@@ -379,7 +379,7 @@ export function CapturaArribo({
         Captura de arribo <span className="font-normal text-slate-500 dark:text-slate-400">· solo se guarda lo que cambies, sin notificar al cliente</span>
       </p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <CampoFecha label="① ATA (arribo real)" valor={ata} onCambiar={setAta} sem={semAta} ayuda={`Se espera en la ETA${op.eta ? ` (${fechaCorta(String(op.eta))})` : ""}`} />
+        <CampoFecha label="① ATA - POD (arribo real)" valor={ata} onCambiar={setAta} sem={semAta} ayuda={`Se espera en la ETA${op.eta ? ` (${fechaCorta(String(op.eta))})` : ""}`} />
         <label className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
           <span className="font-semibold">Días libres de demora</span>
           <input
@@ -393,7 +393,7 @@ export function CapturaArribo({
           <span className="text-[11px] text-slate-500 dark:text-slate-400">Se guardan junto con el ATA.</span>
         </label>
         <CasillaAviso
-          label="② Aviso de ATA"
+          label="② Aviso de ATA - POD"
           hecho={avisoHecho}
           marcado={aviso}
           onCambiar={setAviso}
