@@ -581,17 +581,17 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                       Fuera de seguimiento activo: creada hace más de 180 días o con el vacío ya devuelto.
                     </p>
                   ) : (
-                    <div className="space-y-3 overflow-x-auto p-3">
+                    <div className="space-y-3 p-3">
                       {SECCIONES_HITOS.filter((sec) => hitos.some((h) => seccionHito(h) === sec)).map((sec, iSec) => (
-                      <div key={sec} className="min-w-[56rem] overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-                      <table className="w-full table-fixed text-sm">
+                      <div key={sec} className="overflow-x-auto rounded-xl border border-slate-300 dark:border-slate-600">
+                      <table className="w-full min-w-[52rem] table-fixed text-sm">
                         <colgroup>
-                          <col className="w-[34%]" />
+                          <col className="w-[28%]" />
                           <col className="w-[10%]" />
-                          <col className="w-[10%]" />
-                          <col className="w-[13%]" />
-                          <col className="w-[15%]" />
-                          <col className="w-[18%]" />
+                          <col className="w-[9%]" />
+                          <col className="w-[12%]" />
+                          <col className="w-[17%]" />
+                          <col className="w-[24%]" />
                         </colgroup>
                         {iSec === 0 && (
                         <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
