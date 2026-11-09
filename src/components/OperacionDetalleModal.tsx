@@ -736,7 +736,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                                 <td className={`whitespace-nowrap px-3 py-1 tabular-nums ${fondoEtapa(movEtapa, Boolean(h.valor_real ?? (h.hecho && h.fecha_hecho)))}`}>
                                   {h.valor_real ?? (h.hecho ? fechaCorta(h.fecha_hecho) : "—")}
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="overflow-hidden px-3 py-1">
                                   <PropuestoCelda items={propuestos[h.orden]} real={cargolinkDeHito(h.orden, op)} />
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-1">
