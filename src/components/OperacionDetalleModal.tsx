@@ -809,6 +809,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                               op,
                               idBooking,
                               hitos,
+                              propuestos,
                               onCancelar: () => setEditando(null),
                               onGuardado: (mensaje: string) => {
                                 huboCambios.current = true;

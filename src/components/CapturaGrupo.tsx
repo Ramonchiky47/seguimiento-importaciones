@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { fechaCorta, hoyMexico } from "@/lib/track";
 import { guardarEtapaCargolink } from "@/app/(app)/operaciones-maritima/actions";
+import type { Propuesto } from "@/lib/propuestoHito";
 
 export type HitoGrupo = {
   orden: number;
@@ -88,13 +89,16 @@ function CampoFecha({
   onCambiar,
   sem,
   ayuda,
+  propuestas,
 }: {
   label: string;
   valor: string;
   onCambiar: (v: string) => void;
   sem?: Semaforo;
   ayuda?: string;
+  propuestas?: Propuesto[];
 }) {
+  const utiles = (propuestas ?? []).filter((p) => p.fecha && p.nota !== "estimada");
   return (
     <label className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
       <span className="flex items-center gap-2">
@@ -111,6 +115,27 @@ function CampoFecha({
           Hoy
         </button>
       </span>
+      {utiles.map((p) => (
+        <span key={`${p.fuente}-${p.fecha}`} className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          <span className="rounded-full bg-violet-100 px-2 py-0.5 font-bold text-violet-800 dark:bg-violet-950 dark:text-violet-300">
+            Propuesta {p.fuente.toLowerCase() === "naviera" ? "de la naviera" : "del correo"}: {p.valor}
+          </span>
+          {valor === p.fecha ? (
+            <span className="font-semibold text-green-700 dark:text-green-400">coincide</span>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                onCambiar(p.fecha!);
+              }}
+              className="rounded-md border border-violet-300 px-2 py-0.5 font-semibold text-violet-800 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950"
+            >
+              Usar
+            </button>
+          )}
+        </span>
+      ))}
       {ayuda && <span className="text-[11px] text-slate-500 dark:text-slate-400">{ayuda}</span>}
     </label>
   );
@@ -212,12 +237,14 @@ export function CapturaTransito({
   hitos,
   onGuardado,
   onCancelar,
+  propuestos,
 }: {
   op: Op;
   idBooking: number;
   hitos: HitoGrupo[];
   onGuardado: (mensaje: string) => void;
   onCancelar: () => void;
+  propuestos?: Record<number, Propuesto[]>;
 }) {
   const h = (orden: number) => hitos.find((x) => x.orden === orden);
   const ata = fecha(op.ata) || null;
@@ -265,8 +292,12 @@ export function CapturaTransito({
       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
         Captura de tránsito <span className="font-normal text-slate-500 dark:text-slate-400">· solo se guarda lo que cambies, sin notificar al cliente</span>
       </p>
+      <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+        Puedes capturar <b>uno a la vez</b>: llena solo lo que ya tengas y presiona Guardar cambios; lo demás queda igual. Un campo vacío no se toca.
+        Las propuestas (en morado) vienen de la naviera o del último correo: presiona <b>Usar</b> para pasarlas al campo y revísalas antes de guardar.
+      </p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <CampoFecha label="ETA" valor={v.eta} onCambiar={cambiar("eta")} ayuda="Fecha base: de aquí salen las fechas límite." />
+        <CampoFecha label="ETA" valor={v.eta} onCambiar={cambiar("eta")} propuestas={propuestos?.[2]} ayuda="Fecha base: de aquí salen las fechas límite." />
         <CasillaAviso
           label="① Aviso de arribo"
           hecho={avisoHecho}
@@ -330,12 +361,14 @@ export function CapturaArribo({
   hitos,
   onGuardado,
   onCancelar,
+  propuestos,
 }: {
   op: Op;
   idBooking: number;
   hitos: HitoGrupo[];
   onGuardado: (mensaje: string) => void;
   onCancelar: () => void;
+  propuestos?: Record<number, Propuesto[]>;
 }) {
   const h = (orden: number) => hitos.find((x) => x.orden === orden);
   const ataIni = fecha(op.ata);
@@ -378,8 +411,12 @@ export function CapturaArribo({
       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
         Captura de arribo <span className="font-normal text-slate-500 dark:text-slate-400">· solo se guarda lo que cambies, sin notificar al cliente</span>
       </p>
+      <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+        Puedes capturar <b>uno a la vez</b>: llena solo lo que ya tengas y presiona Guardar cambios; lo demás queda igual. Un campo vacío no se toca.
+        Las propuestas (en morado) vienen de la naviera o del último correo: presiona <b>Usar</b> para pasarlas al campo y revísalas antes de guardar.
+      </p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <CampoFecha label="① ATA - POD (arribo real)" valor={ata} onCambiar={setAta} sem={semAta} ayuda={`Se espera en la ETA${op.eta ? ` (${fechaCorta(String(op.eta))})` : ""}`} />
+        <CampoFecha label="① ATA - POD (arribo real)" valor={ata} onCambiar={setAta} sem={semAta} propuestas={propuestos?.[7]} ayuda={`Se espera en la ETA${op.eta ? ` (${fechaCorta(String(op.eta))})` : ""}`} />
         <label className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-300">
           <span className="font-semibold">Días libres de demora</span>
           <input
