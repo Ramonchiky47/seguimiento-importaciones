@@ -130,7 +130,7 @@ const TIPOS: { tipo: Propuesta["tipo"]; titulo: string; accion: string; ayuda: s
       "La naviera trae otra ETA y la etapa ETA ya está finalizada en Cargolink. Al confirmar se libera la etapa (como Liberación > Liberar etapas) y se guarda la fecha; queda en edición para finalizarla al arribo.",
   },
   { tipo: "transbordo", titulo: "Transbordo → No aplica", accion: "Marcar No aplica", ayuda: "La naviera casi nunca transborda en esa ruta." },
-  { tipo: "eta_finalizar", titulo: "Finalizar ETA", accion: "Finalizar con la ETA capturada", ayuda: "La ETA ya está capturada; falta finalizar la etapa en Cargolink." },
+  { tipo: "eta_finalizar", titulo: "ETA confirmada", accion: "Guardar ETA (sin finalizar)", ayuda: "La naviera confirma la ETA o ya arribó. Se guarda la fecha (puedes modificarla) y la etapa queda en edición: no se finaliza." },
   { tipo: "eta", titulo: "ETA propuesta", accion: "Guardar ETA (queda en edición)", ayuda: "Zarpó sin ETA: ATD + tránsito típico de la naviera." },
   { tipo: "dias", titulo: "Días libres de demora", accion: "Guardar días libres", ayuda: "Ya arribó y no tiene días libres: según el historial." },
 ];
@@ -267,7 +267,7 @@ export function PropuestasPorConfirmar({
           : p.tipo === "eta"
             ? await guardarEtapaCargolink(p.id_booking, "eta", "EDICION", { buque_eta: v })
             : p.tipo === "eta_finalizar"
-              ? await guardarEtapaCargolink(p.id_booking, "eta", "FINALIZADO", { buque_eta: v })
+              ? await guardarEtapaCargolink(p.id_booking, "eta", "EDICION", { buque_eta: v })
               : await guardarEtapaCargolink(p.id_booking, "ata", "EDICION", { dias_demora: v });
       res[clave(p)] = r;
       setResultado({ ...res });
