@@ -360,7 +360,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
         : "text-slate-900 dark:text-slate-50";
 
   const indicador = (label: string, valor: string, clase = "text-slate-900 dark:text-slate-50") => (
-    <div className="rounded-[10px] border border-slate-200 px-3 py-2.5 dark:border-slate-700">
+    <div className="rounded-xl border border-slate-300 px-3 py-2.5 dark:border-slate-600">
       <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
       <p className={`text-lg font-extrabold tabular-nums ${clase}`}>{valor}</p>
     </div>
@@ -530,7 +530,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                   {indicador("Días demora", demoraTexto, demoraClase)}
                 </div>
 
-                <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                <section className="rounded-xl border border-slate-300 bg-white p-4 dark:border-slate-600 dark:bg-slate-900">
                   <h3 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-50">Datos generales</h3>
                   <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
                     {campo("Fecha", fechaCorta(op.fecha as string | null))}
@@ -567,7 +567,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
 
                 <ResumenComercialSeccion key={idBooking} idBooking={idBooking} datos={datos} noBooking={texto(op.no_booking)} />
 
-                <section className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+                <section className="overflow-hidden rounded-xl border border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-900">
                   <h3 className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 dark:border-slate-800 dark:text-slate-50">
                     Hitos de seguimiento (Track)
                   </h3>
@@ -2231,7 +2231,7 @@ export function ResumenComercialSeccion({
   const hayCambios = (r?.cambios.length ?? 0) > 0;
 
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <section className="overflow-hidden rounded-xl border border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-900">
       {completo && r && datos && (
         <ResumenComercialDialog noBooking={noBooking ?? ""} datos={datos} r={r} onCerrar={() => setCompleto(false)} />
       )}
@@ -2563,7 +2563,7 @@ export function NavieraSeccion({
   );
   if (sinAgente)
     return (
-      <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <section className="rounded-xl border border-slate-300 bg-white p-4 dark:border-slate-600 dark:bg-slate-900">
         <h3 className="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
           Información de la naviera{detectada.naviera ? ` (${detectada.naviera})` : ""}
         </h3>
@@ -2592,7 +2592,7 @@ export function NavieraSeccion({
     ) : null;
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <section className="rounded-xl border border-slate-300 bg-white p-4 dark:border-slate-600 dark:bg-slate-900">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50">
           Información de la naviera{t?.ok || detectada.naviera ? ` (${naviera})` : ""}
