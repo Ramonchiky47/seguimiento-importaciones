@@ -651,7 +651,7 @@ export function OperacionDetalleModal({ puedeEditar }: { puedeEditar: boolean })
                               )}
                               <tr className={h.estado === "no_aplica" ? "opacity-50" : ""}>
                                 <td className="px-4 py-2">
-                                  <span className="font-semibold text-slate-900 dark:text-slate-100">{h.hito}</span>
+                                  <span className="font-semibold text-slate-900 dark:text-slate-100">{h.hito === "ATD" ? "ATD - POL" : h.hito}</span>
                                   <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">{h.regla}</span>
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-2 tabular-nums">{fechaCorta(h.fecha_plan)}</td>
