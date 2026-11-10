@@ -30,6 +30,7 @@ const GRUPOS: { label: string; tabs: Tab[] }[] = [
       { href: "/track/info-correos", label: "Info correos" },
       { href: "/track/bitacora", label: "Bitácora" },
       { href: "/track/cambios-cargolink", label: "Cambios en Cargolink" },
+      { href: "/track/aplicaciones", label: "Aplicaciones por etapa" },
     ],
   },
 ];
