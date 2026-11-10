@@ -146,15 +146,27 @@ export default async function InfoCorreosPage() {
   const supabase = await createClient();
   const permisos = await getMyPermissions();
   // Por ahora solo FCL: los LCL van con coloader y la naviera no los reconoce.
-  const { data, error } = await supabase.from("info_correos").select("*").like("no_booking", "%-FCL%").order("fecha_correo", { ascending: false }).limit(200);
-  const correos = (data ?? []) as Correo[];
+  // Todos los correos (Ramón, 10 nov: antes solo los 200 más recientes), de mil en mil.
+  const correos: Correo[] = [];
+  let error: { message: string } | null = null;
+  for (let i = 0; ; i += 1000) {
+    const r = await supabase.from("info_correos").select("*").like("no_booking", "%-FCL%").order("fecha_correo", { ascending: false }).order("id").range(i, i + 999);
+    if (r.error) {
+      error = r.error;
+      break;
+    }
+    correos.push(...((r.data ?? []) as Correo[]));
+    if ((r.data ?? []).length < 1000) break;
+  }
   const ids = [...new Set(correos.map((c) => c.id_booking))];
-  const { data: ops } = ids.length
-    ? await supabase
-        .from("operaciones_maritima")
-        .select("id_booking, no_booking, cliente, ejecutivo, mbl, contenedores, etd_atd, fecha_estimada:datos->>fecha_estimada, eta, ata, origen, destino, shipper, consignatario, buque:datos->>buque, viaje:datos->>no_viaje, id_carrier:datos->>buque_carrier, agente_ext:datos->>nameAgenExt, sitio_origen:datos->>sitioOrigenNombre, sitio_destino:datos->>sitioDestinoNombre, dias_demora:datos->>dias_demora")
-        .in("id_booking", ids)
-    : { data: [] };
+  const ops: Record<string, unknown>[] = [];
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data: parte } = await supabase
+      .from("operaciones_maritima")
+      .select("id_booking, no_booking, cliente, ejecutivo, mbl, contenedores, etd_atd, fecha_estimada:datos->>fecha_estimada, eta, ata, origen, destino, shipper, consignatario, buque:datos->>buque, viaje:datos->>no_viaje, id_carrier:datos->>buque_carrier, agente_ext:datos->>nameAgenExt, sitio_origen:datos->>sitioOrigenNombre, sitio_destino:datos->>sitioDestinoNombre, dias_demora:datos->>dias_demora")
+      .in("id_booking", ids.slice(i, i + 300));
+    ops.push(...((parte ?? []) as Record<string, unknown>[]));
+  }
   const carriers = [...new Set((ops ?? []).map((o) => o.id_carrier as string).filter(Boolean))];
   const { data: provs } = carriers.length
     ? await supabase.from("proveedores_cargolink").select("id_proveedor, razonsocial").in("id_proveedor", carriers)
