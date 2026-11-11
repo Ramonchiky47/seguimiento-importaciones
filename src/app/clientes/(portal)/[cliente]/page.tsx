@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { hoyMexico } from "@/lib/track";
 import { armarEmbarque, difDias, fc, narrativa, type FilaPortal } from "@/lib/portalClientes";
-import { ListaEmbarquesCliente } from "@/components/ListaEmbarquesCliente";
+import { PortalClienteVista } from "@/components/ListaEmbarquesCliente";
 
 export const dynamic = "force-dynamic";
 
@@ -21,14 +21,6 @@ export default async function PortalCliente({ params }: { params: Promise<{ clie
   const es = filas.map((x) => armarEmbarque(x, hoy));
   const parrafos = narrativa(es, hoy);
   const ejecutivo = filas.map((f) => f.ej).find(Boolean) ?? "";
-  const n = (k: string) => es.filter((e) => e.estado === k).length;
-  const kpis: [string, number][] = [
-    ["Por zarpar", n("zarpar")],
-    ["En tránsito", n("transito")],
-    ["En puerto", n("puerto")],
-    ["Por cerrar", n("cierre")],
-    ["Contenedores", es.reduce((a, e) => a + e.contenedores.length, 0)],
-  ];
 
   // Avisos: días libres por vencer (agrupados por fecha) y arribos atrasados.
   const avisos: { tipo: "crit" | "warn"; etiqueta: string; texto: string }[] = [];
@@ -76,18 +68,10 @@ export default async function PortalCliente({ params }: { params: Promise<{ clie
         )}
       </div>
 
-      <div className="mt-4 grid max-w-[72ch] gap-2.5 text-base leading-relaxed">
+      <PortalClienteVista embarques={es}>
+      <div className="mt-5 grid max-w-[72ch] gap-2.5 text-base leading-relaxed">
         {parrafos.map((p) => (
           <p key={p}>{p}</p>
-        ))}
-      </div>
-
-      <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-5 dark:border-slate-700 dark:bg-slate-700">
-        {kpis.map(([t, v]) => (
-          <div key={t} className="grid gap-0.5 bg-white px-4 py-3 dark:bg-[#14222a]">
-            <b className="text-3xl leading-none font-semibold tabular-nums">{v}</b>
-            <span className="text-[13px] text-slate-500 dark:text-slate-400">{t}</span>
-          </div>
         ))}
       </div>
 
@@ -132,10 +116,7 @@ export default async function PortalCliente({ params }: { params: Promise<{ clie
         )}
       </section>
 
-      <section className="mt-8 grid gap-3">
-        <h2 className="text-xl font-semibold">Tus embarques</h2>
-        <ListaEmbarquesCliente embarques={es} />
-      </section>
+      </PortalClienteVista>
     </main>
   );
 }

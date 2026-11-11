@@ -3,7 +3,7 @@
 // Lista de embarques del portal de clientes: filtros por etapa, búsqueda y tarjetas
 // con la escala de seis pasos, el texto explicado y el detalle desplegable.
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ETIQUETA, PASOS, fc, type Embarque, type EstadoCliente } from "@/lib/portalClientes";
 
 const ORDEN: Record<EstadoCliente, number> = { puerto: 0, transito: 1, zarpar: 2, cierre: 3, cerrado: 4 };
@@ -94,17 +94,47 @@ function Tarjeta({ e }: { e: Embarque }) {
   );
 }
 
-export function ListaEmbarquesCliente({ embarques }: { embarques: Embarque[] }) {
-  const [filtro, setFiltro] = useState<EstadoCliente | "todos">("todos");
+type Filtro = EstadoCliente | "todos" | "zarparon";
+const zarpo = (e: Embarque) => e.estado !== "zarpar";
+const coincide = (e: Embarque, f: Filtro) => f === "todos" || (f === "zarparon" ? zarpo(e) : e.estado === f);
+const NOMBRE_FILTRO: Record<Filtro, string> = { todos: "Todos", zarparon: "Zarparon", ...ETIQUETA };
+
+/**
+ * Vista del cliente: tarjetas de resumen arriba (filtran la lista al seleccionarlas),
+ * el contenido del servidor en medio (resumen escrito, avisos, llegadas) y la lista abajo.
+ */
+export function PortalClienteVista({ embarques, children }: { embarques: Embarque[]; children: React.ReactNode }) {
+  const [filtro, setFiltro] = useState<Filtro>("todos");
   const [q, setQ] = useState("");
   const [max, setMax] = useState(20);
-  const cuenta = (k: EstadoCliente) => embarques.filter((e) => e.estado === k).length;
-  const filtros = (["zarpar", "transito", "puerto", "cierre", "cerrado"] as EstadoCliente[]).filter((k) => cuenta(k) > 0);
+  const listaRef = useRef<HTMLElement>(null);
+
+  const tarjetas = (
+    [
+      ["todos", "Activos", "Todos tus embarques"],
+      ["zarpar", "Por zarpar", "Reservados en origen"],
+      ["zarparon", "Zarparon", "Ya salieron de origen"],
+      ["transito", "En tránsito", "Navegando"],
+      ["puerto", "En puerto", "Arribaron a México"],
+      ["cierre", "Por cerrar", "Devolución de vacío"],
+    ] as [Filtro, string, string][]
+  )
+    .map(([f, t, ayuda]) => {
+      const l = embarques.filter((e) => coincide(e, f));
+      return { f, t, ayuda, n: l.length, cont: l.reduce((a, e) => a + e.contenedores.length, 0) };
+    })
+    .filter((x) => x.f !== "cierre" || x.n > 0);
+
+  const elegir = (f: Filtro) => {
+    setFiltro(f);
+    setMax(20);
+    if (f !== "todos") listaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const lista = useMemo(() => {
     const t = q.trim().toUpperCase();
     return embarques
-      .filter((e) => filtro === "todos" || e.estado === filtro)
+      .filter((e) => coincide(e, filtro))
       .filter((e) => !t || [e.booking, e.buque, e.mbl, ...e.contenedores].join(" ").toUpperCase().includes(t))
       .sort(
         (a, b) =>
@@ -114,41 +144,70 @@ export function ListaEmbarquesCliente({ embarques }: { embarques: Embarque[] }) 
       );
   }, [embarques, filtro, q]);
 
-  const chip = (activo: boolean) =>
-    `rounded-full border px-3 py-1 text-[13px] ${activo ? "border-[#13232d] bg-[#13232d] text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900" : "border-slate-300 bg-white hover:border-[#0e6874] dark:border-slate-600 dark:bg-[#14222a]"}`;
-
   return (
-    <div className="grid gap-2.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={chip(filtro === "todos")} aria-pressed={filtro === "todos"} onClick={() => (setFiltro("todos"), setMax(20))}>
-          Todos · {embarques.length}
-        </button>
-        {filtros.map((k) => (
-          <button key={k} type="button" className={chip(filtro === k)} aria-pressed={filtro === k} onClick={() => (setFiltro(k), setMax(20))}>
-            {ETIQUETA[k]} · {cuenta(k)}
-          </button>
-        ))}
-        <input
-          type="search"
-          value={q}
-          onChange={(ev) => (setQ(ev.target.value), setMax(20))}
-          placeholder="Buscar booking, contenedor, buque o BL"
-          aria-label="Buscar"
-          className="ml-auto min-w-0 flex-[1_1_220px] rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm sm:max-w-80 dark:border-slate-600 dark:bg-[#14222a]"
-        />
+    <>
+      <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" role="group" aria-label="Resumen y filtro de embarques">
+        {tarjetas.map((x) => {
+          const activa = filtro === x.f;
+          return (
+            <button
+              key={x.f}
+              type="button"
+              aria-pressed={activa}
+              onClick={() => elegir(activa && x.f !== "todos" ? "todos" : x.f)}
+              className={`grid gap-0.5 rounded-xl border px-4 py-3 text-left transition-colors ${
+                activa
+                  ? "border-[#0e6874] bg-[#0e6874] text-white dark:border-[#4fb3bf] dark:bg-[#4fb3bf] dark:text-[#06191c]"
+                  : "border-slate-200 bg-white hover:border-[#0e6874] dark:border-slate-700 dark:bg-[#14222a] dark:hover:border-[#4fb3bf]"
+              }`}
+            >
+              <span className={`text-[13px] font-semibold ${activa ? "" : "text-slate-600 dark:text-slate-300"}`}>{x.t}</span>
+              <b className="text-3xl leading-tight font-semibold tabular-nums">{x.n}</b>
+              <span className={`text-xs ${activa ? "opacity-90" : "text-slate-500 dark:text-slate-400"}`}>
+                {x.cont} contenedor{x.cont === 1 ? "" : "es"} · {x.ayuda}
+              </span>
+            </button>
+          );
+        })}
       </div>
-      {lista.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-[#14222a]">
-          No hay embarques con ese filtro.
-        </p>
-      ) : (
-        lista.slice(0, max).map((e) => <Tarjeta key={e.booking} e={e} />)
-      )}
-      {lista.length > max && (
-        <button type="button" onClick={() => setMax(max + 20)} className="justify-self-center rounded-md border border-slate-300 bg-white px-4 py-1.5 text-sm hover:border-[#0e6874] dark:border-slate-600 dark:bg-[#14222a]">
-          Ver {Math.min(20, lista.length - max)} más de {lista.length - max}
-        </button>
-      )}
-    </div>
+
+      {children}
+
+      <section ref={listaRef} className="mt-8 grid scroll-mt-4 gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-xl font-semibold">Tus embarques</h2>
+          {filtro !== "todos" && (
+            <button
+              type="button"
+              onClick={() => elegir("todos")}
+              className="rounded-full bg-[#dcedef] px-3 py-0.5 text-[13px] font-semibold text-[#0e6874] dark:bg-[#163a40] dark:text-[#4fb3bf]"
+            >
+              {NOMBRE_FILTRO[filtro]} · {lista.length} <span aria-hidden="true">✕</span>
+              <span className="sr-only">Quitar filtro</span>
+            </button>
+          )}
+          <input
+            type="search"
+            value={q}
+            onChange={(ev) => (setQ(ev.target.value), setMax(20))}
+            placeholder="Buscar booking, contenedor, buque o BL"
+            aria-label="Buscar"
+            className="ml-auto min-w-0 flex-[1_1_220px] rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm sm:max-w-80 dark:border-slate-600 dark:bg-[#14222a]"
+          />
+        </div>
+        {lista.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-[#14222a]">
+            No hay embarques con ese filtro.
+          </p>
+        ) : (
+          lista.slice(0, max).map((e) => <Tarjeta key={e.booking} e={e} />)
+        )}
+        {lista.length > max && (
+          <button type="button" onClick={() => setMax(max + 20)} className="justify-self-center rounded-md border border-slate-300 bg-white px-4 py-1.5 text-sm hover:border-[#0e6874] dark:border-slate-600 dark:bg-[#14222a]">
+            Ver {Math.min(20, lista.length - max)} más de {lista.length - max}
+          </button>
+        )}
+      </section>
+    </>
   );
 }

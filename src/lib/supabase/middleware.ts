@@ -33,9 +33,14 @@ export async function updateSession(request: NextRequest) {
   // Tareas programadas: no tienen sesión y validan su propia clave (CRON_SECRET).
   const isCron = request.nextUrl.pathname.startsWith("/api/cron/");
 
-  if (!user && !isAuthRoute && !isCron) {
+  // Portal de clientes: tiene su propia pantalla de acceso.
+  const ruta = request.nextUrl.pathname;
+  const esPortal = ruta === "/clientes" || ruta.startsWith("/clientes/");
+  const esEntrarPortal = ruta === "/clientes/entrar";
+
+  if (!user && !isAuthRoute && !isCron && !esEntrarPortal) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = esPortal ? "/clientes/entrar" : "/login";
     return NextResponse.redirect(url);
   }
 

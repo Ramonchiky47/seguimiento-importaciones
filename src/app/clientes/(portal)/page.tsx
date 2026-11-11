@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { hoyMexico } from "@/lib/track";
 import { armarEmbarque, type FilaPortal } from "@/lib/portalClientes";
-import portada from "../../../public/clientes/portada.jpg";
+import portada from "../../../../public/clientes/portada.jpg";
 
 export const dynamic = "force-dynamic";
 
