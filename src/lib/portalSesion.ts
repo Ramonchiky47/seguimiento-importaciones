@@ -8,6 +8,10 @@ import { obtenerUsuario } from "@/lib/permissions";
 // - cliente: usuario propio del portal (portal_usuarios), cookie httpOnly con token; ve solo su cliente.
 export const COOKIE_PORTAL = "portal_sesion";
 
+// Prueba con usuarios de cliente (12 nov 2026): Ramón pidió cerrar el acceso por
+// correo (Armando y Ramón). Para reabrirlo, cambiar a true.
+export const REVISORES_ACTIVOS = false;
+
 export type SesionPortal =
   | { tipo: "revisor"; email: string }
   | { tipo: "cliente"; usuario: string; clave: string; nombre: string; token: string }
@@ -23,7 +27,7 @@ export const sesionPortal = cache(async (): Promise<SesionPortal> => {
     const s = (data ?? [])[0] as { usuario: string; clave: string; nombre_visible: string } | undefined;
     if (s) return { tipo: "cliente", usuario: s.usuario, clave: s.clave, nombre: s.nombre_visible, token };
   }
-  const user = await obtenerUsuario();
+  const user = REVISORES_ACTIVOS ? await obtenerUsuario() : null;
   if (user) {
     const { data: acceso } = await supabase.rpc("portal_clientes_acceso");
     if (acceso === true) return { tipo: "revisor", email: user.email ?? "" };

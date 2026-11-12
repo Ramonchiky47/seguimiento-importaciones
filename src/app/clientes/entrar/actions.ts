@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { COOKIE_PORTAL } from "@/lib/portalSesion";
+import { COOKIE_PORTAL, REVISORES_ACTIVOS } from "@/lib/portalSesion";
 
 const ERROR = "Usuario o contraseña incorrectos.";
 
@@ -30,6 +30,7 @@ export async function entrarPortal(_prev: { error: string } | undefined, formDat
     redirect(`/clientes/${s.cliente_clave}`);
   }
 
+  if (!REVISORES_ACTIVOS) return { error: ERROR };
   const { error } = await supabase.auth.signInWithPassword({ email: usuario, password: clave });
   if (error) return { error: ERROR };
   const { data: acceso } = await supabase.rpc("portal_clientes_acceso");
@@ -47,7 +48,7 @@ export async function salirPortal() {
   if (token) {
     await supabase.rpc("portal_salir", { p_token: token });
     jar.delete({ name: COOKIE_PORTAL, path: "/clientes" });
-  } else {
+  } else if (REVISORES_ACTIVOS) {
     await supabase.auth.signOut();
   }
   redirect("/clientes/entrar");
