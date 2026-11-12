@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { sesionPortal } from "@/lib/portalSesion";
 import { hoyMexico } from "@/lib/track";
 import { armarEmbarque, type FilaPortal } from "@/lib/portalClientes";
 import portada from "../../../../public/clientes/portada.jpg";
@@ -10,6 +12,8 @@ export const dynamic = "force-dynamic";
 // Foto de portada: "CMA CGM Seine au port du Havre", Wikimedia Commons, licencia CC0.
 
 export default async function PortalInicio() {
+  const sesion = await sesionPortal();
+  if (sesion?.tipo === "cliente") redirect(`/clientes/${sesion.clave}`);
   const supabase = await createClient();
   const hoy = hoyMexico();
   const { data: lista } = await supabase.rpc("portal_clientes_lista");

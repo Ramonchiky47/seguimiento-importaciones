@@ -11,7 +11,7 @@ export function FormaAccesoPortal() {
     <form action={accion} className="grid gap-4">
       <div className="grid gap-1">
         <label htmlFor="usuario" className="text-sm font-medium text-slate-700 dark:text-slate-300">Usuario</label>
-        <input id="usuario" name="usuario" type="email" required autoComplete="username" placeholder="correo@empresa.com" className={campo} />
+        <input id="usuario" name="usuario" type="text" required autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={120} className={campo} />
       </div>
       <div className="grid gap-1">
         <label htmlFor="clave" className="text-sm font-medium text-slate-700 dark:text-slate-300">Contraseña</label>

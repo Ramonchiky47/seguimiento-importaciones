@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { sesionPortal } from "@/lib/portalSesion";
 import { hoyMexico } from "@/lib/track";
 import { armarEmbarque, difDias, fc, narrativa, type FilaPortal } from "@/lib/portalClientes";
 import { PortalClienteVista } from "@/components/ListaEmbarquesCliente";
@@ -11,11 +12,23 @@ export default async function PortalCliente({ params }: { params: Promise<{ clie
   const { cliente } = await params;
   const supabase = await createClient();
   const hoy = hoyMexico();
-  const [{ data: lista }, { data }] = await Promise.all([
-    supabase.rpc("portal_clientes_lista"),
-    supabase.rpc("portal_clientes_embarques", { p_clave: cliente }),
-  ]);
-  const info = ((lista ?? []) as { clave: string; nombre_visible: string }[]).find((c) => c.clave === cliente);
+  const sesion = await sesionPortal();
+  if (!sesion) notFound();
+  let info: { clave: string; nombre_visible: string } | undefined;
+  let data: unknown;
+  if (sesion.tipo === "cliente") {
+    // Un cliente solo puede abrir su propio portal.
+    if (sesion.clave !== cliente) notFound();
+    info = { clave: sesion.clave, nombre_visible: sesion.nombre };
+    ({ data } = await supabase.rpc("portal_embarques_sesion", { p_token: sesion.token }));
+  } else {
+    const [{ data: lista }, r] = await Promise.all([
+      supabase.rpc("portal_clientes_lista"),
+      supabase.rpc("portal_clientes_embarques", { p_clave: cliente }),
+    ]);
+    info = ((lista ?? []) as { clave: string; nombre_visible: string }[]).find((c) => c.clave === cliente);
+    data = r.data;
+  }
   if (!info) notFound();
   const filas = (data ?? []) as FilaPortal[];
   const es = filas.map((x) => armarEmbarque(x, hoy));
@@ -51,9 +64,11 @@ export default async function PortalCliente({ params }: { params: Promise<{ clie
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-14 sm:px-6">
+      {sesion.tipo === "revisor" && (
       <p className="mb-4 rounded-md bg-amber-100 px-3 py-2 text-[13px] text-amber-900 dark:bg-amber-950 dark:text-amber-200">
         Vista de revisión: así verá el portal {info.nombre_visible} con su usuario. <Link href="/clientes" className="font-semibold underline">Cambiar de cliente</Link>
       </p>
+      )}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold tracking-[0.08em] text-slate-500 uppercase dark:text-slate-400">Embarques activos al {fc(hoy)}</p>

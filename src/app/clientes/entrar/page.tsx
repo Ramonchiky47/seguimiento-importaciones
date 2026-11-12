@@ -1,21 +1,15 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { sesionPortal } from "@/lib/portalSesion";
 import { FormaAccesoPortal } from "@/components/FormaAccesoPortal";
 import portada from "../../../../public/clientes/portada.jpg";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Portal de clientes · AV2 Logistics" };
+export const metadata = { title: "Portal de clientes · AV2 Logistics", robots: { index: false, follow: false } };
 
 export default async function EntrarPortal() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user) {
-    const { data: acceso } = await supabase.rpc("portal_clientes_acceso");
-    if (acceso === true) redirect("/clientes");
-  }
+  const sesion = await sesionPortal();
+  if (sesion) redirect(sesion.tipo === "cliente" ? `/clientes/${sesion.clave}` : "/clientes");
 
   return (
     <main className="grid min-h-screen flex-1 bg-white lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] dark:bg-[#0d171c]">

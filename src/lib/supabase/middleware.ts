@@ -38,7 +38,10 @@ export async function updateSession(request: NextRequest) {
   const esPortal = ruta === "/clientes" || ruta.startsWith("/clientes/");
   const esEntrarPortal = ruta === "/clientes/entrar";
 
-  if (!user && !isAuthRoute && !isCron && !esEntrarPortal) {
+  // Cliente del portal: su sesión es la cookie portal_sesion (se valida en la página).
+  const clientePortal = esPortal && Boolean(request.cookies.get("portal_sesion")?.value);
+
+  if (!user && !isAuthRoute && !isCron && !esEntrarPortal && !clientePortal) {
     const url = request.nextUrl.clone();
     url.pathname = esPortal ? "/clientes/entrar" : "/login";
     return NextResponse.redirect(url);
