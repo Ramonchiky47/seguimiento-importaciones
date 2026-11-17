@@ -47,6 +47,18 @@ function Tarjeta({ e }: { e: Embarque }) {
         ))}
       </ol>
       <p className="max-w-[78ch]">{e.texto}</p>
+      {e.telexMbl ? (
+        <div className={`flex flex-wrap items-baseline gap-x-2 text-[13.5px] ${e.telexMbl.alerta ? "text-red-700 dark:text-red-400" : ""}`}>
+          <span className={`size-1.5 self-center rounded-full ${e.telexMbl.liberado ? "bg-green-600" : e.telexMbl.alerta ? "bg-red-600" : "bg-slate-400"}`} />
+          <b>Telex MBL</b>
+          <span className={e.telexMbl.alerta ? "" : "text-slate-500 dark:text-slate-400"}>ETA − 3 días</span>
+          <span className={e.telexMbl.alerta ? "font-semibold" : "text-slate-500 dark:text-slate-400"}>
+            {e.telexMbl.liberado
+              ? `· liberado el ${fc(e.telexMbl.liberado)}`
+              : `· ${e.telexMbl.alerta ? "pendiente, " : ""}límite ${fc(e.telexMbl.limite)}`}
+          </span>
+        </div>
+      ) : null}
       {e.estado === "puerto" && e.ultimoDiaLibre && e.diasLibres ? (
         <div className="grid gap-1 text-[13px]">
           <span>

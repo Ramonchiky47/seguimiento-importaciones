@@ -53,6 +53,8 @@ export type Embarque = {
   diasLibres: number | null;
   diasRestantes: number | null;
   documentos: string;
+  // Telex MBL: límite ETA − 3 días; alerta (rojo) desde 5 días antes de la ETA sin liberar.
+  telexMbl: { liberado: string | null; limite: string; alerta: boolean } | null;
   contenedores: string[];
   transbordos: string[];
   eventoNaviera: string | null;
@@ -206,6 +208,14 @@ export function armarEmbarque(x: FilaPortal, hoy: string): Embarque {
     diasLibres: x.dl,
     diasRestantes,
     documentos: rev ? `Revalidado el ${fc(rev)}` : th && tm ? "Telex liberados" : th || tm ? "Telex en proceso" : estado === "zarpar" ? "" : "En proceso",
+    telexMbl:
+      eta && (estado === "zarpar" || estado === "transito" || estado === "puerto")
+        ? {
+            liberado: tm,
+            limite: new Date(Date.parse(eta + "T12:00:00Z") - 3 * 864e5).toISOString().slice(0, 10),
+            alerta: !tm && difDias(eta, hoy) <= 5,
+          }
+        : null,
     contenedores,
     transbordos: trans,
     eventoNaviera: eventoValido ? `${x.ue} · ${fc(uef)}` : null,
