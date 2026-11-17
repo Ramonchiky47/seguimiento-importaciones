@@ -8,6 +8,10 @@
 //   se movió) u otro buque (el feeder en vez del buque madre).
 // ATA no viene en los correos (es de la naviera) y los contenedores no tienen
 // etapa con la que guardarlos en Cargolink: ninguno de los dos se pasa.
+// 17 nov 2026 (Ramón: "lo encontrado en los correos aplícalo, guárdalo sin
+// finalizar"): también ETD (Origen › fecha estimada de salida) y días libres
+// (etapa ATA, solo con arribo ya capturado); el buque ya no espera a que la
+// naviera lo confirme, pero si la naviera reporta otro buque no se pasa.
 
 export type CorreoInfo = {
   id_booking: number;
@@ -28,10 +32,14 @@ export type OperacionCl = {
   mov_atd: string | null;
   mov_eta: string | null;
   mov_origen: string | null;
+  fecha_estimada: string | null;
+  ata: string | null;
+  dias_libres_demora: number | string | null;
+  mov_ata: string | null;
 };
 // Lo que reporta la naviera (tracking_naviera, ya leído con detalleNaviera).
 export type NavieraConfirma = { naviera: string; eta: string | null; zarpes: string[]; buque: string | null } | null;
-export type Cambio = { etapa: "atd" | "eta" | "origen"; valores: Record<string, string>; detalle: string };
+export type Cambio = { etapa: "atd" | "eta" | "origen" | "ata"; valores: Record<string, string>; detalle: string };
 export type Rechazo = { campo: string; valor: string; motivo: string };
 
 const MESES: Record<string, number> = {
@@ -151,12 +159,25 @@ export function cambiosDesdeCorreo(
       const m = buqueTxt.match(BUQUE);
       if (!m || NO_BUQUE.test(buqueTxt)) no("Buque", buqueTxt, "No se distingue con claridad el nombre del buque y el viaje.");
       else if (inestable(d, "buque")) no("Buque", buqueTxt, "Cambia de ida y vuelta en la cadena de correos.");
-      else if (!nav?.buque) no("Buque", buqueTxt, "La naviera aún no confirma el buque.");
-      else if (!nombre(nav.buque).startsWith(nombre(m[1]))) no("Buque", buqueTxt, `La naviera reporta otro buque (${nav.buque}).`);
+      else if (nav?.buque && !nombre(nav.buque).startsWith(nombre(m[1]))) no("Buque", buqueTxt, `La naviera reporta otro buque (${nav.buque}).`);
       else {
         origen.buque = m[1].replace(/\s+/g, " ");
         if (vacio(op.no_viaje)) origen.no_viaje = m[2];
         det.push(`Buque ${origen.buque}${origen.no_viaje ? ` viaje ${origen.no_viaje}` : ""} (correo: "${buqueTxt}")`);
+      }
+    }
+    // ETD (fecha estimada de salida): una sola lectura con año, igual a la del agente,
+    // no antes de 30 días del booking ni a más de 120 días de hoy.
+    const etdTxt = texto(d.etd);
+    if (etdTxt && vacio(op.fecha_estimada)) {
+      const minimo = sumarDias(op.fecha?.slice(0, 10) || hoy, -30);
+      const validas = lecturas(etdTxt).filter((f) => f >= minimo && f <= sumarDias(hoy, 120));
+      if (inestable(d, "etd")) no("ETD", etdTxt, "La fecha cambia de ida y vuelta en la cadena de correos.");
+      else if (validas.length !== 1) no("ETD", etdTxt, "Sin fecha completa (día, mes y año), fuera de rango o se puede leer de dos formas.");
+      else if (validas[0] !== texto(d.etd_iso)) no("ETD", etdTxt, "No coincide con la fecha que leyó el agente.");
+      else {
+        origen.fecha_estimada = validas[0];
+        det.push(`ETD ${validas[0]} (correo: "${etdTxt}")`);
       }
     }
     const mbl = texto(d.mbl).toUpperCase();
@@ -184,6 +205,20 @@ export function cambiosDesdeCorreo(
     }
   }
   if (Object.keys(origen).length) cambios.push({ etapa: "origen", valores: origen, detalle: det.join(" · ") });
+
+  // Días libres de demora (etapa ATA): Cargolink los pide con la fecha de arribo,
+  // así que solo cuando el ATA ya está capturado y ya pasó.
+  const diasTxt = texto(d.dias_libres);
+  const n = Number(String(d.dias_libres_n ?? "").trim() || NaN);
+  const diasActual = Number(op.dias_libres_demora ?? 0);
+  if (diasTxt && !(diasActual > 0)) {
+    const ata = op.ata?.slice(0, 10) ?? "";
+    if (!Number.isInteger(n) || n < 1 || n > 60) no("Días libres", diasTxt, "No es un número de días claro (1 a 60).");
+    else if (!/^\d{4}-\d{2}-\d{2}$/.test(ata) || ata.startsWith("0000") || ata > hoy) no("Días libres", diasTxt, "Aún no hay arribo (ATA) capturado; Cargolink lo pide para guardar los días libres.");
+    else if (op.mov_ata === "FINALIZADO") no("Días libres", diasTxt, "La etapa ATA ya está finalizada en Cargolink.");
+    else if (inestable(d, "dias_libres_n") || inestable(d, "dias_libres")) no("Días libres", diasTxt, "Cambia de ida y vuelta en la cadena de correos.");
+    else cambios.push({ etapa: "ata", valores: { dias_demora: String(n) }, detalle: `Días libres ${n} (correo: "${diasTxt}")` });
+  }
   return { cambios, rechazos };
 }
 

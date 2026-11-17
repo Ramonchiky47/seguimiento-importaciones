@@ -6,8 +6,8 @@ import { detalleNaviera } from "@/lib/detalleNaviera";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-// Pasa a Cargolink lo que trae el último correo de cada booking (ATD, ETA, buque y
-// viaje, MBL y HBL) con las reglas de lib/correoACargolink: solo campos vacíos,
+// Pasa a Cargolink lo que trae el último correo de cada booking (ATD, ETA, ETD, buque y
+// viaje, MBL, HBL y días libres) con las reglas de lib/correoACargolink: solo campos vacíos,
 // sin finalizar y sin notificar, como "Aplicación por sistema" y con el correo de
 // origen en la bitácora. ?probar=1 solo dice qué haría. Lo llama la Mac/SYSMON
 // con aplicar_propuestas.py (8:00, 14:00 y al terminar cada actualización).
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
       supabase
         .from("operaciones_maritima")
         .select(
-          "id_booking, fecha, etd_atd, eta, mbl, buque:datos->>buque, no_viaje:datos->>no_viaje, hbl:datos->>no_agentes, mov_atd:datos->>his_mov_atd, mov_eta:datos->>his_mov_eta, mov_origen:datos->>his_mov_origen",
+          "id_booking, fecha, etd_atd, eta, mbl, buque:datos->>buque, no_viaje:datos->>no_viaje, hbl:datos->>no_agentes, mov_atd:datos->>his_mov_atd, mov_eta:datos->>his_mov_eta, mov_origen:datos->>his_mov_origen, fecha_estimada:datos->>fecha_estimada, ata, dias_libres_demora, mov_ata:datos->>his_mov_ata",
         )
         .in("id_booking", lote),
       supabase.from("tracking_naviera").select("id_booking, naviera, eta_naviera, respuesta").eq("ok", true).in("id_booking", lote),
