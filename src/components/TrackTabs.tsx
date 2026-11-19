@@ -36,6 +36,8 @@ const GRUPOS: { label: string; tabs: Tab[] }[] = [
 ];
 const AVANCES = { label: "Avances de descarga", tabs: [{ href: "/track/avances", label: "Avances de descarga" }] };
 
+const HISTORIAL = { label: "Historial de cambios", tabs: [{ href: "/track/historial-cambios", label: "Historial de cambios" }] };
+
 const enTab = (pathname: string, t: Tab) => pathname === t.href || pathname.startsWith(`${t.href}/`);
 
 export function TrackTabs({ asignaEjecutivos = false }: { asignaEjecutivos?: boolean }) {
@@ -45,6 +47,7 @@ export function TrackTabs({ asignaEjecutivos = false }: { asignaEjecutivos?: boo
     ...GRUPOS,
     ...(asignaEjecutivos ? [{ label: "Asignar ejecutivos", tabs: [{ href: "/track/asignar-ejecutivos", label: "Asignar ejecutivos" }] }] : []),
     AVANCES,
+    HISTORIAL,
   ];
   const activo = grupos.find((g) => g.tabs.some((t) => enTab(pathname, t)));
   const [abierto, setAbierto] = useState<string | null>(null);
